@@ -1,11 +1,11 @@
 # Design decisions
 
-Code comments and the spike notes refer to these decisions by their IDs (E1 to E13).
+Code comments and the spike notes refer to these decisions by their IDs: E1 to E13 for the first version, P1 to P8 for the PowerPoint converter.
 
 | ID | Decision | Choice | Reason |
 |---|---|---|---|
-| E1 | Input formats | Keynote HTML export and claude.ai decks; PowerPoint and Google Slides go through PPTX, then Keynote | current PowerPoint versions have no HTML export |
-| E2 | Google Slides | PPTX download, opened and exported in Keynote | Google Slides exports no HTML; no adapter of its own needed |
+| E1 | Input formats | Keynote HTML export and claude.ai decks; PowerPoint and Google Slides go through PPTX, then Keynote. **Revised by P1:** PowerPoint files are read directly | current PowerPoint versions have no HTML export |
+| E2 | Google Slides | PPTX download, opened and exported in Keynote. **Revised by P1:** the PPTX download goes to deckfold directly | Google Slides exports no HTML; no adapter of its own needed |
 | E3 | Target browsers | full support in Chromium (Chrome, Edge); Firefox and Safari without screen placement | only Chromium has the Window Management API |
 | E4 | Where the presenter view is configured | defaults from CLI flags or a JSON file, changeable at runtime and stored per deck in the browser | fixed starting point, adjustable on site |
 | E5 | Presenter view elements | current slide and next step, notes, time, slide overview | matches Keynote and PowerPoint, plus an overview for jumping |
@@ -18,9 +18,23 @@ Code comments and the spike notes refer to these decisions by their IDs (E1 to E
 | E12 | Code signing | binaries are unsigned; the README describes how to allow them | no cost, can be added later |
 | E13 | Unknown format | abort; `--generic` embeds it without presenter view, overview and auto mode | the presenter view never goes missing silently |
 
+## PowerPoint converter
+
+| ID | Decision | Choice | Reason |
+|---|---|---|---|
+| P1 | Scope | PowerPoint files (.pptx, .ppsx, .pptm) are converted directly; deckfold renders the slides and plays them with its own player; the control layer stays the same | a PPTX file has no player of its own, and the Keynote route needs a Mac with Keynote and loses the notes |
+| P2 | Approach | native Go: slides as SVG, a timing model for animations; the Keynote route stays possible | the only way that needs no installation, keeps the MIT license and runs on all platforms |
+| P3 | Scope of the first version | static content plus the animation core; 3D transitions and Morph are played as a fade | covers most real decks |
+| P4 | Text layout | deckfold lays out text itself with the font metrics | text is the largest risk for fidelity, and the result is the same in every browser |
+| P5 | Fonts | cascade: fonts embedded in the presentation, then installed fonts, then the bundled OFL fonts; fsType is honoured; subsets are embedded | line breaks match, font licenses are respected |
+| P6 | Charts | own SVG drawing for the common chart types, from the data cache in the file | chart slides stay presentable |
+| P7 | EMF and WMF | own converter for the common records | logos and older pictures stay visible |
+| P8 | Test decks | generated public feature decks with PowerPoint reference images, compared by SSIM | fidelity can be measured and regressions show up |
+
 Defaults that were set without a separate decision:
 
-- The source player stays unchanged and deckfold adds a control layer with one adapter per format, because the animations could not be rebuilt faithfully.
+- For Keynote and claude.ai, the source player stays unchanged and deckfold adds a control layer with one adapter per format, because the animations could not be rebuilt faithfully. PowerPoint files have no source player; there deckfold's own player runs under the same control layer (P1).
+- PowerPoint: `.ppt` and password-protected files are refused with a hint (exit code 2); hidden slides are skipped; SmartArt is drawn from the drawing PowerPoint stores with it, otherwise a placeholder; equations, ink, OLE objects and 3D models show the fallback picture stored in the file; shadows and glow become SVG filters, 3D bevels are left out and reported; media stays unchanged (E8), WMV, AVI and ASF show only their still image; animations by word or letter are played by paragraph; triggers (interactive sequences) are not played; `advTm` is the source timing for auto mode (E7).
 - deckfold is written in Go: one static binary per platform.
 - Assets are embedded as Base64 blocks and turned into blob URLs at runtime; fonts load through rewritten `@font-face` rules, and the start waits for `document.fonts.ready`. One-shot assets (scripts, XHR, fetch, worker code) are released after use; assets referenced by the DOM stay.
 - Remote resources (for example Google Fonts) are downloaded during conversion.

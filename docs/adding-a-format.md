@@ -22,3 +22,13 @@ This is the order in which the Keynote adapter was built. Most of its problems o
    `tests/e2e/setup.mjs` (corpus discovery), `tests/e2e/helpers.mjs` (`need`) and `tests/e2e/fidelity.spec.mjs` only know `claude` and `keynote` so far; extend them for the new format. Add a golden test in `cmd/deckfold/main_test.go` that checks the player code is embedded byte-identical.
 
 7. **Write down what you found** in `docs/spikes/S<n>-<format>.md`, and add new decisions to `docs/decisions.md`.
+
+## Formats without a player of their own
+
+PowerPoint files have no player, so deckfold renders them itself (`internal/pptx`). The same approach fits any format that is a document rather than an HTML export:
+
+1. Convert the input into an HTML deck in a temporary folder: one element per slide, the deck data as JSON, deckfold's own player, the assets as files. Branch in `cmd/deckfold/main.go` before `detect.Load`, by extension and file signature.
+2. Mark the deck (`<meta name="deckfold:source" content="...">`) and write a Go adapter that detects the mark and reads slides, steps, notes and timings from the deck data. Set `Meta.SlideSelector` so that the presenter overview and the asset report find the slides.
+3. Give the player a small public API and drive it from the JS adapter. `jump` has to restore any step without animation (previews, back, recovery), only `forward` animates.
+4. Treat everything from the source file as untrusted: escape text and attributes, allow only harmless link schemes, never inline SVG from the file, name assets by their content hash.
+5. Keep the player between marker comments, so that `--refresh` can replace it (`internal/inject.ReplacePlayer`).

@@ -34,13 +34,17 @@ type Slide struct {
 
 // Meta describes the deck.
 type Meta struct {
-	Format  string         `json:"format"`
-	Title   string         `json:"title"`
-	Width   int            `json:"width"`
-	Height  int            `json:"height"`
-	Slides  []Slide        `json:"slides"`
-	Version string         `json:"version,omitempty"`
-	Extra   map[string]any `json:"extra,omitempty"`
+	Format  string  `json:"format"`
+	Title   string  `json:"title"`
+	Width   int     `json:"width"`
+	Height  int     `json:"height"`
+	Slides  []Slide `json:"slides"`
+	Version string  `json:"version,omitempty"`
+	// SlideSelector is the CSS selector of the slide elements in the source document, in order
+	// (default ".deck-slide"). The presenter overview clones them, embed uses them to name
+	// the slide of an asset.
+	SlideSelector string         `json:"slideSelector,omitempty"`
+	Extra         map[string]any `json:"extra,omitempty"`
 }
 
 // ExtraAsset is an asset the source player loads at runtime through a computed path.

@@ -1,5 +1,6 @@
-// Command deckfold turns the HTML export of a presentation (Keynote, claude.ai) into a single
-// self-contained HTML file with full screen, presenter view, auto mode and screen choice.
+// Command deckfold turns a presentation (PowerPoint file, Keynote HTML export, claude.ai deck)
+// into a single self-contained HTML file with full screen, presenter view, auto mode and screen
+// choice.
 //
 // Exit codes: 0 success, 1 conversion failed (e.g. unresolved assets),
 // 2 format not recognized, 3 usage or configuration error.
@@ -20,6 +21,8 @@ import (
 	"deckfold/internal/detect"
 	"deckfold/internal/embed"
 	"deckfold/internal/inject"
+	"deckfold/internal/pptx"
+	"deckfold/internal/pptx/opc"
 	"deckfold/internal/report"
 	dfruntime "deckfold/runtime"
 )
@@ -89,7 +92,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVer := fs.Bool("version", false, "print the version")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "deckfold %s: turn an HTML presentation into one self-contained file\n\n", Version)
-		fmt.Fprintf(stderr, "Usage:\n  deckfold <folder|file.html> [options]\n  deckfold --refresh <output.html> [options]\n\nOptions:\n")
+		fmt.Fprintf(stderr, "Usage:\n  deckfold <folder|file.html|file.pptx> [options]\n  deckfold --refresh <output.html> [options]\n\nOptions:\n")
 		fs.PrintDefaults()
 		fmt.Fprintf(stderr, "\nExit codes: 0 success, 1 conversion failed, 2 format not recognized, 3 usage or configuration error\n")
 	}
@@ -179,7 +182,46 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "error:", err)
 		return 3
 	}
-	in, err := detect.Load(input)
+	rep := report.New()
+	loadPath, srcPath, srcIsDir := input, input, false
+	if fi, err := os.Stat(input); err == nil {
+		srcIsDir = fi.IsDir()
+	}
+	if !srcIsDir && isPowerPoint(input) {
+		// PowerPoint: render the deck into a temporary folder, then embed it like any export.
+		tmp, err := os.MkdirTemp("", "deckfold-pptx-")
+		if err != nil {
+			fmt.Fprintln(stderr, "error:", err)
+			return 1
+		}
+		defer os.RemoveAll(tmp)
+		res, err := pptx.Convert(input, tmp, pptx.Options{BundledFontsOnly: os.Getenv("DECKFOLD_BUNDLED_FONTS") == "1",
+			AllowOutside: allow, Fetcher: fetcher, Lenient: *lenient})
+		if err != nil {
+			var me *pptx.MissingError
+			if errors.As(err, &me) {
+				rep.Missing = me.Missing
+				rep.PrintMissing(stderr)
+				fmt.Fprintln(stderr, "aborted: the file would not be self-contained. With --lenient it is written anyway (with a warning).")
+				return 1
+			}
+			fmt.Fprintln(stderr, "error:", err)
+			if errors.Is(err, pptx.ErrUnsupported) {
+				return 2
+			}
+			return 1
+		}
+		rep.Summary = plural(res.Slides, "slide")
+		if res.Hidden > 0 {
+			rep.Summary += ", " + plural(res.Hidden, "hidden slide") + " skipped"
+		}
+		rep.Fonts = res.Fonts
+		for _, w := range res.Warnings {
+			rep.Warn("%s", w)
+		}
+		loadPath = tmp
+	}
+	in, err := detect.Load(loadPath)
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 3
@@ -191,9 +233,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	outPath := *out
 	if outPath == "" {
-		outPath = defaultOutput(in.Arg, in.IsDir)
+		outPath = defaultOutput(srcPath, srcIsDir)
 	}
-	if same(outPath, in.HTMLPath) {
+	if same(outPath, srcPath) || same(outPath, in.HTMLPath) {
 		fmt.Fprintln(stderr, "error: the output would overwrite the input; choose another name with -o")
 		return 3
 	}
@@ -201,7 +243,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %s already exists (overwrite with --force)\n", outPath)
 		return 3
 	}
-	rep := report.New()
 	html, _, err := embed.Convert(in, ad, embed.Options{Config: cfg, Lenient: *lenient, AllowOutside: allow,
 		Fetcher: fetcher, Version: Version, Runtime: rt}, rep)
 	if err != nil {
@@ -251,6 +292,12 @@ func doRefresh(input, out string, force bool, src []byte, cfg config.Config, rt 
 		return 1
 	}
 	res, err := inject.Replace(src, block)
+	if err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 1
+	}
+	// decks generated from PowerPoint also get the current player
+	res, _, err = inject.ReplacePlayer(res, dfruntime.PptxJS)
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
@@ -329,4 +376,35 @@ func writeFile(p string, data []byte) error {
 	}
 	_ = os.Chmod(tmp.Name(), 0o644)
 	return os.Rename(tmp.Name(), p)
+}
+
+// isPowerPoint reports whether the input is a PowerPoint file: by extension, or by content for
+// files without one of the PowerPoint extensions (a ZIP with a presentation, an OLE file).
+func isPowerPoint(p string) bool {
+	if pptx.IsPowerPoint(p, nil) {
+		return true
+	}
+	ext := strings.ToLower(filepath.Ext(p))
+	if ext == ".html" || ext == ".htm" || ext == ".xhtml" {
+		return false
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 8)
+	n, _ := io.ReadFull(f, head)
+	switch opc.Sniff(head[:n]) {
+	case "zip", "cfb":
+		return true
+	}
+	return false
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }

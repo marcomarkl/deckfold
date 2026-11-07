@@ -4,7 +4,9 @@
 # (Linux, Windows and macOS, x64 and arm64): go vet, go test and a smoke test of the native
 # binary (scripts/smoke). On Linux the smoke test also runs as an unprivileged user. Windows and
 # macOS runners run with elevated rights, so there the test only shows that the binary works.
-# The browser tests in tests/ need a local corpus and do not run here.
+# The fidelity job runs the browser tests of the PowerPoint converter (tests/e2e/pptx*.spec.mjs and
+# the 200-slide performance test) in Chrome on Linux; they use the public decks in fixtures/pptx.
+# The other browser tests need a local corpus and do not run here.
 #
 # A v* tag additionally builds the six release binaries and publishes them as a pre-release.
 name: CI
@@ -70,8 +72,29 @@ jobs:
             echo "::notice::Rosetta is not available on this runner; darwin/amd64 was only built"
           fi
 
+  fidelity:
+    name: browser tests (PowerPoint, Chrome on Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright with Chrome
+        working-directory: tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chrome
+      - name: PowerPoint browser tests
+        working-directory: tests
+        run: npx playwright test e2e/pptx.spec.mjs e2e/pptx-fidelity.spec.mjs e2e/perf.spec.mjs --project=chrome
+
   release:
-    needs: test
+    needs: [test, fidelity]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20

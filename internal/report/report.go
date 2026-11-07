@@ -31,13 +31,17 @@ type Report struct {
 	Assets     []Sized
 	OutputSize int
 	Output     string
+	Summary    string   // one line about the content, e.g. slide counts of a PowerPoint file
+	Fonts      []string // fonts and where they came from (PowerPoint files)
 }
 
 // New creates an empty report.
 func New() *Report { return &Report{Hosts: map[string]bool{}} }
 
 // Warn adds a warning.
-func (r *Report) Warn(format string, a ...any) { r.Warnings = append(r.Warnings, fmt.Sprintf(format, a...)) }
+func (r *Report) Warn(format string, a ...any) {
+	r.Warnings = append(r.Warnings, fmt.Sprintf(format, a...))
+}
 
 // Miss records an asset that could not be resolved.
 func (r *Report) Miss(ref, where, reason string) {
@@ -73,6 +77,9 @@ func (r *Report) PrintMissing(w io.Writer) {
 // Print prints the final report.
 func (r *Report) Print(w io.Writer, warnSize int) {
 	fmt.Fprintf(w, "Format: %s\n", r.Format)
+	if r.Summary != "" {
+		fmt.Fprintf(w, "Content: %s\n", r.Summary)
+	}
 	if r.Output != "" {
 		fmt.Fprintf(w, "Output: %s (%s)\n", r.Output, HumanSize(r.OutputSize))
 	}
@@ -93,6 +100,12 @@ func (r *Report) Print(w io.Writer, warnSize int) {
 		fmt.Fprintf(w, "Largest assets:\n")
 		for _, s := range a {
 			fmt.Fprintf(w, "  %10s  %s\n", HumanSize(s.Size), s.Name)
+		}
+	}
+	if len(r.Fonts) > 0 {
+		fmt.Fprintf(w, "Fonts:\n")
+		for _, s := range r.Fonts {
+			fmt.Fprintf(w, "  %s\n", s)
 		}
 	}
 	if len(r.NetSlides) > 0 {

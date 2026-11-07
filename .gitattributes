@@ -2,3 +2,8 @@
 # runtime/dist byte by byte, and Windows checkouts would otherwise convert them to CRLF.
 * text=auto eol=lf
 *.png binary
+*.gz binary
+*.pptx binary
+*.ttf binary
+# Ecma file, kept byte-identical (CRLF, BOM)
+internal/pptx/geom/presetShapeDefinitions.xml -text

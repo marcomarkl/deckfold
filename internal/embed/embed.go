@@ -89,8 +89,12 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	if ns, ok := meta.Extra["netSlides"].([]string); ok {
 		rep.NetSlides = append(rep.NetSlides, ns...)
 	}
+	slideClass := "deck-slide"
+	if sel := meta.SlideSelector; strings.HasPrefix(sel, ".") && !strings.ContainsAny(sel[1:], " .#[:>") {
+		slideClass = sel[1:]
+	}
 	for _, t := range in.Doc.Tags {
-		if t.Name == "section" && strings.Contains(" "+t.Value("class")+" ", " deck-slide ") {
+		if t.Name == "section" && strings.Contains(" "+t.Value("class")+" ", " "+slideClass+" ") {
 			c.slideAt = append(c.slideAt, t.Start)
 		}
 	}
@@ -159,7 +163,11 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	if err != nil {
 		return nil, meta, err
 	}
-	tail := append(append([]byte("\n"), mb...), inject.AssetBlocks(c.store)...)
+	// one allocation for the tail, then the raw asset data can go: it is now in the tail
+	tail := make([]byte, 0, 1+len(mb)+inject.AssetBlocksSize(c.store))
+	tail = append(append(tail, '\n'), mb...)
+	tail = inject.AppendAssetBlocks(tail, c.store)
+	c.store.Release()
 	end := len(in.Src)
 	if in.Doc.BodyClose >= 0 {
 		end = in.Doc.BodyClose
@@ -172,7 +180,7 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	}
 	for _, h := range c.store.Order {
 		a := c.store.Get(h)
-		rep.Assets = append(rep.Assets, report.Sized{Name: strings.Join(a.Names, ", "), Size: len(a.Data)})
+		rep.Assets = append(rep.Assets, report.Sized{Name: strings.Join(a.Names, ", "), Size: a.Size})
 	}
 	for h := range opt.Fetcher.Hosts {
 		rep.Hosts[h] = true

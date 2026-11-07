@@ -12,3 +12,8 @@ var JS string
 
 //go:embed dist/deckfold.css
 var CSS string
+
+// PptxJS is the player of decks generated from PowerPoint files.
+//
+//go:embed dist/pptx-player.js
+var PptxJS string
