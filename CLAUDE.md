@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Rules
 
-- This is a public repository. Everything that can be read publicly is written in English: README, CLAUDE.md, `docs/`, code comments, test names, CLI output and error messages, commit messages, and texts on GitHub. Write these texts following the `anthropic-skills:vermenschlichen` skill (load it first; apply its rules to English). Conversations with the maintainer stay in German.
+- This is a public repository. Everything that can be read publicly is written in English: README, CLAUDE.md, `docs/`, code comments, test names, CLI output and error messages, commit messages, and texts on GitHub. Write these texts following the `anthropic-skills:vermenschlichen` skill (load it first; apply its rules to English). Conversations with the maintainer stay in German. `internal/repocheck` fails on German umlauts, sharp s and the German opening quotation mark (U+201E) in tracked files outside the German UI strings in `runtime/src/00-core.js`; it does not catch German without these characters.
 - The browser UI stays bilingual: German and English strings live side by side in the `TEXT` table in `runtime/src/00-core.js`, and the language follows the browser.
 - `testdata/` holds private sample decks and is never committed. Do not put file names, slide content or notes from it into code, tests, docs or commits. Tests read expected values (slide counts, notes) from the deck metadata.
 
@@ -35,6 +35,8 @@ npx playwright test e2e/claude.spec.mjs -g "recovery" --project=chrome
 
 Projects: `chrome` (channel `chrome`, autoplay without a gesture allowed) and `webkit` (only `webkit.spec.mjs`, the fallback browser). Firefox is not configured because the Playwright Firefox does not start on macOS 27.2. Tests pick buttons by position (`.df-start-buttons button:nth-child(n)`) because the UI language follows the browser. `helpers.mjs` has `need(kind)` to skip without a corpus entry and `expected(page, ops)` to compute expected states with the runtime's own model.
 
+Every output contains the runtime bundle, and the bundle contains marker strings such as `text/df-css`, `text/df-deferred`, `data-df-` and `deckfold:`. When a Go test asserts on an output, count tags or attributes with `internal/htmlscan` (see `cmd/deckfold/main_test.go`), never substring occurrences in the whole file.
+
 Local corpus layout (not in the repository): `testdata/claude/*.html` and `testdata/keynote/<export>/index.html`.
 
 ## Architecture
@@ -47,7 +49,7 @@ Local corpus layout (not in the repository): `testdata/claude/*.html` and `testd
 - **CSP** (`internal/csp`): extended (`blob:`, embed origins), embedded Google hosts removed. If the source uses `'unsafe-inline'` without hashes or nonces, NO hashes may be added (that would block the source scripts). The loader decodes with `atob`, never with `fetch` or a worker (the claude.ai CSP forbids both).
 - **Boundaries:** `assets.Resolver` resolves only inside the input folder (symlinks checked, `--allow-outside` as the exception), in stages: exact, URL decoding, NFC/NFD, case-insensitive (every fix is reported as a warning). `assets.Fetcher` refuses private, loopback and link-local targets.
 
-**Adapters** (`internal/adapter/{claude,keynote,generic}`, Go side): `Detect`, `Collect` (files loaded at runtime through computed paths, which end up in the shim table), `Meta` (slides, steps, auto flags, delays, notes, thumbnails). Each format also has a JS adapter in `runtime/src/20-model.js`.
+**Adapters** (`internal/adapter/{claude,keynote,generic}`, Go side): `Detect`, `Collect` (files loaded at runtime through computed paths, which end up in the shim table), `Meta` (slides, steps, auto flags, delays, notes, thumbnails). Each format also has a JS adapter in `runtime/src/20-model.js`. To add a format, follow `docs/adding-a-format.md`.
 - claude.ai: detected by `meta[name^="hz:"]` + `#deck-motion`; notes come from `data-speaker-notes`; the player advances auto steps itself. Strict structure check; an unknown structure is an error.
 - Keynote 15.4 (export format 1.2): detected by `assets/header.json(p)` + `assets/player/main.js`. The whole `assets/` folder is embedded, because the audience window on `file:` uses JSONP/PDFP while the srcdoc previews load `.json`/`.pdf`/CMaps through XHR/fetch. No notes panel (Keynote exports no notes). Details and key codes: `docs/spikes/S1-keynote.md`.
 
@@ -63,3 +65,5 @@ Background measurements on `file://` behaviour (Window Management API, blob URLs
 ## Keynote automation
 
 Never close a Keynote document through AppleScript (Keynote crashes). Export only into folders below `~/Documents` (Keynote is sandboxed). A native Keynote test deck with builds, video, audio and self-playing mode is still missing.
+
+If you launched Keynote (or any other app or long-running process such as a Playwright browser or a local server) during a task, stop it before you report the task as done. For Keynote, first check that no document is open (`osascript -e 'tell application "Keynote" to get name of every document'`), then quit it with `tell application "Keynote" to quit`. Use the name of the installed app; on some Macs it is "Keynote Creator Studio". Never use `close` on a document (see above).
