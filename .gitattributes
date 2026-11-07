@@ -1,0 +1,4 @@
+# Keep LF line endings on every platform. The runtime bundle test compares runtime/src with
+# runtime/dist byte by byte, and Windows checkouts would otherwise convert them to CRLF.
+* text=auto eol=lf
+*.png binary
