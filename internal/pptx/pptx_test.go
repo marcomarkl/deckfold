@@ -266,3 +266,35 @@ func TestChartsDeck(t *testing.T) {
 		t.Errorf("only %d rectangles drawn", n)
 	}
 }
+
+// The text of a table style (white bold header row) ranks above the presentation's default
+// text styles, which give black text.
+func TestTableStyleText(t *testing.T) {
+	d := pptxgen.New("Table style")
+	id := "{11111111-2222-3333-4444-555555555555}"
+	d.TableStyles = `<a:tblStyle styleId="` + id + `" styleName="Test"><a:wholeTbl><a:tcTxStyle><a:fontRef idx="minor"/><a:schemeClr val="dk1"/></a:tcTxStyle></a:wholeTbl>` +
+		`<a:firstRow><a:tcTxStyle b="on"><a:fontRef idx="minor"/><a:schemeClr val="lt1"/></a:tcTxStyle><a:tcStyle><a:fill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:fill></a:tcStyle></a:firstRow></a:tblStyle>`
+	s := d.Add(pptxgen.LayoutBlank)
+	cell := func(text string) string {
+		return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>` + text + `</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>`
+	}
+	s.Raw(`<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="Table"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="952500" y="952500"/><a:ext cx="5715000" cy="952500"/></p:xfrm>` +
+		`<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1"><a:tableStyleId>` + id + `</a:tableStyleId></a:tblPr>` +
+		`<a:tblGrid><a:gridCol w="5715000"/></a:tblGrid><a:tr h="476250">` + cell("Header") + `</a:tr><a:tr h="476250">` + cell("Body") + `</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`)
+	html, _, _ := convert(t, d)
+	header := regexp.MustCompile(`<text [^>]*fill="([^"]+)"[^>]*>Header</text>`).FindStringSubmatch(html)
+	body := regexp.MustCompile(`<text [^>]*font-family="([^"]+)"[^>]*fill="([^"]+)"[^>]*>Body</text>`).FindStringSubmatch(html)
+	if header == nil || body == nil {
+		t.Fatal("table text not found")
+	}
+	if header[1] != "#ffffff" {
+		t.Errorf("header text color %s, want #ffffff from the table style", header[1])
+	}
+	if body[2] != "#000000" {
+		t.Errorf("body text color %s, want #000000", body[2])
+	}
+	hf := regexp.MustCompile(`<text [^>]*font-family="([^"]+)"[^>]*>Header</text>`).FindStringSubmatch(html)
+	if hf == nil || hf[1] == body[1] {
+		t.Error("the header row should use the bold face")
+	}
+}

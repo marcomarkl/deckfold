@@ -42,6 +42,7 @@ type Deck struct {
 	BodyFont      string // theme minor font (default Carlito)
 	FirstSlideNum int    // first slide number (0 = default 1)
 	ShowLoop      bool   // presentation property: loop until Escape
+	TableStyles   string // raw a:tblStyle elements for ppt/tableStyles.xml
 	UseTimings    *bool  // presentation property: use rehearsed timings (nil = default true)
 	Slides        []*Slide
 	media         []media
@@ -382,7 +383,7 @@ func (d *Deck) parts() [][2]string {
 	show += `><p:present/><p:sldAll/></p:showPr>`
 	add("ppt/presProps.xml", xmlHead+`<p:presentationPr `+nsDecl+`>`+show+`</p:presentationPr>`)
 	add("ppt/viewProps.xml", xmlHead+`<p:viewPr `+nsDecl+`><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>`)
-	add("ppt/tableStyles.xml", xmlHead+`<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>`)
+	add("ppt/tableStyles.xml", xmlHead+`<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}">`+d.TableStyles+`</a:tblStyleLst>`)
 
 	add("ppt/theme/theme1.xml", theme(d.HeadFont, d.BodyFont))
 	add("ppt/theme/theme2.xml", theme(d.HeadFont, d.BodyFont))

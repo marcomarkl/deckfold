@@ -152,14 +152,13 @@ func (r *slideRenderer) cellText(tc *xmltree.Node, cell rect, cx colorCtx, part 
 	ts := &textStyle{}
 	ts.addList(r.pres.DefaultTextStyle)
 	ts.addList(r.slide.Layout.Master.Other)
+	// the text color and weight of the table style (white bold header, ...) rank above the
+	// presentation's default text styles and below the cell's own formatting
+	if style != nil {
+		ts.addList(r.styleTextFor(style, ri, ci, nrows, firstRow, lastRow, firstCol))
+	}
 	ts.addList(body.Child("lstStyle"))
 	ts.bodyPr = []*xmltree.Node{{Name: "bodyPr", Attrs: attrs("lIns", "0", "tIns", "0", "rIns", "0", "bIns", "0")}}
-	// table style text properties (bold header, text color)
-	if style != nil {
-		if tcs := r.styleTextFor(style, ri, ci, nrows, firstRow, lastRow, firstCol); tcs != nil {
-			ts.fontRef = tcs
-		}
-	}
 	sp := &xmltree.Node{Name: "sp", Kids: []*xmltree.Node{body}}
 	inner := rect{cell.x + l, cell.y + t, cell.w - l - rr, 100000}
 	segs := r.layoutText(sp, ts, inner, cx, relLookup{part, r.Renderer})
@@ -251,18 +250,34 @@ func (r *slideRenderer) styleBorder(style *xmltree.Node, side string, ri, ci, nr
 	return nil
 }
 
-// styleTextFor returns a fontRef-like node with the text color (and bold) of the table style.
+// styleTextFor returns an a:lstStyle-like node with the text color, bold and italic of the table
+// style for a cell (from a:tcTxStyle), or nil.
 func (r *slideRenderer) styleTextFor(style *xmltree.Node, ri, ci, nrows int, firstRow, lastRow, firstCol bool) *xmltree.Node {
 	for _, p := range stylePart(style, ri, ci, nrows, firstRow, false, lastRow, firstCol) {
-		if tx := p.Child("tcTxStyle"); tx != nil {
-			ref := &xmltree.Node{Name: "fontRef", Attrs: attrs("idx", "minor")}
-			for _, k := range tx.Kids {
-				if r.colorCtx().colorOf(k).OK {
-					ref.Kids = append(ref.Kids, k)
-				}
-			}
-			return ref
+		tx := p.Child("tcTxStyle")
+		if tx == nil {
+			continue
 		}
+		def := &xmltree.Node{Name: "defRPr"}
+		for _, a := range []string{"b", "i"} {
+			switch tx.Attr(a) {
+			case "on":
+				def.Attrs = append(def.Attrs, attrs(a, "1")...)
+			case "off":
+				def.Attrs = append(def.Attrs, attrs(a, "0")...)
+			}
+		}
+		for _, k := range tx.Kids {
+			if r.colorCtx().colorOf(k).OK {
+				def.Kids = append(def.Kids, &xmltree.Node{Name: "solidFill", Kids: []*xmltree.Node{k}})
+				break
+			}
+		}
+		lst := &xmltree.Node{Name: "lstStyle"}
+		for l := 1; l <= 9; l++ {
+			lst.Kids = append(lst.Kids, &xmltree.Node{Name: fmt.Sprintf("lvl%dpPr", l), Kids: []*xmltree.Node{def}})
+		}
+		return lst
 	}
 	return nil
 }
