@@ -15,7 +15,9 @@ The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint i
 1. Install the bundled fonts into `~/Library/Fonts` (no admin rights needed).
 2. Close all open presentations in PowerPoint and dismiss any start dialogs (sign-in, what's new).
    PowerPoint's sandbox shows a "Grant Access" dialog for files it has not opened before. Granting the folder `~/Documents/deckfold-pptxref` in that dialog did not stop it in a test, so expect to confirm the dialogs during a run.
-3. Run `scripts/pptxref/pptxref.sh`, or `scripts/pptxref/pptxref.sh basic` for one deck.
+3. Run `scripts/pptxref/pptxref.sh` with the names of the decks whose source in `fixtures/pptx/src` changed, for example `scripts/pptxref/pptxref.sh basic`; `git status fixtures/pptx/src` shows them. Without arguments the script runs over every deck.
+
+PowerPoint writes new metadata every time it saves, so a run over an unchanged deck changes its saved copy, `source.sha256` and sometimes a reference image, although nothing in the content changed. Discard such changes with `git checkout -- fixtures/pptx/<name>.pptx fixtures/pptx/ref/<name>`.
 
 If PowerPoint shows a dialog while opening a deck (for example a repair prompt), the script stops after its timeout. A repair prompt means the generator wrote invalid XML; fix the generator instead of saving the repaired deck.
 

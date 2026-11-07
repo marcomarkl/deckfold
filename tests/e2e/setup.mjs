@@ -53,6 +53,10 @@ function injectIntoSlide(html, n, snippet) {
 
 export default async function setup() {
   fs.mkdirSync(OUT, { recursive: true });
+  // The binary embeds runtime/dist. A bundle that no longer matches runtime/src or
+  // runtime/pptx-player would make the browser tests run against old code, so check it first
+  // (fails with "run go generate ./runtime").
+  execFileSync('go', ['test', './runtime/bundle'], { cwd: ROOT, stdio: 'inherit' });
   execFileSync('go', ['build', '-o', BIN, './cmd/deckfold'], { cwd: ROOT, stdio: 'inherit' });
   const corpus = findCorpus();
   fs.writeFileSync(path.join(OUT, 'corpus.json'), JSON.stringify(corpus));
