@@ -27,6 +27,7 @@ What deckfold does not show as PowerPoint does:
 
 - Morph, 3D and the other dynamic transitions are played as a fade.
 - Animations by word or by letter are played by paragraph; animations started by clicking a shape (triggers) are not played.
+- Charts with an automatic layout can differ from PowerPoint by a few pixels in the position of the plot area.
 - Fonts embedded in the presentation are stored compressed (MicroType Express), which deckfold cannot read yet; it uses the installed fonts or a bundled substitute instead and reports it.
 - WMF pictures, scatter, radar, bubble and stock charts and 3D effects are left out or shown as a placeholder, with a warning.
 - Right-to-left text and complex scripts are laid out without shaping, picture bullets are not shown.
@@ -141,7 +142,7 @@ scripts/release.sh 0.1.0
 
 The browser part lives in `runtime/src/` (controls) and `runtime/pptx-player/` (the player of PowerPoint decks) and is bundled into `runtime/dist/` with `go generate ./runtime`; a test checks that the checked-in bundle is up to date. The format adapters are in `internal/adapter/`, the shared conversion is in `internal/embed/`, the PowerPoint renderer is in `internal/pptx/`. The design decisions are listed in `docs/decisions.md`, and background notes on the formats and browsers are in `docs/spikes/`.
 
-The PowerPoint tests use public feature decks in `fixtures/pptx/`, written by `go run ./scripts/pptxgen`; `fixtures/pptx/README.md` explains how the PowerPoint reference images are made.
+The PowerPoint tests use public feature decks in `fixtures/pptx/`, written by `go run ./scripts/pptxgen` and saved again by PowerPoint; each slide is compared with an image exported by PowerPoint. `fixtures/pptx/README.md` explains how the reference images are made.
 
 The golden tests and most browser tests need sample decks in `testdata/`, which is not part of the repository: put claude.ai decks in `testdata/claude/*.html` and Keynote exports in `testdata/keynote/<name>/`. Without them those tests are skipped.
 

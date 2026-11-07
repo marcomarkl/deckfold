@@ -230,6 +230,7 @@ func Text() *Deck {
 		Para{Text: "Wide character spacing", RPr: `spc="300"`})
 	long := "This text box shrinks its text on overflow. It holds more text than fits at the declared size of twenty-four points, so the text has to become smaller to stay inside the box."
 	s.TextBox("Shrinking", Box{X: 640, Y: 240, W: 420, H: 120}, `<a:bodyPr wrap="square"><a:normAutofit/></a:bodyPr>`, Para{Text: long, RPr: `sz="2400"`})
+	s.TextBox("Shrunk", Box{X: 640, Y: 520, W: 420, H: 90}, `<a:bodyPr wrap="square"><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>`, Para{Text: "Stored scale: this text is drawn at 62.5 percent of its 24 point size.", RPr: `sz="2400"`})
 	s.TextBox("Vertical", Box{X: 1120, Y: 240, W: 80, H: 400}, `<a:bodyPr vert="vert270" wrap="square" anchor="ctr"/>`, Para{Text: "Vertical text", RPr: `sz="2800"`, PPr: `algn="ctr"`})
 	s.Raw(fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="Slide number"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>`+
 		`<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Slide </a:t></a:r><a:fld id="{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}" type="slidenum"><a:rPr lang="en-US"/><a:t>99</a:t></a:fld></a:p></p:txBody></p:sp>`,

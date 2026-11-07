@@ -103,8 +103,9 @@ func (r *slideRenderer) layoutText(sp *xmltree.Node, ts *textStyle, box rect, cx
 }
 
 // layoutTextAt lays out with a forced font scale when scale > 0. With "shrink text on overflow"
-// (a:normAutofit) the stored scale is only a cache of what PowerPoint computed: when the text
-// still overflows with deckfold's metrics, the scale is reduced in steps, as PowerPoint does.
+// (a:normAutofit) deckfold uses the scale stored in the file, as PowerPoint does when it opens
+// or exports a file: PowerPoint only shrinks the text again while someone edits it. The
+// reference images show overflowing text when the file stores no scale.
 func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, cx colorCtx, shapeRels relLookup, scale float64) []textSeg {
 	body := sp.Child("txBody")
 	if body == nil {
@@ -127,7 +128,6 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 		}
 		lnReduce = float64(af.Int("lnSpcReduction", 0)) / 100000
 	}
-	autofit := bp.elem("normAutofit") != nil && bp.elem("normAutofit").Name == "normAutofit"
 	if scale > 0 {
 		fontScale = scale
 		lnReduce = math.Min(0.2, (1-scale)*0.5)
@@ -390,7 +390,17 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 					l.segs[i].x += shift
 				}
 			}
+			// PowerPoint's single line spacing is 1.2 times the largest font size of the line,
+			// whatever the font; the ascent only places the baseline (measured against the
+			// PowerPoint reference images, docs/spikes/S4-powerpoint-reference.md)
+			size := 0.0
+			for _, sg := range l.segs {
+				size = math.Max(size, sg.size)
+			}
 			h := (l.asc + l.desc) * lnPct
+			if size > 0 {
+				h = 1.2 * size * lnPct
+			}
 			a := l.asc * lnPct
 			if lnPts > 0 {
 				h = lnPts
@@ -426,9 +436,6 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 	total := 0.0
 	for i, l := range lines {
 		total += spaceBefore[i] + l.asc + l.desc + spaceAfter[i]
-	}
-	if autofit && total > inner.h+1 && fontScale > 0.3 {
-		return r.layoutTextAt(sp, ts, box, cx, shapeRels, math.Max(0.25, fontScale-0.1))
 	}
 	top := inner.y
 	switch bp.attr("anchor") {

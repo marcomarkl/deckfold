@@ -4,7 +4,8 @@
 # For every deck in fixtures/pptx/src it
 #   1. opens the deck in PowerPoint,
 #   2. saves it again as fixtures/pptx/<name>.pptx (the copy the tests read),
-#   3. exports one PNG per slide into fixtures/pptx/ref/<name>/,
+#   3. exports it as PDF and renders one PNG per shown slide into fixtures/pptx/ref/<name>/
+#      (rasterize.swift, PDFKit; PowerPoint's own PNG export writes no files),
 #   4. writes fixtures/pptx/ref/<name>/source.sha256 with the hash of the saved copy.
 #
 # PowerPoint is sandboxed, so all work happens in ~/Documents/deckfold-pptxref and the results
@@ -27,19 +28,20 @@ for name in "$@"; do
 	run="$work/$name-$(date +%s)"
 	mkdir -p "$run/png"
 	cp "$src/$name.pptx" "$run/in.pptx"
-	osascript "$repo/scripts/pptxref/export.applescript" "$run/in.pptx" "$run/out.pptx" "$run/png"
+	osascript "$repo/scripts/pptxref/export.applescript" "$run/in.pptx" "$run/out.pptx" "$run/deck.pdf"
+	# slide size in CSS pixels (EMU / 9525)
+	size=$(unzip -p "$run/out.pptx" ppt/presentation.xml | grep -o '<p:sldSz[^>]*>' | head -1)
+	cx=$(echo "$size" | sed -E 's/.*cx="([0-9]+)".*/\1/')
+	cy=$(echo "$size" | sed -E 's/.*cy="([0-9]+)".*/\1/')
+	swift "$repo/scripts/pptxref/rasterize.swift" "$run/deck.pdf" "$run/png" $((cx / 9525)) $((cy / 9525))
 	ref="$repo/fixtures/pptx/ref/$name"
 	mkdir -p "$ref"
 	rm -f "$ref"/*.png
-	i=1
-	# PowerPoint names the slides Slide1.png, Slide2.png, ... (localized on some systems).
-	for f in $(ls "$run/png" | sort -V); do
-		cp "$run/png/$f" "$ref/$i.png"
-		i=$((i + 1))
-	done
+	cp "$run/png"/*.png "$ref/"
+	i=$(ls "$run/png" | wc -l | tr -d ' ')
 	cp "$run/out.pptx" "$repo/fixtures/pptx/$name.pptx"
 	shasum -a 256 "$repo/fixtures/pptx/$name.pptx" | cut -d' ' -f1 > "$ref/source.sha256"
-	echo "reference written: $name ($((i - 1)) slides)"
+	echo "reference written: $name ($i slides)"
 done
 
 # Quit PowerPoint only if no presentation is open.

@@ -200,16 +200,22 @@ func TestTextDeck(t *testing.T) {
 			t.Errorf("text output has no %s", want)
 		}
 	}
-	// the overflowing 24 pt text (32 px) is drawn smaller
-	re := regexp.MustCompile(`font-size="([0-9.]+)"[^>]*>This text box`)
-	m := re.FindStringSubmatch(html)
-	if m == nil {
-		t.Fatal("shrinking text not found")
+	// "shrink on overflow" uses the scale stored in the file, like PowerPoint: without one the
+	// 24 pt text (32 px) keeps its size, with fontScale="62500" it is drawn at 20 px
+	sizeOf := func(start string) float64 {
+		m := regexp.MustCompile(`font-size="([0-9.]+)"[^>]*>` + start).FindStringSubmatch(html)
+		if m == nil {
+			t.Fatalf("text %q not found", start)
+		}
+		var v float64
+		fmt.Sscan(m[1], &v)
+		return v
 	}
-	var size float64
-	fmt.Sscan(m[1], &size)
-	if size >= 32 {
-		t.Errorf("shrinking text drawn at %v px, want less than 32", size)
+	if v := sizeOf("This text box"); v != 32 {
+		t.Errorf("text without a stored scale drawn at %v px, want 32", v)
+	}
+	if v := sizeOf("Stored scale"); v < 19.9 || v > 20.1 {
+		t.Errorf("text with fontScale 62.5 %% drawn at %v px, want 20", v)
 	}
 }
 

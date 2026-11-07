@@ -12,7 +12,14 @@ import { ROOT, OUT, fileURL } from './helpers.mjs';
 // Starting value from the plan; spike S4 calibrates it.
 const THRESHOLD = 0.95;
 // Slides allowed below the threshold, with the reason: { 'deck/3': 'reason' }.
-const EXCEPTIONS = {};
+const EXCEPTIONS = {
+  // Values, axis scale, legend and colors match PowerPoint, but PowerPoint lays out the plot area
+  // of an automatic layout a few pixels differently; the offset of the many one-pixel gridlines
+  // and tick marks dominates SSIM (measured 0.68 on 2026-11-07).
+  'charts/1': 'automatic plot area layout',
+  // The same for the gridlines of the area chart (0.92); the pie and the doughnut match.
+  'charts/2': 'automatic plot area layout',
+};
 
 const fixtures = path.join(ROOT, 'fixtures', 'pptx');
 const decks = fs.readdirSync(path.join(fixtures, 'src')).filter((f) => f.endsWith('.pptx')).map((f) => f.slice(0, -5));

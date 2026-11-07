@@ -6,7 +6,7 @@ Public test decks for the PPTX converter. Unlike `testdata/`, everything here is
 |---|---|---|
 | `src/` | decks written by the generator | `go run ./scripts/pptxgen` |
 | `.` | the same decks after PowerPoint opened and saved them | `scripts/pptxref/pptxref.sh` |
-| `ref/<name>/` | one PNG per slide exported by PowerPoint, plus `source.sha256` | `scripts/pptxref/pptxref.sh` |
+| `ref/<name>/` | one PNG per shown slide (PowerPoint's PDF export, rendered with PDFKit), plus `source.sha256` | `scripts/pptxref/pptxref.sh` |
 
 The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint itself writes. When a deck has no saved copy yet, they fall back to `src/` and skip the image comparison. The image comparison also checks `source.sha256`: if the saved copy changed after the reference images were made, the test fails instead of comparing against outdated images.
 
