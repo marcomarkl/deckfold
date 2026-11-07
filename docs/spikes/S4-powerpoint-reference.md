@@ -38,7 +38,39 @@ SSIM after these changes, per slide:
 
 The threshold stays at 0.95. The two chart slides are exceptions in the test: values, axis scale, legend and colors match, but PowerPoint lays out the plot area of an automatic layout a few pixels differently, and SSIM in 8 x 8 windows reacts strongly to many one-pixel lines that are offset.
 
+## Second and third run: the decks for the closed gaps
+
+Twelve more feature decks went through the script on 2026-11-07, in two announced runs: `gifs`, `triggers`, `shapes3d`, `bullets`, `effects` and `fontembed` (a deck with an embedded OFL font), then `wmf`, `text2`, `morph`, `transitions3d`, `charts2` and `ink`.
+
+Findings:
+
+- **PowerPoint reported `transitions3d` as damaged.** Saving the repaired deck gave an empty file. The cause was the form of the PowerPoint 2010 and 2013 transitions: PowerPoint accepts only the form it writes itself, with explicit directions (`p14:flip dir="l"`, `p15:wind invX="1"`), `p15:prstTrans prst="..."` for the newer presets and no `p14:dur` beside them. The form came from transitions that PowerPoint set itself through AppleScript; the generator writes it now and PowerPoint opens the deck without a prompt.
+- **PowerPoint dropped the ink.** It keeps an InkML part only when the `p14:contentPart` points to it with the `customXml` relationship type. PowerPoint stretches the strokes to the frame of the part in both directions and draws them at the brush width in centimeters, whatever the frame's size.
+- **Picture bullets** are 0.65 times the font size high and do not count for the line pitch or the first baseline (0.916 before, 0.959 after).
+- **3D shapes:** the isometric camera presets are a rotation of 45 degrees about z and 54.74 degrees about x, the shape turns about its front face, and a fill light from the opposite side keeps the dark faces from going black. Slide 3 of `shapes3d` went from 0.905 to 0.961 with these changes.
+- **Charts with an automatic layout and chart text without `c:txPr`** differ in the font and in the plot area. The data, axes and colors match; the slides of `charts2` are exceptions in the test.
+- **The baseline of Liberation Serif** (the embedded font in `fontembed`) is 1 to 3 px lower in PowerPoint than in deckfold; the glyphs match.
+- PowerPoint built `fixtures/pptx/powerpoint/animations.pptx` and `transitions.pptx` itself (`scripts/pptxref/ppdecks.sh`). Its scripting dictionary sets neither trigger shapes nor delays.
+
+SSIM per slide after all three runs (Chrome on macOS, measured on 2026-11-07):
+
+| Deck | Slides |
+|---|---|
+| bullets | 0.959 |
+| charts2 | 0.74 to 0.90 (exceptions) |
+| effects | 0.981, 0.985 |
+| fontembed | 0.918 (exception) |
+| gifs | 0.996, 0.990 |
+| ink | 1.000 |
+| morph | 0.999, 0.999 |
+| shapes3d | 0.953, 0.966, 0.961 |
+| text2 | 0.958, 0.988 |
+| transitions3d | 0.983 to 0.999 (38 slides) |
+| triggers | 0.998, 0.999 |
+| wmf | 0.978 |
+
+The decks of the first run kept their values. The images show the editing view, so they cover the static drawing only; the transitions and Morph are checked by the browser tests in `tests/e2e/pptx.spec.mjs`.
+
 ## Still open
 
-- The two decks that should come from PowerPoint itself (animations and transitions as PowerPoint writes them). The scripting dictionary has `add effect` and `slide show transition`, so they can probably be built by script.
-- A comparison in Chromium on Linux; the CI job runs the same test there.
+- A comparison of the 3D shapes with WebGL in a browser with a GPU: the tests draw WebGL with SwiftShader.

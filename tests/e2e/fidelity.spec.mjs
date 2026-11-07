@@ -10,7 +10,7 @@ import { ROOT, OUT, fileURL, corpus, need } from './helpers.mjs';
 
 let server, base;
 test.beforeAll(async () => {
-  const root = path.join(ROOT, 'testdata');
+  const root = ROOT; // corpus paths are relative to the repository
   server = http.createServer((req, res) => {
     const p = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
     if (!p.startsWith(root) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }

@@ -206,6 +206,11 @@ func (r *slideRenderer) addSeg(segs *[]textSeg, asc, desc *float64, x float64, t
 }
 
 func measure(f *fonts.Face, text string, size float64) float64 {
+	if fonts.Complex(text) {
+		if w, ok := f.ShapedWidth(text); ok {
+			return w * size
+		}
+	}
 	w := 0.0
 	for _, c := range text {
 		w += f.Advance(c)

@@ -44,12 +44,20 @@ type Deck struct {
 	ShowLoop      bool   // presentation property: loop until Escape
 	TableStyles   string // raw a:tblStyle elements for ppt/tableStyles.xml
 	UseTimings    *bool  // presentation property: use rehearsed timings (nil = default true)
-	Slides        []*Slide
-	media         []media
-	extra         []extraPart
+	// Fonts are embedded as ppt/fonts/fontN.fntdata (EOT data, see fonts.EOT).
+	Fonts  []Font
+	Slides []*Slide
+	media  []media
+	extra  []extraPart
 }
 
 type extraPart struct{ name, contentType, data string }
+
+// Font is an embedded font: the typeface name and the regular style as EOT data.
+type Font struct {
+	Typeface string
+	Regular  []byte
+}
 
 // Part adds an XML part (for example ppt/charts/chart1.xml) with its content type.
 func (d *Deck) Part(name, contentType, data string) {
@@ -198,8 +206,10 @@ func (s *Slide) Placeholder(typ string, ps ...Para) {
 // Box is a position in pixels at 96 dpi.
 type Box struct{ X, Y, W, H float64 }
 
-func (b Box) xfrm() string {
-	return fmt.Sprintf(`<a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm>`, Px(b.X), Px(b.Y), Px(b.W), Px(b.H))
+func (b Box) xfrm() string { return `<a:xfrm>` + b.xfrmInner() + `</a:xfrm>` }
+
+func (b Box) xfrmInner() string {
+	return fmt.Sprintf(`<a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/>`, Px(b.X), Px(b.Y), Px(b.W), Px(b.H))
 }
 
 // Shape adds a preset shape. fill and line are raw DrawingML (e.g. `<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>`);
@@ -269,6 +279,15 @@ func (d *Deck) Bytes() ([]byte, error) {
 			return nil, err
 		}
 	}
+	for i, f := range d.Fonts {
+		w, err := z.CreateHeader(&zip.FileHeader{Name: fmt.Sprintf("ppt/fonts/font%d.fntdata", i+1), Method: zip.Store, Modified: stamp})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(f.Regular); err != nil {
+			return nil, err
+		}
+	}
 	for _, m := range d.media {
 		w, err := z.CreateHeader(&zip.FileHeader{Name: "ppt/media/" + m.name, Method: zip.Store, Modified: stamp})
 		if err != nil {
@@ -302,6 +321,9 @@ func (d *Deck) parts() [][2]string {
 	ct.WriteString(xmlHead + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`)
 	ct.WriteString(`<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>`)
 	exts := map[string]bool{}
+	if len(d.Fonts) > 0 {
+		ct.WriteString(`<Default Extension="fntdata" ContentType="application/x-fontdata"/>`)
+	}
 	for _, m := range d.media {
 		ext := m.name[strings.LastIndex(m.name, ".")+1:]
 		if !exts[ext] {
@@ -361,13 +383,26 @@ func (d *Deck) parts() [][2]string {
 	if d.FirstSlideNum > 1 {
 		first = fmt.Sprintf(` firstSlideNum="%d"`, d.FirstSlideNum)
 	}
-	pres.WriteString(xmlHead + `<p:presentation ` + nsDecl + ` saveSubsetFonts="1"` + first + `><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:notesMasterIdLst><p:notesMasterId r:id="rId2"/></p:notesMasterIdLst><p:sldIdLst>`)
+	embed := ""
+	if len(d.Fonts) > 0 {
+		embed = ` embedTrueTypeFonts="1"`
+	}
+	pres.WriteString(xmlHead + `<p:presentation ` + nsDecl + ` saveSubsetFonts="1"` + first + embed + `><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:notesMasterIdLst><p:notesMasterId r:id="rId2"/></p:notesMasterIdLst><p:sldIdLst>`)
 	for i := range d.Slides {
 		rid := fmt.Sprintf("rId%d", 100+i)
 		pres.WriteString(fmt.Sprintf(`<p:sldId id="%d" r:id="%s"/>`, 256+i, rid))
 		presRels.WriteString(`<Relationship Id="` + rid + `" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide` + fmt.Sprint(i+1) + `.xml"/>`)
 	}
 	pres.WriteString(fmt.Sprintf(`</p:sldIdLst><p:sldSz cx="%d" cy="%d"/><p:notesSz cx="6858000" cy="9144000"/>`, d.Width, d.Height))
+	if len(d.Fonts) > 0 {
+		pres.WriteString(`<p:embeddedFontLst>`)
+		for i, f := range d.Fonts {
+			rid := fmt.Sprintf("rId%d", 50+i)
+			pres.WriteString(`<p:embeddedFont><p:font typeface="` + Esc(f.Typeface) + `" pitchFamily="18" charset="0"/><p:regular r:id="` + rid + `"/></p:embeddedFont>`)
+			presRels.WriteString(`<Relationship Id="` + rid + `" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/font` + fmt.Sprint(i+1) + `.fntdata"/>`)
+		}
+		pres.WriteString(`</p:embeddedFontLst>`)
+	}
 	pres.WriteString(`<p:defaultTextStyle>` + levels("", d.BodyFont, 1800) + `</p:defaultTextStyle></p:presentation>`)
 	presRels.WriteString(`</Relationships>`)
 	add("ppt/presentation.xml", pres.String())
@@ -383,7 +418,11 @@ func (d *Deck) parts() [][2]string {
 	show += `><p:present/><p:sldAll/></p:showPr>`
 	add("ppt/presProps.xml", xmlHead+`<p:presentationPr `+nsDecl+`>`+show+`</p:presentationPr>`)
 	add("ppt/viewProps.xml", xmlHead+`<p:viewPr `+nsDecl+`><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>`)
-	add("ppt/tableStyles.xml", xmlHead+`<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}">`+d.TableStyles+`</a:tblStyleLst>`)
+	tblStyles := `<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"/>`
+	if d.TableStyles != "" {
+		tblStyles = strings.TrimSuffix(tblStyles, "/>") + ">" + d.TableStyles + "</a:tblStyleLst>"
+	}
+	add("ppt/tableStyles.xml", xmlHead+tblStyles)
 
 	add("ppt/theme/theme1.xml", theme(d.HeadFont, d.BodyFont))
 	add("ppt/theme/theme2.xml", theme(d.HeadFont, d.BodyFont))

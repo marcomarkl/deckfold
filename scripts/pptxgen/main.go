@@ -1,6 +1,6 @@
 // Command pptxgen writes the public PowerPoint feature decks to fixtures/pptx/src.
 //
-// Usage: go run ./scripts/pptxgen [-out fixtures/pptx/src] [-big]
+// Usage: go run ./scripts/pptxgen [-out fixtures/pptx/src] [-big] [-ppbase folder]
 //
 // The decks use neutral English content and only the fonts deckfold bundles. scripts/pptxref
 // opens each of them in PowerPoint, saves it again and exports one reference PNG per slide;
@@ -22,7 +22,16 @@ import (
 func main() {
 	out := flag.String("out", filepath.Join("fixtures", "pptx", "src"), "output folder")
 	big := flag.Bool("big", false, "also write big.pptx with 200 slides")
+	ppbase := flag.String("ppbase", "", "only write the base decks for scripts/pptxref/ppdecks.sh into this folder")
 	flag.Parse()
+	if *ppbase != "" {
+		for name, d := range map[string]*pptxgen.Deck{"animations": pptxgen.PPAnimationsBase(), "transitions": pptxgen.PPTransitionsBase()} {
+			if err := d.Write(filepath.Join(*ppbase, name+"-base.pptx")); err != nil {
+				fail(err)
+			}
+		}
+		return
+	}
 	if err := os.MkdirAll(*out, 0o755); err != nil {
 		fail(err)
 	}

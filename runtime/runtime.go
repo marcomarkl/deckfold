@@ -17,3 +17,9 @@ var CSS string
 //
 //go:embed dist/pptx-player.js
 var PptxJS string
+
+// ThreeJS is the part of three.js that the PowerPoint player uses for 3D (built by scripts/three).
+// The deck writer embeds it only in decks that need it.
+//
+//go:embed dist/three.js
+var ThreeJS string

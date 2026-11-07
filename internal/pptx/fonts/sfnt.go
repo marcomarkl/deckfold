@@ -116,3 +116,106 @@ func nameTable(family string, orig *tfont.SFNT) []byte {
 	}
 	return append(hdr, strs...)
 }
+
+// cmapTable writes a cmap table for a subset from the characters it maps: format 4 for the
+// Basic Multilingual Plane (platforms 0/3 and 3/1) and, when needed, format 12 for the rest
+// (platforms 0/4 and 3/10). The subset's own cmap is not used: tdewolff/font rebuilds it from
+// a reverse lookup that reports wrong characters for some glyphs (for example the u with
+// diaeresis for the cedilla of Liberation Serif), so a composite glyph's component could take
+// over a character.
+func cmapTable(m map[rune]uint16) []byte {
+	runes := make([]rune, 0, len(m))
+	for r := range m {
+		runes = append(runes, r)
+	}
+	sort.Slice(runes, func(i, j int) bool { return runes[i] < runes[j] })
+	type seg struct {
+		start, end rune
+		glyph      uint16
+	}
+	// runs of characters whose glyph ids also follow each other
+	var segs []seg
+	for _, r := range runes {
+		g := m[r]
+		if n := len(segs); n > 0 && segs[n-1].end == r-1 && uint32(segs[n-1].glyph)+uint32(r-segs[n-1].start) == uint32(g) {
+			segs[n-1].end = r
+			continue
+		}
+		segs = append(segs, seg{r, r, g})
+	}
+	var bmp []seg
+	for _, s := range segs {
+		if s.start <= 0xFFFF {
+			if s.end > 0xFFFF {
+				s.end = 0xFFFF
+			}
+			if s.start == 0xFFFF {
+				continue
+			}
+			if s.end == 0xFFFF {
+				s.end = 0xFFFE
+			}
+			bmp = append(bmp, s)
+		}
+	}
+	// format 4 with idDelta for every segment, plus the closing 0xFFFF segment
+	n := len(bmp) + 1
+	es := 0
+	for 1<<(es+1) <= n {
+		es++
+	}
+	f4 := make([]byte, 16+8*n)
+	be := binary.BigEndian
+	be.PutUint16(f4[0:], 4)
+	be.PutUint16(f4[2:], uint16(len(f4)))
+	be.PutUint16(f4[6:], uint16(2*n))
+	be.PutUint16(f4[8:], uint16(2*(1<<es)))
+	be.PutUint16(f4[10:], uint16(es))
+	be.PutUint16(f4[12:], uint16(2*n-2*(1<<es)))
+	for i := 0; i < n; i++ {
+		start, end, delta := uint16(0xFFFF), uint16(0xFFFF), uint16(1)
+		if i < len(bmp) {
+			start, end = uint16(bmp[i].start), uint16(bmp[i].end)
+			delta = bmp[i].glyph - start
+		}
+		be.PutUint16(f4[14+2*i:], end)
+		be.PutUint16(f4[16+2*n+2*i:], start)
+		be.PutUint16(f4[16+4*n+2*i:], delta)
+		// idRangeOffset stays 0
+	}
+	var f12 []byte
+	if len(runes) > 0 && runes[len(runes)-1] > 0xFFFF {
+		f12 = make([]byte, 16+12*len(segs))
+		be.PutUint16(f12[0:], 12)
+		be.PutUint32(f12[4:], uint32(len(f12)))
+		be.PutUint32(f12[12:], uint32(len(segs)))
+		for i, s := range segs {
+			be.PutUint32(f12[16+12*i:], uint32(s.start))
+			be.PutUint32(f12[20+12*i:], uint32(s.end))
+			be.PutUint32(f12[24+12*i:], uint32(s.glyph))
+		}
+	}
+	type rec struct {
+		platform, encoding uint16
+		table              []byte
+	}
+	recs := []rec{{0, 3, f4}, {3, 1, f4}}
+	if f12 != nil {
+		recs = []rec{{0, 3, f4}, {0, 4, f12}, {3, 1, f4}, {3, 10, f12}}
+	}
+	out := make([]byte, 4+8*len(recs))
+	be.PutUint16(out[2:], uint16(len(recs)))
+	offs := map[*byte]uint32{}
+	for i, r := range recs {
+		off, ok := offs[&r.table[0]]
+		if !ok {
+			off = uint32(len(out))
+			offs[&r.table[0]] = off
+			out = append(out, r.table...)
+		}
+		be.PutUint16(out[4+8*i:], r.platform)
+		be.PutUint16(out[6+8*i:], r.encoding)
+		be.PutUint32(out[8+8*i:], off)
+	}
+	return out
+}

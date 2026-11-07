@@ -4,9 +4,9 @@
 # (Linux, Windows and macOS, x64 and arm64): go vet, go test and a smoke test of the native
 # binary (scripts/smoke). On Linux the smoke test also runs as an unprivileged user. Windows and
 # macOS runners run with elevated rights, so there the test only shows that the binary works.
-# The fidelity job runs the browser tests of the PowerPoint converter (tests/e2e/pptx*.spec.mjs and
-# the 200-slide performance test) in Chrome on Linux; they use the public decks in fixtures/pptx.
-# The other browser tests need a local corpus and do not run here.
+# The browser job runs the browser tests in Chrome on Linux and Windows and the PowerPoint tests in
+# Firefox on Linux, with the public decks in fixtures/. Tests that need a deck only the local
+# corpus has (testdata/) are skipped there.
 #
 # A v* tag additionally builds the six release binaries and publishes them as a pre-release.
 name: CI
@@ -72,10 +72,23 @@ jobs:
             echo "::notice::Rosetta is not available on this runner; darwin/amd64 was only built"
           fi
 
-  fidelity:
-    name: browser tests (PowerPoint, Chrome on Linux)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  browser:
+    name: browser tests (${{ matrix.project }} on ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            project: chrome
+            browser: chrome
+          - os: ubuntu-latest
+            project: firefox
+            browser: firefox
+          - os: windows-latest
+            project: chrome
+            browser: chrome
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -84,17 +97,17 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - name: Install Playwright with Chrome
+      - name: Install Playwright with ${{ matrix.browser }}
         working-directory: tests
         run: |
           npm ci
-          npx playwright install --with-deps chrome
-      - name: PowerPoint browser tests
+          npx playwright install --with-deps ${{ matrix.browser }}
+      - name: Browser tests (public decks; tests of the private corpus are skipped)
         working-directory: tests
-        run: npx playwright test e2e/pptx.spec.mjs e2e/pptx-fidelity.spec.mjs e2e/perf.spec.mjs --project=chrome
+        run: npx playwright test --project=${{ matrix.project }}
 
   release:
-    needs: [test, fidelity]
+    needs: [test, browser]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -8,14 +8,14 @@ export const OUT = path.resolve(here, '..', '.out');
 export const ROOT = path.resolve(here, '..', '..');
 export const fileURL = (name) => 'file://' + path.join(OUT, name);
 
-// Corpus entries found by setup.mjs ({ claude, keynote }, paths relative to testdata/).
+// Decks found by setup.mjs ({ claude, keynote }, paths relative to the repository).
 export const corpus = (() => {
   try { return JSON.parse(fs.readFileSync(path.join(OUT, 'corpus.json'), 'utf8')); } catch { return {}; }
 })();
 
-// Skips the current test when the local corpus has no entry of this kind.
+// Skips the current test when there is no deck of this kind.
 export function need(kind) {
-  test.skip(!corpus[kind], `local test corpus has no ${kind} deck (testdata/ is not part of the repository)`);
+  test.skip(!corpus[kind], `no ${kind} deck in fixtures/ or in the local corpus testdata/`);
 }
 
 // Watches network requests and errors on all pages of a context.
@@ -52,6 +52,13 @@ export async function present(page, context, name) {
   await aud.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   return aud;
 }
+
+// Whether the page's browser can create a WebGL context (the Firefox of the Linux CI cannot).
+export const hasWebGL = (page) => page.evaluate(() => {
+  const c = document.createElement('canvas');
+  return !!(c.getContext('webgl2') || c.getContext('webgl'));
+});
+export const NO_WEBGL = 'no WebGL in this browser; the fallback is checked by the transitions test';
 
 export const audState = (aud) => aud.evaluate(() => window.__deckfold.audience.state());
 export const counter = (page) => page.textContent('.df-counter');

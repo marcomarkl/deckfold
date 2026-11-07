@@ -60,8 +60,9 @@ type Font struct {
 	File  string
 }
 
-// Write writes the deck into dir (which must exist and be empty).
-func Write(dir string, res *render.Result, data Data, fonts []Font, playerJS string) error {
+// Write writes the deck into dir (which must exist and be empty). threeJS is the three.js
+// bundle; it is embedded only when the deck has 3D content (res.WebGL).
+func Write(dir string, res *render.Result, data Data, fonts []Font, playerJS, threeJS string) error {
 	assets := filepath.Join(dir, "assets")
 	if err := os.MkdirAll(assets, 0o755); err != nil {
 		return err
@@ -109,6 +110,9 @@ func Write(dir string, res *render.Result, data Data, fonts []Font, playerJS str
 	safe := strings.ReplaceAll(string(js), "</", `<\/`)
 	safe = strings.ReplaceAll(safe, "<!--", `<\!--`)
 	fmt.Fprintf(&b, "<script type=\"application/json\" id=\"%s\">%s</script>\n", DataID, safe)
+	if res.WebGL && threeJS != "" {
+		b.WriteString(inject.ThreeBegin + "<script id=\"df-pptx-three\">" + threeJS + "</script>" + inject.ThreeEnd + "\n")
+	}
 	b.WriteString(PlayerBegin + PlayerScript(playerJS) + PlayerEnd + "\n")
 	b.WriteString("</body>\n</html>\n")
 	return os.WriteFile(filepath.Join(dir, "index.html"), []byte(b.String()), 0o644)

@@ -19,18 +19,17 @@ Keynote does not write presenter notes into its HTML export, so Keynote decks ha
 
 ### PowerPoint files
 
-deckfold reads the slides, layouts, masters and themes of the file and draws every slide as SVG: shapes and their geometry, fills, outlines and arrowheads, shadows and glow, pictures (also EMF), tables, charts (column, bar, line, area, pie, doughnut), SmartArt graphics and text. It lays out the text itself with the metrics of the fonts. Fonts come from the presentation, from the fonts installed on the computer (including the fonts that ship with Microsoft Office) or, when neither has them, from the fonts bundled with deckfold (Carlito for Calibri, Liberation for Arial, Times New Roman and Courier New). The report lists where each font came from. Only subsets of the fonts that may be embedded are stored in the file.
+deckfold reads the slides, layouts, masters and themes of the file and draws every slide as SVG: shapes and their geometry, fills, outlines and arrowheads, shadows, glow, inner shadows, soft edges, reflections and blur, pictures (also EMF and WMF), tables, charts, SmartArt graphics, ink and text. It lays out the text itself with the metrics of the fonts, including justified text; right-to-left text and complex scripts (Arabic, Hebrew, Indic, Thai) are measured with HarfBuzz and shaped by the browser. Fonts come from the presentation (also when PowerPoint stored them compressed), from the fonts installed on the computer (including the fonts that ship with Microsoft Office) or, when neither has them, from the fonts bundled with deckfold (Carlito for Calibri, Liberation for Arial, Times New Roman and Courier New). The report lists where each font came from. Only subsets of the fonts that may be embedded are stored in the file.
 
-Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, effects that start with or after the previous one, and the transitions fade, push, wipe, cover, reveal and cut. Slides with automatic timings advance by themselves in auto mode. Hidden slides are left out.
+Charts are drawn from the data stored with them: column, bar, line, area, pie, doughnut, scatter, bubble, radar, stock, pie of pie, bar of pie and surface charts. 3D shapes (bevels, extrusions, cameras) and 3D charts are drawn with WebGL (three.js, embedded only in decks that need it); without WebGL, and in the previews of the presenter view, an SVG approximation takes their place.
+
+Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, word and letter, effects that start with or after the previous one, and triggers (a click on a shape plays its effects; a click on a video or an audio icon plays or pauses it). Animated GIFs start again when their slide is shown. Morph moves, scales and turns the objects it pairs. The transitions of PowerPoint 2010 and later are drawn too: the 3D ones (cube, flip, gallery, doors and others) with CSS, the ones that break the slide into pieces (glitter, honeycomb, vortex, shred and others) with WebGL, and as a fade where WebGL is missing. Slides with automatic timings advance by themselves in auto mode. Hidden slides are left out.
 
 What deckfold does not show as PowerPoint does:
 
-- Morph, 3D and the other dynamic transitions are played as a fade.
-- Animations by word or by letter are played by paragraph; animations started by clicking a shape (triggers) are not played.
-- Charts with an automatic layout can differ from PowerPoint by a few pixels in the position of the plot area.
-- Fonts embedded in the presentation are stored compressed (MicroType Express), which deckfold cannot read yet; it uses the installed fonts or a bundled substitute instead and reports it.
-- WMF pictures, scatter, radar, bubble and stock charts and 3D effects are left out or shown as a placeholder, with a warning.
-- Right-to-left text and complex scripts are laid out without shaping, picture bullets are not shown.
+- Charts with an automatic layout can differ from PowerPoint by a few pixels in the position of the plot area, and the 3D charts are an approximation.
+- 3D shapes and the tile transitions are close to PowerPoint, not identical; Morph does not change the outline of shapes.
+- Animations started by a bookmark in a video or audio clip are not played.
 - Videos in WMV, AVI or ASF show only their still image, because browsers cannot play them. Media files larger than 1 GB are refused; compress them in PowerPoint first.
 
 ## Usage

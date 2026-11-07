@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 
+	gtfont "github.com/go-text/typesetting/font"
 	tfont "github.com/tdewolff/font"
 )
 
@@ -57,6 +58,9 @@ type Face struct {
 	noSubset bool
 	mu       sync.Mutex
 	used     map[rune]bool
+	// shaping (shape.go), loaded on first use
+	shapeFace   *gtfont.Face
+	shapeFailed bool
 }
 
 // Ascent returns the ascent in em (OS/2 winAscent, as PowerPoint uses it for line height).
@@ -124,6 +128,9 @@ func (f *Face) Subset() (data []byte, family string, err error) {
 	}
 	sum := sha256.Sum256(append(append([]byte{}, f.data[:min(len(f.data), 4096)]...), []byte(string(runes))...))
 	family = "df-" + hex.EncodeToString(sum[:5])
+	if !sub.IsCFF {
+		sub.Tables["cmap"] = cmapTable(subsetCmap(f.sfnt, runes, ids))
+	}
 	sub.Tables["name"] = nameTable(family, f.sfnt)
 	delete(sub.Tables, "DSIG")
 	return writeSFNT(sub.Tables, sub.IsCFF), family, nil
@@ -389,4 +396,51 @@ func (r *Resolver) scan() {
 			return list[i].index < list[j].index
 		})
 	}
+}
+
+// BundledSubset returns a subset of a bundled font (for example "LiberationSerif") with the
+// characters of chars, renamed to family. The deck generator uses it to embed a font in a
+// public test deck; the new name keeps the Reserved Font Names of the original free.
+func BundledSubset(name, family, chars string) ([]byte, error) {
+	data := bundledData(name, false, false)
+	s, err := tfont.ParseSFNT(data, 0)
+	if err != nil {
+		return nil, err
+	}
+	ids := []uint16{0}
+	seen := map[uint16]bool{0: true}
+	for _, r := range chars {
+		if g := s.GlyphIndex(r); !seen[g] {
+			seen[g] = true
+			ids = append(ids, g)
+		}
+	}
+	sub, err := s.Subset(ids, tfont.SubsetOptions{Tables: tfont.KeepMinTables})
+	if err != nil {
+		return nil, err
+	}
+	sub.Tables["cmap"] = cmapTable(subsetCmap(s, []rune(chars), ids))
+	sub.Tables["name"] = nameTable(family, s)
+	delete(sub.Tables, "DSIG")
+	return writeSFNT(sub.Tables, false), nil
+}
+
+// subsetCmap maps each character to its glyph id in a subset made from ids (the subset keeps
+// the order of ids).
+func subsetCmap(s *tfont.SFNT, runes []rune, ids []uint16) map[rune]uint16 {
+	pos := make(map[uint16]uint16, len(ids))
+	for i, g := range ids {
+		if _, ok := pos[g]; !ok {
+			pos[g] = uint16(i)
+		}
+	}
+	m := map[rune]uint16{}
+	for _, r := range runes {
+		if g := s.GlyphIndex(r); g != 0 {
+			if p, ok := pos[g]; ok {
+				m[r] = p
+			}
+		}
+	}
+	return m
 }
