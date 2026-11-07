@@ -13,7 +13,7 @@ var Tiles = (function () {
   function ready() {
     if (failed) return false;
     T = window.__dfThree;
-    if (!T) { failed = true; return false; }
+    if (!T || !hasWebGL()) { failed = true; return false; }
     if (renderer) return true;
     try {
       renderer = new T.WebGLRenderer({ alpha: true, antialias: true });

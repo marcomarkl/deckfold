@@ -53,6 +53,13 @@ export async function present(page, context, name) {
   return aud;
 }
 
+// Whether the page's browser can create a WebGL context (the Firefox of the Linux CI cannot).
+export const hasWebGL = (page) => page.evaluate(() => {
+  const c = document.createElement('canvas');
+  return !!(c.getContext('webgl2') || c.getContext('webgl'));
+});
+export const NO_WEBGL = 'no WebGL in this browser; the fallback is checked by the transitions test';
+
 export const audState = (aud) => aud.evaluate(() => window.__deckfold.audience.state());
 export const counter = (page) => page.textContent('.df-counter');
 export const slideCount = (page) => page.evaluate(() => window.__deckfold.slides().length);

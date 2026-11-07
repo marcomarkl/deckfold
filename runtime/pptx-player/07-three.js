@@ -6,6 +6,26 @@
 // extruded, bevelled mesh, renders it once into a picture and lays the picture over the shape;
 // the path keeps only its outline. Previews and browsers without WebGL keep the approximation.
 
+// hasWebGL tells whether the browser can create a WebGL context. It is asked before three.js
+// creates a renderer, because three.js reports a failed context as console errors.
+var hasWebGL = (function () {
+  var known = null;
+  return function () {
+    if (known !== null) return known;
+    known = false;
+    try {
+      var c = document.createElement("canvas");
+      var gl = c.getContext("webgl2") || c.getContext("webgl");
+      if (gl) {
+        known = true;
+        var lose = gl.getExtension("WEBGL_lose_context");
+        if (lose) lose.loseContext();
+      }
+    } catch (e) {}
+    return known;
+  };
+})();
+
 var Shapes3D = (function () {
   var svgNS = "http://www.w3.org/2000/svg";
   var T = null, renderer = null, failed = false, probe = null;
@@ -13,7 +33,7 @@ var Shapes3D = (function () {
   function ready() {
     if (failed) return false;
     T = window.__dfThree;
-    if (!T) { failed = true; return false; }
+    if (!T || !hasWebGL()) { failed = true; return false; }
     if (renderer) return true;
     try {
       var c = document.createElement("canvas");

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, audState, counter, slideCount, expected, fileURL, OUT } from './helpers.mjs';
+import { watch, realErrors, solo, present, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -224,6 +224,7 @@ test('PowerPoint media: a click on the icon of an audio clip plays and pauses it
 test('PowerPoint 3D: shapes are drawn with WebGL, the front keeps its fill color', async ({ page, context }) => {
   const w = watch(context);
   await solo(page, 'pptx-shapes3d.html');
+  test.skip(!(await hasWebGL(page)), NO_WEBGL);
   const counts = async () => page.evaluate(() => ({
     all: document.querySelectorAll('[data-df-pptx-3d]').length,
     done: document.querySelectorAll('[data-df-pptx-3d-done=""]').length,
@@ -254,6 +255,7 @@ test('PowerPoint 3D: without WebGL and in previews the SVG approximation stays',
 
 test('PowerPoint 3D: previews in the presenter view keep the approximation', async ({ page, context }) => {
   const aud = await present(page, context, 'pptx-shapes3d.html');
+  test.skip(!(await hasWebGL(aud)), NO_WEBGL);
   await expect(page.locator('iframe[data-df-preview]')).toHaveCount(2);
   await expect.poll(() => aud.evaluate(() => document.querySelectorAll('image[data-df-pptx-3d-image]').length)).toBeGreaterThan(0);
   await page.waitForTimeout(500);
@@ -327,6 +329,7 @@ test('PowerPoint transitions: every 2D, 3D and tile transition plays and ends on
 test('PowerPoint 3D charts: the plots are drawn with WebGL', async ({ page, context }) => {
   const w = watch(context);
   await solo(page, 'pptx-charts2.html');
+  test.skip(!(await hasWebGL(page)), NO_WEBGL);
   const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
   for (let i = 0; i < n; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
   // five 3D charts in the generated deck; PowerPoint saves the surface chart as a 3D one too
