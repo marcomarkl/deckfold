@@ -10,6 +10,7 @@ Findings on the way:
 
 - **Start dialogs block Apple events.** In a first attempt PowerPoint did not answer `make new presentation` within two minutes (`-1712`), probably because a start dialog was open. In a later session it answered at once.
 - **`save as PNG` writes nothing.** It reports success for a file path and for a folder path, but no image appears anywhere in the sandbox or in `~/Documents`. `save as PDF` works, so the PNGs are made from the PDF.
+- **The sandbox asks for new files.** PowerPoint shows a "Grant Access" dialog for files it has not opened before. A first version of the script used a new folder per run and made PowerPoint ask for every deck. The script now uses one folder with fixed file names, but granting that folder in the dialog did not stop the dialogs for new decks in a test on 2026-11-07. The script cannot work inside PowerPoint's own container, which would avoid the dialogs: macOS refuses other programs write access to it. So the dialogs have to be confirmed during a run.
 - **Hidden slides are left out of the PDF**, so there is one page per shown slide, the same count as in the deckfold output.
 - **Fonts have to be installed.** Without Carlito and Liberation in `~/Library/Fonts`, PowerPoint draws the decks with Calibri and Arial (metric-compatible, but different glyphs). The bundled fonts are now installed there for the reference.
 - **The images show the editing view**: objects with entrance or exit animations are visible. The browser test therefore compares the player's static mode (`__dfPptx.showAll`).

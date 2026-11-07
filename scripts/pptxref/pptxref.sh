@@ -9,7 +9,8 @@
 #   4. writes fixtures/pptx/ref/<name>/source.sha256 with the hash of the saved copy.
 #
 # PowerPoint is sandboxed, so all work happens in ~/Documents/deckfold-pptxref and the results
-# are copied back. Install the bundled fonts first (Carlito and Liberation, see THIRD_PARTY_LICENSES.md)
+# are copied back. PowerPoint's sandbox shows "Grant Access" dialogs for files it has not opened
+# before; confirm them during the run. Install the bundled fonts first (Carlito and Liberation, see THIRD_PARTY_LICENSES.md)
 # into ~/Library/Fonts, otherwise PowerPoint substitutes them.
 #
 # Usage: scripts/pptxref/pptxref.sh [name ...]
@@ -25,21 +26,24 @@ if [ "$#" -eq 0 ]; then
 fi
 
 for name in "$@"; do
-	run="$work/$name-$(date +%s)"
-	mkdir -p "$run/png"
-	cp "$src/$name.pptx" "$run/in.pptx"
-	osascript "$repo/scripts/pptxref/export.applescript" "$run/in.pptx" "$run/out.pptx" "$run/deck.pdf"
+	# fixed file names in one folder: PowerPoint asks for file access ("Grant Access") for every
+	# path it has not seen; granting the folder once covers every later run
+	in="$work/$name-in.pptx" out="$work/$name-out.pptx" pdf="$work/$name.pdf" png="$work/$name-png"
+	rm -rf "$png"
+	mkdir -p "$png"
+	cp "$src/$name.pptx" "$in"
+	osascript "$repo/scripts/pptxref/export.applescript" "$in" "$out" "$pdf"
 	# slide size in CSS pixels (EMU / 9525)
-	size=$(unzip -p "$run/out.pptx" ppt/presentation.xml | grep -o '<p:sldSz[^>]*>' | head -1)
+	size=$(unzip -p "$out" ppt/presentation.xml | grep -o '<p:sldSz[^>]*>' | head -1)
 	cx=$(echo "$size" | sed -E 's/.*cx="([0-9]+)".*/\1/')
 	cy=$(echo "$size" | sed -E 's/.*cy="([0-9]+)".*/\1/')
-	swift "$repo/scripts/pptxref/rasterize.swift" "$run/deck.pdf" "$run/png" $((cx / 9525)) $((cy / 9525))
+	swift "$repo/scripts/pptxref/rasterize.swift" "$pdf" "$png" $((cx / 9525)) $((cy / 9525))
 	ref="$repo/fixtures/pptx/ref/$name"
 	mkdir -p "$ref"
 	rm -f "$ref"/*.png
-	cp "$run/png"/*.png "$ref/"
-	i=$(ls "$run/png" | wc -l | tr -d ' ')
-	cp "$run/out.pptx" "$repo/fixtures/pptx/$name.pptx"
+	cp "$png"/*.png "$ref/"
+	i=$(ls "$png" | wc -l | tr -d ' ')
+	cp "$out" "$repo/fixtures/pptx/$name.pptx"
 	shasum -a 256 "$repo/fixtures/pptx/$name.pptx" | cut -d' ' -f1 > "$ref/source.sha256"
 	echo "reference written: $name ($i slides)"
 done

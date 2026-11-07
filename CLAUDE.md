@@ -74,7 +74,7 @@ Background measurements on `file://` behaviour (Window Management API, blob URLs
 
 ## PowerPoint automation
 
-`scripts/pptxref/pptxref.sh` drives PowerPoint through AppleScript to make the reference images (see `fixtures/pptx/README.md` and `docs/spikes/S4-powerpoint-reference.md`). PowerPoint does not answer Apple events while a start dialog is open; close it first. Work only in folders below `~/Documents` and quit PowerPoint afterwards when no presentation is open.
+`scripts/pptxref/pptxref.sh` drives PowerPoint through AppleScript to make the reference images (see `fixtures/pptx/README.md` and `docs/spikes/S4-powerpoint-reference.md`). PowerPoint's sandbox shows modal "Grant Access" dialogs for files it has not opened before, and the maintainer has to confirm them; a folder grant does not stop them, and macOS blocks writing into PowerPoint's container. Tell the maintainer before every run, keep the fixed work folder `~/Documents/deckfold-pptxref` with fixed file names, and do not query PowerPoint through AppleScript just to check its state (that starts it again). PowerPoint does not answer Apple events while a start dialog is open; close it first. Work only in folders below `~/Documents` and quit PowerPoint afterwards when no presentation is open.
 
 ## Keynote automation
 

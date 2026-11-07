@@ -14,6 +14,7 @@ The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint i
 
 1. Install the bundled fonts into `~/Library/Fonts` (no admin rights needed).
 2. Close all open presentations in PowerPoint and dismiss any start dialogs (sign-in, what's new).
+   PowerPoint's sandbox shows a "Grant Access" dialog for files it has not opened before. Granting the folder `~/Documents/deckfold-pptxref` in that dialog did not stop it in a test, so expect to confirm the dialogs during a run.
 3. Run `scripts/pptxref/pptxref.sh`, or `scripts/pptxref/pptxref.sh basic` for one deck.
 
 If PowerPoint shows a dialog while opening a deck (for example a repair prompt), the script stops after its timeout. A repair prompt means the generator wrote invalid XML; fix the generator instead of saving the repaired deck.
