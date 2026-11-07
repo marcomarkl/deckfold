@@ -1,0 +1,2 @@
+/* Smoke test stylesheet: references a local image so embedding through CSS is exercised. */
+body { margin: 0; font-family: sans-serif; background: url(pixel.png) repeat; }

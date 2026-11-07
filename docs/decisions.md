@@ -22,7 +22,7 @@ Defaults that were set without a separate decision:
 
 - The source player stays unchanged and deckfold adds a control layer with one adapter per format, because the animations could not be rebuilt faithfully.
 - deckfold is written in Go: one static binary per platform.
-- Assets are embedded as Base64 blocks and turned into blob URLs at runtime; fonts load through rewritten `@font-face` rules, and the start waits for `document.fonts.ready`.
+- Assets are embedded as Base64 blocks and turned into blob URLs at runtime; fonts load through rewritten `@font-face` rules, and the start waits for `document.fonts.ready`. One-shot assets (scripts, XHR, fetch, worker code) are released after use; assets referenced by the DOM stay.
 - Remote resources (for example Google Fonts) are downloaded during conversion.
 - The CSP of the source is extended for `blob:` and live embeds.
 - Default key bindings follow common presentation clickers and can be changed in the configuration.

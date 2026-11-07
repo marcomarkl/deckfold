@@ -35,6 +35,8 @@ npx playwright test e2e/claude.spec.mjs -g "recovery" --project=chrome
 
 Projects: `chrome` (channel `chrome`, autoplay without a gesture allowed) and `webkit` (only `webkit.spec.mjs`, the fallback browser). Firefox is not configured because the Playwright Firefox does not start on macOS 27.2. Tests pick buttons by position (`.df-start-buttons button:nth-child(n)`) because the UI language follows the browser. `helpers.mjs` has `need(kind)` to skip without a corpus entry and `expected(page, ops)` to compute expected states with the runtime's own model.
 
+CI (`.github/workflows/ci.yml`) runs on every push to main, every pull request and every `v*` tag: `go vet`, `go test` and the smoke test on Linux, Windows and macOS (x64 and arm64), on Linux also as an unprivileged user. Run the smoke test locally with `go run ./scripts/smoke -bin <binary>`. A `v*` tag also builds the six binaries with `scripts/release.sh` and publishes them as a pre-release. To release, add `docs/release-notes/<tag>.md` first (the job stops without it), then push the tag. The two-screen checks that CI cannot do are in `docs/manual-test.md`.
+
 Every output contains the runtime bundle, and the bundle contains marker strings such as `text/df-css`, `text/df-deferred`, `data-df-` and `deckfold:`. When a Go test asserts on an output, count tags or attributes with `internal/htmlscan` (see `cmd/deckfold/main_test.go`), never substring occurrences in the whole file.
 
 Local corpus layout (not in the repository): `testdata/claude/*.html` and `testdata/keynote/<export>/index.html`.

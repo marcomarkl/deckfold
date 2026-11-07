@@ -1,0 +1,104 @@
+# CI for deckfold.
+#
+# On every push to main, every pull request and every v* tag, the test job runs on five runners
+# (Linux, Windows and macOS, x64 and arm64): go vet, go test and a smoke test of the native
+# binary (scripts/smoke). On Linux the smoke test also runs as an unprivileged user. Windows and
+# macOS runners run with elevated rights, so there the test only shows that the binary works.
+# The browser tests in tests/ need a local corpus and do not run here.
+#
+# A v* tag additionally builds the six release binaries and publishes them as a pre-release.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Vet and test
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build native binary
+        shell: bash
+        run: |
+          ext=""; [ "$RUNNER_OS" = Windows ] && ext=".exe"
+          go build -o "deckfold$ext" ./cmd/deckfold
+          echo "BIN=./deckfold$ext" >> "$GITHUB_ENV"
+
+      - name: Smoke test
+        shell: bash
+        run: go run ./scripts/smoke -bin "$BIN"
+
+      - name: Smoke test as unprivileged user (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo useradd -M -s /usr/sbin/nologin dfguest
+          cp deckfold /tmp/deckfold-guest
+          chmod 755 /tmp/deckfold-guest
+          go run ./scripts/smoke -bin /tmp/deckfold-guest -as-user dfguest
+
+      - name: Smoke test darwin/amd64 through Rosetta (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          GOARCH=amd64 go build -o deckfold-amd64 ./cmd/deckfold
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            printf '#!/bin/sh\nexec arch -x86_64 "%s" "$@"\n' "$PWD/deckfold-amd64" > deckfold-rosetta
+            chmod 755 deckfold-rosetta
+            go run ./scripts/smoke -bin ./deckfold-rosetta
+            echo "::notice::darwin/amd64 smoke test passed through Rosetta"
+          else
+            echo "::notice::Rosetta is not available on this runner; darwin/amd64 was only built"
+          fi
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Check release notes
+        run: |
+          notes="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::$notes is missing; add release notes before tagging"
+            exit 1
+          fi
+
+      - name: Build release binaries
+        run: scripts/release.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --prerelease \
+            --title "deckfold $GITHUB_REF_NAME" \
+            --notes-file "docs/release-notes/${GITHUB_REF_NAME}.md" \
+            dist/*

@@ -145,6 +145,13 @@ DF.fmtTime = fmtTime;
 // start the deferred source scripts in their original order.
 var PH = /deckfold:([0-9a-f]{20})/g;
 
+// Asset store. url(h) returns a cached blob URL that is never released: it serves placeholders in
+// attributes and CSS and media, image and link sources set through the shim, all of which may stay
+// in use while the page is open. fresh(h) returns a new, uncached URL for one-shot use (scripts,
+// XHR, fetch, worker code); the caller releases it with revoke(u) after use. Releasing right after
+// open(), new Worker() or a settled fetch is safe because the URL parser binds the blob when the
+// URL is parsed. In the preview role all three go to the parent window, so the same window creates
+// and releases every URL.
 DF.assets = (function () {
   var urls = {};
   function parts(h) {
@@ -160,17 +167,32 @@ DF.assets = (function () {
     }
     return { mime: first.getAttribute("data-mime") || "application/octet-stream", parts: out };
   }
-  function url(h) {
-    if (DF.role === "preview") {
-      try { return window.parent.__deckfold.assets.url(h); } catch (e) { /* fall back to local decoding */ }
-    }
-    if (urls[h]) return urls[h];
-    var p = parts(h);
-    if (!p) { console.warn("deckfold: Asset fehlt", h); return "data:,"; }
-    urls[h] = URL.createObjectURL(new Blob(p.parts, { type: p.mime }));
-    return urls[h];
+  function parent() {
+    if (DF.role !== "preview") return null;
+    try { return window.parent.__deckfold.assets; } catch (e) { return null; } // fall back to local decoding
   }
-  return { url: url, has: function (h) { return !!document.getElementById("df-a-" + h + "-0") || !!urls[h]; } };
+  function create(h) {
+    var p = parts(h);
+    if (!p) { console.warn("deckfold: asset missing", h); return null; }
+    return URL.createObjectURL(new Blob(p.parts, { type: p.mime }));
+  }
+  function url(h) {
+    var pa = parent();
+    if (pa) return pa.url(h);
+    if (!urls[h]) urls[h] = create(h);
+    return urls[h] || "data:,";
+  }
+  function fresh(h) {
+    var pa = parent();
+    if (pa) return pa.fresh(h);
+    return create(h) || "data:,";
+  }
+  function revoke(u) {
+    var pa = parent();
+    if (pa) return pa.revoke(u);
+    if (typeof u === "string" && u.indexOf("blob:") === 0) URL.revokeObjectURL(u);
+  }
+  return { url: url, fresh: fresh, revoke: revoke, has: function (h) { return !!document.getElementById("df-a-" + h + "-0") || !!urls[h]; } };
 })();
 
 function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { return DF.assets.url(h); }); }
@@ -232,7 +254,8 @@ function quietMedia(m) {
 }
 
 // ---------- shim for runtime loads ----------
-function lookup(u) {
+// lookupHash maps a path requested by the source player to the hash of an embedded asset.
+function lookupHash(u) {
   if (!u || typeof u !== "string" || /^(blob:|data:|deckfold:|about:|javascript:)/i.test(u)) return null;
   var shim = (DF.meta && DF.meta.shim) || {};
   var abs, base;
@@ -241,17 +264,34 @@ function lookup(u) {
   if (href.indexOf(base) !== 0) return null;
   var rel = href.slice(base.length);
   try { rel = decodeURIComponent(rel); } catch (e) { }
-  var h = shim[rel];
-  return h ? DF.assets.url(h) : null;
+  return shim[rel] || null;
 }
+function lookup(u) { var h = lookupHash(u); return h ? DF.assets.url(h) : null; }
 DF.lookup = lookup;
 
-function wrapSetter(proto, prop) {
+// oneShotScript gives a script element a fresh URL and releases it once the script has loaded.
+function oneShotScript(el, h) {
+  var u = DF.assets.fresh(h);
+  var release = function () {
+    el.removeEventListener("load", release);
+    el.removeEventListener("error", release);
+    DF.assets.revoke(u);
+  };
+  el.addEventListener("load", release);
+  el.addEventListener("error", release);
+  return u;
+}
+
+function wrapSetter(proto, prop, oneShot) {
   var d = Object.getOwnPropertyDescriptor(proto, prop);
   if (!d || !d.set) return;
   Object.defineProperty(proto, prop, {
     configurable: true, enumerable: d.enumerable, get: d.get,
-    set: function (v) { var r = lookup(v); return d.set.call(this, r || v); }
+    set: function (v) {
+      if (oneShot) { var h = lookupHash(v); if (h) return d.set.call(this, oneShotScript(this, h)); }
+      var r = lookup(v);
+      return d.set.call(this, r || v);
+    }
   });
 }
 
@@ -276,30 +316,48 @@ function installShim() {
   var origSetAttr = Element.prototype.setAttribute;
   Element.prototype.setAttribute = function (name, value) {
     var n = String(name).toLowerCase();
-    if ((n === "src" || n === "href") && typeof value === "string") { var r = lookup(value); if (r) value = r; }
+    if ((n === "src" || n === "href") && typeof value === "string") {
+      var h = n === "src" && this.tagName === "SCRIPT" ? lookupHash(value) : null;
+      if (h) value = oneShotScript(this, h);
+      else { var r = lookup(value); if (r) value = r; }
+    }
     return origSetAttr.call(this, name, value);
   };
-  [[HTMLScriptElement, "src"], [HTMLImageElement, "src"], [HTMLMediaElement, "src"], [HTMLSourceElement, "src"],
+  [[HTMLScriptElement, "src", true], [HTMLImageElement, "src"], [HTMLMediaElement, "src"], [HTMLSourceElement, "src"],
    [HTMLLinkElement, "href"], [HTMLEmbedElement, "src"], [HTMLIFrameElement, "src"]].forEach(function (p) {
-    if (p[0]) wrapSetter(p[0].prototype, p[1]);
+    if (p[0]) wrapSetter(p[0].prototype, p[1], !!p[2]);
   });
   var origOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url) {
-    var args = [].slice.call(arguments), r = lookup(String(url));
-    if (r) args[1] = r;
+    var args = [].slice.call(arguments), h = lookupHash(String(url));
+    if (h) {
+      var u = DF.assets.fresh(h), xhr = this;
+      args[1] = u;
+      var release = function () { xhr.removeEventListener("loadend", release); DF.assets.revoke(u); };
+      xhr.addEventListener("loadend", release);
+    }
     return origOpen.apply(this, args);
   };
   if (window.fetch) {
     var origFetch = window.fetch;
     window.fetch = function (input, init) {
-      var u = typeof input === "string" ? input : (input && input.url);
-      var r = lookup(u);
-      return origFetch.call(this, r || input, init);
+      var h = lookupHash(typeof input === "string" ? input : (input && input.url));
+      if (!h) return origFetch.call(this, input, init);
+      var u = DF.assets.fresh(h);
+      var p = origFetch.call(this, u, init);
+      p.then(function () { DF.assets.revoke(u); }, function () { DF.assets.revoke(u); });
+      return p;
     };
   }
   if (window.Worker) {
     var OrigWorker = window.Worker;
-    var W = function (url, opts) { var r = lookup(String(url)); return new OrigWorker(r || url, opts); };
+    var W = function (url, opts) {
+      var h = lookupHash(String(url));
+      if (!h) return new OrigWorker(url, opts);
+      var u = DF.assets.fresh(h), w = new OrigWorker(u, opts);
+      DF.assets.revoke(u);
+      return w;
+    };
     W.prototype = OrigWorker.prototype;
     window.Worker = W;
   }
@@ -349,7 +407,8 @@ function runDeferred() {
       if (src) {
         s.async = false;
         s.onload = s.onerror = function () { step(); };
-        s.src = fillPlaceholders(src);
+        var m = /^deckfold:([0-9a-f]{20})(#.*)?$/.exec(src);
+        s.src = m ? oneShotScript(s, m[1]) + (m[2] || "") : fillPlaceholders(src);
         old.parentNode.replaceChild(s, old);
       } else {
         s.textContent = old.textContent;

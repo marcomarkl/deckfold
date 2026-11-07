@@ -90,6 +90,8 @@ Auto mode uses timings from the source (Keynote in self-playing mode, automatic 
 
 ## Download and first start
 
+Binaries for macOS, Windows and Linux (x64 and Arm) are on the [releases page](https://github.com/marcomarkl/deckfold/releases), with checksums in `SHA256SUMS`. The current version is a pre-release; its release notes list what has been tested so far.
+
 The binaries are not signed, so the operating systems ask before the first start:
 
 - macOS: System Settings > Privacy & Security > "Open Anyway", or in a terminal `xattr -d com.apple.quarantine deckfold`.
