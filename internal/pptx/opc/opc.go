@@ -36,6 +36,15 @@ type Package struct {
 	files map[string]*zip.File // by part name without leading slash
 	types *contentTypes
 	total int64
+	file  *os.File // the archive when opened with Open
+}
+
+// Close releases the file of a package opened with Open.
+func (p *Package) Close() error {
+	if p.file == nil {
+		return nil
+	}
+	return p.file.Close()
 }
 
 // Rel is a relationship.
@@ -57,25 +66,43 @@ func Sniff(b []byte) string {
 	return ""
 }
 
-// Open reads the package from a file.
+// Open reads the package from a file. The parts are read from the file when needed, so a large
+// presentation is not held in memory as a whole; call Close when done.
 func Open(p string) (*Package, error) {
-	data, err := os.ReadFile(p)
+	f, err := os.Open(p)
 	if err != nil {
 		return nil, err
 	}
-	return OpenBytes(data)
+	fi, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	head := make([]byte, 8)
+	n, _ := io.ReadFull(f, head)
+	pkg, err := open(f, fi.Size(), head[:n])
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	pkg.file = f
+	return pkg, nil
 }
 
 // OpenBytes reads the package from memory.
 func OpenBytes(data []byte) (*Package, error) {
-	switch Sniff(data) {
+	return open(bytes.NewReader(data), int64(len(data)), data)
+}
+
+func open(r io.ReaderAt, size int64, head []byte) (*Package, error) {
+	switch Sniff(head) {
 	case "cfb":
 		return nil, ErrCFB
 	case "zip":
 	default:
 		return nil, ErrNotZip
 	}
-	z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	z, err := zip.NewReader(r, size)
 	if err != nil {
 		return nil, fmt.Errorf("damaged PowerPoint file: %w", err)
 	}

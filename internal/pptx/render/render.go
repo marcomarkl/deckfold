@@ -9,7 +9,9 @@ import (
 	"encoding/xml"
 	"fmt"
 	"math"
+	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -45,6 +47,9 @@ type Options struct {
 	Linked func(target string) (data []byte, ext string, err error)
 	// Missing is called for a linked file that cannot be loaded (where: e.g. "slide 3").
 	Missing func(target, where string, err error)
+	// AssetDir, when set, receives every asset file as soon as it is known; Result.Assets then
+	// lists the names with nil content, so media is not held in memory until the end.
+	AssetDir string
 }
 
 // Slide is one rendered slide.
@@ -63,7 +68,7 @@ type Slide struct {
 type Result struct {
 	Width, Height float64 // px
 	Slides        []Slide
-	Assets        map[string][]byte // file name -> content
+	Assets        map[string][]byte // file name -> content (nil when written to Options.AssetDir)
 	Faces         []FaceUse
 	AnimReport    anim.Report
 }
@@ -83,6 +88,9 @@ type Renderer struct {
 	aliases map[*fonts.Face]string
 	faces   []FaceUse
 	warned  map[string]bool
+	sizes   map[string][2]float64 // pixel size of image assets
+	dir     string                // Options.AssetDir
+	err     error                 // first error writing an asset
 }
 
 // Render renders the visible slides.
@@ -98,7 +106,13 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 			opt.Warn("%s: linked file %s cannot be loaded: %v", where, target, err)
 		}
 	}
-	rd := &Renderer{pres: pres, opt: opt, fonts: opt.Fonts, assets: map[string][]byte{}, aliases: map[*fonts.Face]string{}, warned: map[string]bool{}}
+	rd := &Renderer{pres: pres, opt: opt, fonts: opt.Fonts, assets: map[string][]byte{}, aliases: map[*fonts.Face]string{}, warned: map[string]bool{},
+		sizes: map[string][2]float64{}, dir: opt.AssetDir}
+	if rd.dir != "" {
+		if err := os.MkdirAll(rd.dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
 	res := &Result{Width: float64(pres.Width) / emuPx, Height: float64(pres.Height) / emuPx, Assets: rd.assets}
 	num := pres.FirstSlideNum
 	for _, s := range pres.Slides {
@@ -115,6 +129,9 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 		num++
 	}
 	res.Faces = rd.faces
+	if rd.err != nil {
+		return nil, rd.err
+	}
 	return res, nil
 }
 
@@ -147,7 +164,20 @@ func (rd *Renderer) asset(data []byte, ext string) string {
 		ext = "bin"
 	}
 	name := hex.EncodeToString(sum[:10]) + "." + ext
-	rd.assets[name] = data
+	if _, ok := rd.assets[name]; ok {
+		return name
+	}
+	if w, h := imageSize(data); w > 0 {
+		rd.sizes[name] = [2]float64{w, h}
+	}
+	if rd.dir == "" {
+		rd.assets[name] = data
+		return name
+	}
+	if err := os.WriteFile(filepath.Join(rd.dir, name), data, 0o644); err != nil && rd.err == nil {
+		rd.err = err
+	}
+	rd.assets[name] = nil
 	return name
 }
 
@@ -917,10 +947,12 @@ func esc(s string) string {
 	return b.String()
 }
 
-// AddAsset stores an extra file (for example a font subset) and returns its name.
-func (res *Result) AddAsset(data []byte, ext string) string {
-	rd := &Renderer{assets: res.Assets}
-	return rd.asset(data, ext)
+// AddAsset stores an extra file (for example a font subset) in dir (or in memory when dir is
+// empty) and returns its name.
+func (res *Result) AddAsset(data []byte, ext, dir string) (string, error) {
+	rd := &Renderer{assets: res.Assets, sizes: map[string][2]float64{}, dir: dir}
+	name := rd.asset(data, ext)
+	return name, rd.err
 }
 
 // linked loads a linked file through Options.Linked and reports a failure as missing.

@@ -82,7 +82,8 @@ func (r *slideRenderer) fillOf(k *xmltree.Node, cx colorCtx, part model.Part, bo
 		if tile := k.Child("tile"); tile != nil {
 			// tiled picture: the image at its own size, scaled by sx/sy
 			sx, sy := float64(tile.Int("sx", 100000))/100000, float64(tile.Int("sy", 100000))/100000
-			w, h := imageSize(r.assets[name])
+			sz := r.sizes[name]
+			w, h := sz[0], sz[1]
 			w, h = w*sx, h*sy
 			if w <= 0 || h <= 0 {
 				w, h = box.w, box.h

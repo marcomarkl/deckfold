@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -65,5 +66,26 @@ func TestRelsAndTypes(t *testing.T) {
 	}
 	if got := ByType(rels, "slide"); len(got) != 1 || got[0].ID != "rId1" {
 		t.Errorf("ByType = %+v", got)
+	}
+}
+
+// Open reads the parts from the file, not from a copy in memory.
+func TestOpenFile(t *testing.T) {
+	data := zipOf(t, map[string]string{"[Content_Types].xml": types, "ppt/presentation.xml": "<p/>"})
+	path := t.TempDir() + "/deck.pptx"
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	b, err := p.Read("ppt/presentation.xml")
+	if err != nil || string(b) != "<p/>" {
+		t.Fatalf("read %q, %v", b, err)
+	}
+	if p.file == nil {
+		t.Error("the package does not keep the file open")
 	}
 }

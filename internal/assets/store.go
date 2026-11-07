@@ -15,6 +15,7 @@ type Asset struct {
 	Hash  string
 	Mime  string
 	Data  []byte
+	Size  int      // len(Data), kept after Release
 	Names []string // origin(s), for the report
 }
 
@@ -45,13 +46,21 @@ func (s *Store) Add(data []byte, mimeType, name string) string {
 		a.Names = append(a.Names, name)
 		return h
 	}
-	s.byHash[h] = &Asset{Hash: h, Mime: mimeType, Data: data, Names: []string{name}}
+	s.byHash[h] = &Asset{Hash: h, Mime: mimeType, Data: data, Size: len(data), Names: []string{name}}
 	s.Order = append(s.Order, h)
 	return h
 }
 
 // Get returns an asset.
 func (s *Store) Get(h string) *Asset { return s.byHash[h] }
+
+// Release drops the content of all assets (after they were encoded into the output), so that
+// large media is not held twice. Size and names stay for the report.
+func (s *Store) Release() {
+	for _, a := range s.byHash {
+		a.Data = nil
+	}
+}
 
 // Len returns the number of assets.
 func (s *Store) Len() int { return len(s.Order) }

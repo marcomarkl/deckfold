@@ -75,6 +75,9 @@ func Write(dir string, res *render.Result, data Data, fonts []Font, playerJS str
 		if strings.ContainsAny(n, `/\`) || strings.HasPrefix(n, ".") {
 			return fmt.Errorf("invalid asset name %q", n)
 		}
+		if res.Assets[n] == nil {
+			continue // already written by the renderer (render.Options.AssetDir)
+		}
 		if err := os.WriteFile(filepath.Join(assets, n), res.Assets[n], 0o644); err != nil {
 			return err
 		}

@@ -82,28 +82,52 @@ func MetaBlock(meta any) ([]byte, error) {
 
 // AssetBlocks encodes all assets as Base64 blocks (at most PartBytes binary per block).
 func AssetBlocks(s *assets.Store) []byte {
-	var b bytes.Buffer
+	return AppendAssetBlocks(make([]byte, 0, AssetBlocksSize(s)), s)
+}
+
+// AssetBlocksSize returns the exact length of the asset blocks, so that callers can allocate
+// the output once instead of growing it (large media would otherwise be copied several times).
+func AssetBlocksSize(s *assets.Store) int {
+	n := 0
 	for _, h := range s.Order {
 		a := s.Get(h)
-		parts := (len(a.Data) + PartBytes - 1) / PartBytes
-		if parts == 0 {
-			parts = 1
+		parts := partsOf(len(a.Data))
+		n += len(fmt.Sprintf(`<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts))
+		for i := 1; i < parts; i++ {
+			n += len(fmt.Sprintf(`<script type="application/octet-stream" id="df-a-%s-%d">`, h, i))
 		}
+		n += base64.StdEncoding.EncodedLen(len(a.Data)) + parts*len("</script>\n")
+	}
+	return n
+}
+
+func partsOf(size int) int {
+	if size == 0 {
+		return 1
+	}
+	return (size + PartBytes - 1) / PartBytes
+}
+
+// AppendAssetBlocks appends the asset blocks to dst.
+func AppendAssetBlocks(dst []byte, s *assets.Store) []byte {
+	for _, h := range s.Order {
+		a := s.Get(h)
+		parts := partsOf(len(a.Data))
 		for i := 0; i < parts; i++ {
 			lo, hi := i*PartBytes, (i+1)*PartBytes
 			if hi > len(a.Data) {
 				hi = len(a.Data)
 			}
 			if i == 0 {
-				fmt.Fprintf(&b, `<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts)
+				dst = fmt.Appendf(dst, `<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts)
 			} else {
-				fmt.Fprintf(&b, `<script type="application/octet-stream" id="df-a-%s-%d">`, h, i)
+				dst = fmt.Appendf(dst, `<script type="application/octet-stream" id="df-a-%s-%d">`, h, i)
 			}
-			b.WriteString(base64.StdEncoding.EncodeToString(a.Data[lo:hi]))
-			b.WriteString("</script>\n")
+			dst = base64.StdEncoding.AppendEncode(dst, a.Data[lo:hi])
+			dst = append(dst, "</script>\n"...)
 		}
 	}
-	return b.Bytes()
+	return dst
 }
 
 func htmlAttr(s string) string {

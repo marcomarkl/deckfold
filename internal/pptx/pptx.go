@@ -76,6 +76,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 		}
 		return nil, err
 	}
+	defer pkg.Close()
 	pres, err := model.Read(pkg)
 	if err != nil {
 		if errors.Is(err, model.ErrStructure) {
@@ -110,7 +111,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 	if opt.FontDirs != nil {
 		fr.Dirs = opt.FontDirs
 	}
-	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked,
+	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked, AssetDir: filepath.Join(dir, "assets"),
 		Missing: func(target, where string, err error) {
 			missing = append(missing, report.Missing{Ref: target, Where: filepath.Base(src) + ": " + where, Reason: err.Error()})
 		}})
@@ -134,7 +135,10 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 			warn("font %s cannot be subset (%v); it is left out", fu.Face.Family, err)
 			continue
 		}
-		name := out.AddAsset(data, "ttf")
+		name, err := out.AddAsset(data, "ttf", filepath.Join(dir, "assets"))
+		if err != nil {
+			return nil, err
+		}
 		dfonts = append(dfonts, deck.Font{Alias: fu.Alias, File: name})
 		line := fmt.Sprintf("%s: %s (%s)", fu.Face.Family, fu.Face.Source, filepath.Base(fu.Face.File))
 		if fu.Face.Subst {
