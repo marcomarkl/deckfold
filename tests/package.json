@@ -1,0 +1,13 @@
+{
+  "name": "deckfold-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0"
+  }
+}

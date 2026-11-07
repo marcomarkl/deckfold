@@ -1,0 +1,16 @@
+# Build output
+/dist/
+/build/
+/deckfold
+/deckfold.exe
+*.standalone.html
+
+# Local test corpus (private decks, never published) and test output
+/testdata/
+/tests/node_modules/
+/tests/.out/
+/tests/test-results/
+/node_modules/
+/test-results/
+
+.DS_Store
