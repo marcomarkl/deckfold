@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -243,8 +244,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %s already exists (overwrite with --force)\n", outPath)
 		return 3
 	}
-	html, _, err := embed.Convert(in, ad, embed.Options{Config: cfg, Lenient: *lenient, AllowOutside: allow,
-		Fetcher: fetcher, Version: Version, Runtime: rt}, rep)
+	var size int64
+	err = writeFileStream(outPath, func(w io.Writer) error {
+		var err error
+		size, _, err = embed.ConvertTo(w, in, ad, embed.Options{Config: cfg, Lenient: *lenient, AllowOutside: allow,
+			Fetcher: fetcher, Version: Version, Runtime: rt}, rep)
+		return err
+	})
 	if err != nil {
 		switch {
 		case errors.Is(err, embed.ErrMissing):
@@ -258,11 +264,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
-	if err := writeFile(outPath, html); err != nil {
-		fmt.Fprintln(stderr, "error:", err)
-		return 1
-	}
-	rep.Output, rep.OutputSize = outPath, len(html)
+	rep.Output, rep.OutputSize = outPath, int(size)
 	rep.Print(stdout, warnBytes)
 	return 0
 }
@@ -298,6 +300,9 @@ func doRefresh(input, out string, force bool, src []byte, cfg config.Config, rt 
 	}
 	// decks generated from PowerPoint also get the current player
 	res, _, err = inject.ReplacePlayer(res, dfruntime.PptxJS)
+	if err == nil {
+		res, _, err = inject.ReplaceThree(res, dfruntime.ThreeJS)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
@@ -359,6 +364,33 @@ func same(a, b string) bool {
 }
 
 // writeFile writes atomically through a temporary file in the target folder.
+// writeFileStream writes a file atomically: write fills a temporary file next to p (through a
+// buffer), which then replaces p. On an error nothing is left behind.
+func writeFileStream(p string, write func(w io.Writer) error) error {
+	dir := filepath.Dir(p)
+	tmp, err := os.CreateTemp(dir, ".deckfold-*.tmp")
+	if err != nil {
+		return err
+	}
+	bw := bufio.NewWriterSize(tmp, 1<<20)
+	if err := write(bw); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := bw.Flush(); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	_ = os.Chmod(tmp.Name(), 0o644)
+	return os.Rename(tmp.Name(), p)
+}
+
 func writeFile(p string, data []byte) error {
 	dir := filepath.Dir(p)
 	tmp, err := os.CreateTemp(dir, ".deckfold-*.tmp")

@@ -1,0 +1,141 @@
+package mtx
+
+// triplet is one row of the table in section 5.11 of the MTX submission: the byte count of the
+// triplet including the flag byte, the bits for dx and dy, the amounts added to them and their signs.
+type triplet struct {
+	bytes, xBits, yBits int
+	deltaX, deltaY      int
+	xNeg, yNeg          bool
+}
+
+// triplets is the table of section 5.11, indexed by the low seven bits of the flag byte.
+var triplets = [128]triplet{
+	{2, 0, 8, 0, 0, false, true},      // 0
+	{2, 0, 8, 0, 0, false, false},     // 1
+	{2, 0, 8, 0, 256, false, true},    // 2
+	{2, 0, 8, 0, 256, false, false},   // 3
+	{2, 0, 8, 0, 512, false, true},    // 4
+	{2, 0, 8, 0, 512, false, false},   // 5
+	{2, 0, 8, 0, 768, false, true},    // 6
+	{2, 0, 8, 0, 768, false, false},   // 7
+	{2, 0, 8, 0, 1024, false, true},   // 8
+	{2, 0, 8, 0, 1024, false, false},  // 9
+	{2, 8, 0, 0, 0, true, false},      // 10
+	{2, 8, 0, 0, 0, false, false},     // 11
+	{2, 8, 0, 256, 0, true, false},    // 12
+	{2, 8, 0, 256, 0, false, false},   // 13
+	{2, 8, 0, 512, 0, true, false},    // 14
+	{2, 8, 0, 512, 0, false, false},   // 15
+	{2, 8, 0, 768, 0, true, false},    // 16
+	{2, 8, 0, 768, 0, false, false},   // 17
+	{2, 8, 0, 1024, 0, true, false},   // 18
+	{2, 8, 0, 1024, 0, false, false},  // 19
+	{2, 4, 4, 1, 1, true, true},       // 20
+	{2, 4, 4, 1, 1, false, true},      // 21
+	{2, 4, 4, 1, 1, true, false},      // 22
+	{2, 4, 4, 1, 1, false, false},     // 23
+	{2, 4, 4, 1, 17, true, true},      // 24
+	{2, 4, 4, 1, 17, false, true},     // 25
+	{2, 4, 4, 1, 17, true, false},     // 26
+	{2, 4, 4, 1, 17, false, false},    // 27
+	{2, 4, 4, 1, 33, true, true},      // 28
+	{2, 4, 4, 1, 33, false, true},     // 29
+	{2, 4, 4, 1, 33, true, false},     // 30
+	{2, 4, 4, 1, 33, false, false},    // 31
+	{2, 4, 4, 1, 49, true, true},      // 32
+	{2, 4, 4, 1, 49, false, true},     // 33
+	{2, 4, 4, 1, 49, true, false},     // 34
+	{2, 4, 4, 1, 49, false, false},    // 35
+	{2, 4, 4, 17, 1, true, true},      // 36
+	{2, 4, 4, 17, 1, false, true},     // 37
+	{2, 4, 4, 17, 1, true, false},     // 38
+	{2, 4, 4, 17, 1, false, false},    // 39
+	{2, 4, 4, 17, 17, true, true},     // 40
+	{2, 4, 4, 17, 17, false, true},    // 41
+	{2, 4, 4, 17, 17, true, false},    // 42
+	{2, 4, 4, 17, 17, false, false},   // 43
+	{2, 4, 4, 17, 33, true, true},     // 44
+	{2, 4, 4, 17, 33, false, true},    // 45
+	{2, 4, 4, 17, 33, true, false},    // 46
+	{2, 4, 4, 17, 33, false, false},   // 47
+	{2, 4, 4, 17, 49, true, true},     // 48
+	{2, 4, 4, 17, 49, false, true},    // 49
+	{2, 4, 4, 17, 49, true, false},    // 50
+	{2, 4, 4, 17, 49, false, false},   // 51
+	{2, 4, 4, 33, 1, true, true},      // 52
+	{2, 4, 4, 33, 1, false, true},     // 53
+	{2, 4, 4, 33, 1, true, false},     // 54
+	{2, 4, 4, 33, 1, false, false},    // 55
+	{2, 4, 4, 33, 17, true, true},     // 56
+	{2, 4, 4, 33, 17, false, true},    // 57
+	{2, 4, 4, 33, 17, true, false},    // 58
+	{2, 4, 4, 33, 17, false, false},   // 59
+	{2, 4, 4, 33, 33, true, true},     // 60
+	{2, 4, 4, 33, 33, false, true},    // 61
+	{2, 4, 4, 33, 33, true, false},    // 62
+	{2, 4, 4, 33, 33, false, false},   // 63
+	{2, 4, 4, 33, 49, true, true},     // 64
+	{2, 4, 4, 33, 49, false, true},    // 65
+	{2, 4, 4, 33, 49, true, false},    // 66
+	{2, 4, 4, 33, 49, false, false},   // 67
+	{2, 4, 4, 49, 1, true, true},      // 68
+	{2, 4, 4, 49, 1, false, true},     // 69
+	{2, 4, 4, 49, 1, true, false},     // 70
+	{2, 4, 4, 49, 1, false, false},    // 71
+	{2, 4, 4, 49, 17, true, true},     // 72
+	{2, 4, 4, 49, 17, false, true},    // 73
+	{2, 4, 4, 49, 17, true, false},    // 74
+	{2, 4, 4, 49, 17, false, false},   // 75
+	{2, 4, 4, 49, 33, true, true},     // 76
+	{2, 4, 4, 49, 33, false, true},    // 77
+	{2, 4, 4, 49, 33, true, false},    // 78
+	{2, 4, 4, 49, 33, false, false},   // 79
+	{2, 4, 4, 49, 49, true, true},     // 80
+	{2, 4, 4, 49, 49, false, true},    // 81
+	{2, 4, 4, 49, 49, true, false},    // 82
+	{2, 4, 4, 49, 49, false, false},   // 83
+	{3, 8, 8, 1, 1, true, true},       // 84
+	{3, 8, 8, 1, 1, false, true},      // 85
+	{3, 8, 8, 1, 1, true, false},      // 86
+	{3, 8, 8, 1, 1, false, false},     // 87
+	{3, 8, 8, 1, 257, true, true},     // 88
+	{3, 8, 8, 1, 257, false, true},    // 89
+	{3, 8, 8, 1, 257, true, false},    // 90
+	{3, 8, 8, 1, 257, false, false},   // 91
+	{3, 8, 8, 1, 513, true, true},     // 92
+	{3, 8, 8, 1, 513, false, true},    // 93
+	{3, 8, 8, 1, 513, true, false},    // 94
+	{3, 8, 8, 1, 513, false, false},   // 95
+	{3, 8, 8, 257, 1, true, true},     // 96
+	{3, 8, 8, 257, 1, false, true},    // 97
+	{3, 8, 8, 257, 1, true, false},    // 98
+	{3, 8, 8, 257, 1, false, false},   // 99
+	{3, 8, 8, 257, 257, true, true},   // 100
+	{3, 8, 8, 257, 257, false, true},  // 101
+	{3, 8, 8, 257, 257, true, false},  // 102
+	{3, 8, 8, 257, 257, false, false}, // 103
+	{3, 8, 8, 257, 513, true, true},   // 104
+	{3, 8, 8, 257, 513, false, true},  // 105
+	{3, 8, 8, 257, 513, true, false},  // 106
+	{3, 8, 8, 257, 513, false, false}, // 107
+	{3, 8, 8, 513, 1, true, true},     // 108
+	{3, 8, 8, 513, 1, false, true},    // 109
+	{3, 8, 8, 513, 1, true, false},    // 110
+	{3, 8, 8, 513, 1, false, false},   // 111
+	{3, 8, 8, 513, 257, true, true},   // 112
+	{3, 8, 8, 513, 257, false, true},  // 113
+	{3, 8, 8, 513, 257, true, false},  // 114
+	{3, 8, 8, 513, 257, false, false}, // 115
+	{3, 8, 8, 513, 513, true, true},   // 116
+	{3, 8, 8, 513, 513, false, true},  // 117
+	{3, 8, 8, 513, 513, true, false},  // 118
+	{3, 8, 8, 513, 513, false, false}, // 119
+	{4, 12, 12, 0, 0, true, true},     // 120
+	{4, 12, 12, 0, 0, false, true},    // 121
+	{4, 12, 12, 0, 0, true, false},    // 122
+	{4, 12, 12, 0, 0, false, false},   // 123
+	{5, 16, 16, 0, 0, true, true},     // 124
+	{5, 16, 16, 0, 0, false, true},    // 125
+	{5, 16, 16, 0, 0, true, false},    // 126
+	{5, 16, 16, 0, 0, false, false},   // 127
+}

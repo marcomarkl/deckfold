@@ -71,6 +71,8 @@ type Result struct {
 	Assets        map[string][]byte // file name -> content (nil when written to Options.AssetDir)
 	Faces         []FaceUse
 	AnimReport    anim.Report
+	// WebGL is set when a slide has content the player draws with three.js (3D shapes).
+	WebGL bool
 }
 
 // FaceUse maps a CSS family alias to a face.
@@ -91,6 +93,7 @@ type Renderer struct {
 	sizes   map[string][2]float64 // pixel size of image assets
 	dir     string                // Options.AssetDir
 	err     error                 // first error writing an asset
+	webGL   bool                  // a slide has content the player draws with three.js
 }
 
 // Render renders the visible slides.
@@ -125,10 +128,14 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 			return nil, fmt.Errorf("slide %d: %w", s.Number, err)
 		}
 		out.Anim = anim.Read(s.Root, &res.AnimReport)
+		if t := out.Anim.Transition; t != nil && anim.WebGLTransitions[t.Type] {
+			rd.webGL = true // tile transitions are drawn with three.js
+		}
 		res.Slides = append(res.Slides, out)
 		num++
 	}
 	res.Faces = rd.faces
+	res.WebGL = rd.webGL
 	if rd.err != nil {
 		return nil, rd.err
 	}
@@ -191,6 +198,9 @@ type slideRenderer struct {
 	sids     []string
 	label    string
 	nodePart map[*xmltree.Node]model.Part // part an inherited property node belongs to
+	split    map[string]string            // shape id -> "wd" or "lt" for word and letter builds
+	curSplit string                       // split mode of the text being written
+	curChart *xmltree.Node                // chart space of the chart being drawn
 }
 
 func (r *slideRenderer) newID(kind string) string {
@@ -200,6 +210,15 @@ func (r *slideRenderer) newID(kind string) string {
 
 func (r *slideRenderer) render() (Slide, error) {
 	W, H := float64(r.pres.Width)/emuPx, float64(r.pres.Height)/emuPx
+	// shapes with builds by word or letter get their text in units the player can animate
+	r.split = map[string]string{}
+	for _, c := range r.slide.Root.Child("timing").All("cTn") {
+		if it := c.Child("iterate"); it != nil && (it.Attr("type") == "wd" || it.Attr("type") == "lt") {
+			if t := c.Find("spTgt"); t != nil {
+				r.split[t.Attr("spid")] = it.Attr("type")
+			}
+		}
+	}
 	var body strings.Builder
 	r.background(&body, W, H)
 	layout, master := r.slide.Layout, r.slide.Layout.Master
@@ -289,7 +308,7 @@ func (r *slideRenderer) tree(b *strings.Builder, tree *xmltree.Node, owner owner
 			}
 			r.graphicFrame(b, k, owner, part, t)
 		case "contentPart":
-			r.warnOnce("ink is not shown (slide %d)", r.slide.Number)
+			r.ink(b, k, owner, part, t)
 		}
 	}
 }
@@ -352,13 +371,29 @@ func (r *slideRenderer) inheritedSpPr(sp *xmltree.Node, owner ownerKind) []*xmlt
 	return out
 }
 
+// partOfNode returns the part (slide, layout or master) a node belongs to, for relationships of
+// inherited properties such as picture bullets.
+func (r *slideRenderer) partOfNode(n *xmltree.Node) model.Part {
+	top := n
+	for top != nil && top.Parent != nil {
+		top = top.Parent
+	}
+	switch top {
+	case r.slide.Layout.Root:
+		return r.slide.Layout.Part
+	case r.slide.Layout.Master.Root:
+		return r.slide.Layout.Master.Part
+	}
+	return r.slide.Part
+}
+
 func (r *slideRenderer) colorCtx() colorCtx {
 	return colorCtx{theme: r.slide.Layout.Master.Theme, clrMap: r.slide.ClrMap}
 }
 
 func (r *slideRenderer) shapeID(sp *xmltree.Node, owner ownerKind) string {
 	id := ""
-	for _, nv := range []string{"nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr"} {
+	for _, nv := range []string{"nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr", "nvContentPartPr"} {
 		if c := sp.Path(nv + "/cNvPr"); c != nil {
 			id = c.Attr("id")
 			break
@@ -379,7 +414,17 @@ func (r *slideRenderer) open(b *strings.Builder, sp *xmltree.Node, owner ownerKi
 	if owner == ownerSlide {
 		r.sids = append(r.sids, sid)
 	}
-	fmt.Fprintf(b, `<g data-sid="%s">`, esc(sid))
+	morph := ""
+	if owner == ownerSlide {
+		// for the morph transition: a key that matches the same object on the next slide (a
+		// hash, so that shape names do not end up in the page) and the unrotated box
+		rot := 0.0
+		if x != nil {
+			rot = float64(x.Int("rot", 0)) / 60000
+		}
+		morph = fmt.Sprintf(` data-mk="%s" data-box="%s %s %s %s %s"`, morphKey(sp), f(box.x), f(box.y), f(box.w), f(box.h), f(rot))
+	}
+	fmt.Fprintf(b, `<g data-sid="%s"%s>`, esc(sid), morph)
 	if x != nil {
 		if rot := float64(x.Int("rot", 0)) / 60000; rot != 0 {
 			fmt.Fprintf(b, `<g transform="rotate(%s %s %s)">`, f(rot), f(box.x+box.w/2), f(box.y+box.h/2))
@@ -407,12 +452,20 @@ func (r *slideRenderer) shape(b *strings.Builder, sp *xmltree.Node, owner ownerK
 		stroke := r.strokeAttr(sppr, sp.Path("style/lnRef"), cx)
 		ft := flipTransform(box, flipH, flipV)
 		if fill != `fill="none"` || stroke != "" {
-			fx := r.effects(sppr, sp.Path("style/effectRef"), cx)
+			td := r.shape3D(sppr, sp.Path("style/effectRef"), cx)
+			fx, refl := r.effects(sppr, sp.Path("style/effectRef"), cx, td)
 			ends := ""
 			if stroke != "" {
 				ends = r.lineEnds(sppr, sp.Path("style/lnRef"), cx)
 			}
-			fmt.Fprintf(b, `<path d="%s" %s%s%s%s%s/>`, path, fill, stroke, ends, fx, ft)
+			data := ""
+			if td != nil {
+				b.WriteString(td.behind(path, fill, ft))
+				data = td.attr()
+				r.webGL = true
+			}
+			fmt.Fprintf(b, `<path d="%s" %s%s%s%s%s%s/>`, path, fill, stroke, ends, fx, ft, data)
+			b.WriteString(r.reflection(fmt.Sprintf(`<path d="%s" %s%s%s%s/>`, path, fill, stroke, fx, ft), box, refl))
 		}
 	}
 	if model.Ph(sp) != nil && owner == ownerSlide {
@@ -440,10 +493,14 @@ func (r *slideRenderer) shape(b *strings.Builder, sp *xmltree.Node, owner ownerK
 			c := rect{textRect.x + textRect.w/2, textRect.y + textRect.h/2, 0, 0}
 			turned := rect{c.x - textRect.h/2, c.y - textRect.w/2, textRect.h, textRect.w}
 			fmt.Fprintf(b, `<g transform="rotate(%s %s %s)">`, f(rot), f(c.x), f(c.y))
+			r.curSplit = r.splitOf(sp, owner)
 			r.writeText(b, r.layoutText(sp, ts, turned, cx, relLookup{part, r.Renderer}))
+			r.curSplit = ""
 			b.WriteString("</g>")
 		} else {
+			r.curSplit = r.splitOf(sp, owner)
 			r.writeText(b, r.layoutText(sp, ts, textRect, cx, relLookup{part, r.Renderer}))
+			r.curSplit = ""
 		}
 	}
 	b.WriteString(end)
@@ -492,17 +549,92 @@ func plainText(body *xmltree.Node) string {
 	return strings.Join(parts, " ")
 }
 
+// splitOf returns the build unit ("wd", "lt" or "") of a slide shape's text.
+func (r *slideRenderer) splitOf(sp *xmltree.Node, owner ownerKind) string {
+	if owner != ownerSlide {
+		return ""
+	}
+	return r.split[r.shapeID(sp, owner)]
+}
+
+// splitSegs cuts text segments into words ("wd", a word keeps the spaces after it) or letters
+// ("lt") and numbers the units per paragraph, so that builds by word or letter can animate them
+// one after the other. A word that runs over several segments keeps one number.
+func splitSegs(segs []textSeg, mode string) []textSeg {
+	var out []textSeg
+	unit, para := -1, -1
+	prevSpace := true
+	for _, s := range segs {
+		if s.para != para {
+			para, unit, prevSpace = s.para, -1, true
+		}
+		if s.image != "" || s.bullet || s.rtl || s.text == "" {
+			s.unit = -1
+			out = append(out, s)
+			continue
+		}
+		rs := []rune(s.text)
+		start := 0
+		flush := func(end int) {
+			if end <= start {
+				return
+			}
+			piece := s
+			piece.text = string(rs[start:end])
+			piece.x = s.x + measure(s.face, string(rs[:start]), s.size) + float64(start)*s.spacing
+			piece.unit = unit
+			out = append(out, piece)
+			start = end
+		}
+		for i, c := range rs {
+			space := c == ' ' || c == '\u00a0'
+			switch {
+			case mode == "lt" && !space:
+				flush(i)
+				unit++
+			case mode == "wd" && !space && prevSpace:
+				flush(i)
+				unit++
+			}
+			prevSpace = space
+		}
+		flush(len(rs))
+	}
+	return out
+}
+
 // writeText draws text segments, one group per paragraph (data-p), so that paragraph builds can
-// animate them one by one.
+// animate them one by one. In shapes with builds by word or letter, each unit gets its own
+// group (data-w or data-c) inside the paragraph group.
 func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 	cur := -1
+	attr := map[string]string{"wd": "data-w", "lt": "data-c"}[r.curSplit]
+	unit := -1
+	if attr != "" {
+		segs = splitSegs(segs, r.curSplit)
+	}
 	for _, s := range segs {
+		if attr != "" && (s.para != cur || s.unit != unit) && unit >= 0 {
+			b.WriteString("</g>")
+			unit = -1
+		}
 		if s.para != cur {
 			if cur >= 0 {
 				b.WriteString("</g>")
 			}
 			cur = s.para
 			fmt.Fprintf(b, `<g data-p="%d">`, cur)
+		}
+		if attr != "" && s.unit >= 0 && s.unit != unit {
+			unit = s.unit
+			fmt.Fprintf(b, `<g %s="%d">`, attr, unit)
+		}
+		if s.image != "" {
+			// picture bullet: its bottom sits just above the baseline
+			h := picBulletScale * s.size
+			fmt.Fprintf(b, `<image href="assets/%s" x="%s" y="%s" width="%s" height="%s" preserveAspectRatio="none"/>`,
+				s.image, f(s.x), f(s.y-h-0.07*s.size), f(s.imgW), f(h))
+			continue
 		}
 		if s.color.OK && s.color.A == 0 {
 			continue
@@ -525,6 +657,9 @@ func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 		if s.spacing != 0 {
 			style += "letter-spacing:" + f(s.spacing) + "px;"
 		}
+		if s.wordSpace != 0 {
+			style += "word-spacing:" + f(s.wordSpace) + "px;"
+		}
 		op := ""
 		if s.color.A < 1 {
 			op = ` fill-opacity="` + f(s.color.A) + `"`
@@ -532,12 +667,20 @@ func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 		if style != "" {
 			style = ` style="` + style + `"`
 		}
-		txt := fmt.Sprintf(`<text x="%s" y="%s" font-family="%s" font-size="%s" fill="%s"%s%s xml:space="preserve">%s</text>`,
-			f(s.x), f(s.y), alias, f(s.size), s.color.Hex(), op, style, esc(s.text))
+		dir := ""
+		if s.rtl || fonts.RTL(s.text) {
+			// right-to-left: the browser orders and shapes the text; it ends at x, its left edge
+			dir = ` direction="rtl" text-anchor="end"`
+		}
+		txt := fmt.Sprintf(`<text x="%s" y="%s" font-family="%s" font-size="%s" fill="%s"%s%s%s xml:space="preserve">%s</text>`,
+			f(s.x), f(s.y), alias, f(s.size), s.color.Hex(), op, style, dir, esc(s.text))
 		if s.href != "" {
 			txt = `<a href="` + esc(s.href) + `" target="_blank" rel="noopener">` + txt + `</a>`
 		}
 		b.WriteString(txt)
+	}
+	if unit >= 0 {
+		b.WriteString("</g>")
 	}
 	if cur >= 0 {
 		b.WriteString("</g>")
@@ -568,8 +711,33 @@ func (r *slideRenderer) picture(b *strings.Builder, pic *xmltree.Node, owner own
 		if a := blip.Child("alphaModFix"); a != nil {
 			op = ` opacity="` + f(float64(a.Int("amt", 100000))/100000) + `"`
 		}
-		fmt.Fprintf(b, `<g clip-path="url(#%s)"%s><image href="assets/%s" x="%s" y="%s" width="%s" height="%s" preserveAspectRatio="none"%s/></g>`,
-			clip, op, name, f(img.x), f(img.y), f(img.w), f(img.h), ft)
+		// The player restarts GIF animations when the slide is shown, as PowerPoint does.
+		gif := ""
+		if strings.HasSuffix(strings.ToLower(name), ".gif") {
+			gif = ` data-df-pptx-gif=""`
+		}
+		// effects (shadow, bevel) sit on an outer group: a filter on the clipped group itself
+		// would be clipped away
+		cx := r.colorCtx()
+		ref := pic.Path("style/effectRef")
+		td := r.shape3D(sppr, ref, cx)
+		fx, refl := r.effects(sppr, ref, cx, td)
+		data := ""
+		if td != nil {
+			b.WriteString(td.behind(path, `fill="#808080"`, ""))
+			data = td.attr()
+			r.webGL = true
+		}
+		if fx != "" || data != "" {
+			fmt.Fprintf(b, `<g%s%s>`, fx, data)
+		}
+		pic := fmt.Sprintf(`<g clip-path="url(#%s)"%s><image href="assets/%s" x="%s" y="%s" width="%s" height="%s" preserveAspectRatio="none"%s%s/></g>`,
+			clip, op, name, f(img.x), f(img.y), f(img.w), f(img.h), ft, gif)
+		b.WriteString(pic)
+		if fx != "" || data != "" {
+			b.WriteString("</g>")
+		}
+		b.WriteString(r.reflection(pic, box, refl))
 	}
 	stroke := r.strokeAttr(sppr, pic.Path("style/lnRef"), r.colorCtx())
 	if stroke != "" && path != "" {
@@ -754,8 +922,15 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 		}
 		return r.asset(res.SVG, "svg"), true
 	case "wmf":
-		r.warnOnce("WMF pictures are not converted yet and are left out (slide %d)", r.slide.Number)
-		return "", false
+		res, err := emf.ConvertWMF(data)
+		if err != nil {
+			r.warnOnce("a WMF picture on slide %d cannot be read (%v) and is left out", r.slide.Number, err)
+			return "", false
+		}
+		if res.Unknown*2 > res.Records {
+			r.warnOnce("a WMF picture on slide %d uses drawing commands deckfold does not convert; it may be incomplete", r.slide.Number)
+		}
+		return r.asset(res.SVG, "svg"), true
 	case "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp":
 	default:
 		ct := r.pres.Pkg.ContentType(rel.Target)
@@ -968,4 +1143,25 @@ func (r *slideRenderer) linked(target string) ([]byte, string, error) {
 		return nil, "", err
 	}
 	return data, ext, nil
+}
+
+// morphKey returns the key the morph transition matches objects by: a name that starts with
+// "!!" (PowerPoint's way to pair objects explicitly), otherwise the kind of object, its
+// geometry and its text, otherwise its name.
+func morphKey(sp *xmltree.Node) string {
+	name := ""
+	for _, nv := range []string{"nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr", "nvContentPartPr"} {
+		if c := sp.Path(nv + "/cNvPr"); c != nil {
+			name = c.Attr("name")
+			break
+		}
+	}
+	key := "n:" + name
+	if !strings.HasPrefix(name, "!!") {
+		if txt := strings.TrimSpace(plainText(sp.Child("txBody"))); txt != "" {
+			key = "t:" + sp.Name + ":" + sp.Path("spPr/prstGeom").Attr("prst") + ":" + txt
+		}
+	}
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:6])
 }

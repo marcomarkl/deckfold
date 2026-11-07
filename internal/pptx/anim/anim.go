@@ -23,6 +23,14 @@ type Slide struct {
 	// Hidden lists targets that are invisible when the slide appears (their first effect is an
 	// entrance).
 	Hidden []string `json:"hidden,omitempty"`
+	// Triggers are the interactive sequences: a click on the trigger shape plays its next step.
+	Triggers []Trigger `json:"triggers,omitempty"`
+}
+
+// Trigger is an interactive sequence of a slide.
+type Trigger struct {
+	Shape string `json:"shape"` // spid of the shape that starts the sequence when clicked
+	Steps []Step `json:"steps"` // one step per click group
 }
 
 // Step is one click step.
@@ -38,6 +46,10 @@ type Effect struct {
 	Preset int        `json:"preset,omitempty"`
 	Begin  float64    `json:"begin"` // ms from the start of the step
 	Bhv    []Behavior `json:"bhv"`
+	// Iterate plays the effect word by word ("wd") or letter by letter ("lt"), each unit
+	// IterDelay ms after the one before.
+	Iterate   string  `json:"iterate,omitempty"`
+	IterDelay float64 `json:"iterDelay,omitempty"`
 }
 
 // Behavior is one animation behavior.
@@ -78,10 +90,9 @@ type Transition struct {
 
 // Report collects what the player cannot show as in PowerPoint.
 type Report struct {
-	Triggers bool     // interactive sequences (triggers) were ignored
-	Iterate  bool     // word or letter builds were played by paragraph
-	Fallback []string // transitions played as a fade
-	Unknown  []string // behaviors the player plays as appear
+	Bookmarks bool     // sequences started by a media bookmark were ignored
+	Fallback  []string // transitions played as a fade
+	Unknown   []string // behaviors the player plays as appear
 }
 
 // Read reads the timing and transition of a slide. paraCount returns the number of paragraphs of
@@ -100,19 +111,24 @@ func Read(sld *xmltree.Node, rep *Report) Slide {
 		case "mainSeq":
 			readMain(ctn, &out, rep)
 		case "interactiveSeq":
-			rep.Triggers = true
+			readInteractive(ctn, &out, rep)
 		}
 	}
-	// targets whose first effect is an entrance start hidden
+	// targets whose first effect is an entrance start hidden; the main sequence comes first,
+	// then the interactive sequences
+	all := out.Steps
+	for _, tr := range out.Triggers {
+		all = append(all[:len(all):len(all)], tr.Steps...)
+	}
 	first := map[string]string{}
-	for _, st := range out.Steps {
+	for _, st := range all {
 		for _, e := range st.Effects {
 			if _, ok := first[e.Target]; !ok {
 				first[e.Target] = e.Class
 			}
 		}
 	}
-	for _, st := range out.Steps {
+	for _, st := range all {
 		for _, e := range st.Effects {
 			if first[e.Target] == "entr" {
 				out.Hidden = append(out.Hidden, e.Target)
@@ -123,7 +139,46 @@ func Read(sld *xmltree.Node, rep *Report) Slide {
 	return out
 }
 
-func readMain(seq *xmltree.Node, out *Slide, rep *Report) {
+// readInteractive reads an interactive sequence. A sequence that only plays or pauses the
+// medium that starts it ("play on click" of a video) is left to the player's own click handling
+// of media.
+func readInteractive(seq *xmltree.Node, out *Slide, rep *Report) {
+	shape := ""
+	for _, c := range seq.Path("stCondLst").Children("cond") {
+		switch c.Attr("evt") {
+		case "onClick":
+			if t := c.Path("tgtEl/spTgt"); t != nil {
+				shape = t.Attr("spid")
+			}
+		case "onMediaBookmark":
+			rep.Bookmarks = true
+			return
+		}
+	}
+	if shape == "" {
+		return
+	}
+	var steps []Step
+	readGroups(seq, &steps, rep)
+	ownMedia := true
+	for _, st := range steps {
+		for _, e := range st.Effects {
+			if e.Class != "mediacall" || e.Target != shape {
+				ownMedia = false
+			}
+		}
+	}
+	if len(steps) == 0 || ownMedia {
+		return
+	}
+	out.Triggers = append(out.Triggers, Trigger{Shape: shape, Steps: steps})
+}
+
+func readMain(seq *xmltree.Node, out *Slide, rep *Report) { readGroups(seq, &out.Steps, rep) }
+
+// readGroups adds the click groups of a sequence to steps: a click group starts a new step, an
+// automatic group joins the step before it (or the first step when there is none yet).
+func readGroups(seq *xmltree.Node, steps *[]Step, rep *Report) {
 	step := 0
 	for _, grp := range seq.Path("childTnLst").Children("par") {
 		gctn := grp.Child("cTn")
@@ -132,11 +187,11 @@ func readMain(seq *xmltree.Node, out *Slide, rep *Report) {
 			continue
 		}
 		click := firstNodeType(gctn) == "clickEffect"
-		if click {
-			out.Steps = append(out.Steps, Step{})
-			step = len(out.Steps) - 1
+		if click || len(*steps) == 0 {
+			*steps = append(*steps, Step{})
+			step = len(*steps) - 1
 		}
-		st := &out.Steps[step]
+		st := &(*steps)[step]
 		offset := 0.0
 		if !click {
 			offset = st.Dur // an automatic group starts after the group before it
@@ -197,9 +252,7 @@ func collect(ctn *xmltree.Node, base float64, rep *Report) []Effect {
 		if cls := c.Attr("presetClass"); cls != "" || c.Attr("nodeType") != "" && hasBehaviors(c) {
 			e := Effect{Class: cls, Begin: at}
 			e.Preset = int(c.Int("presetID", 0))
-			if c.Attr("iterate") != "" || c.Child("iterate") != nil {
-				rep.Iterate = true
-			}
+			it := c.Child("iterate")
 			for _, bnode := range c.Path("childTnLst").Kids {
 				b, tgt, ok := behavior(bnode, rep)
 				if !ok {
@@ -209,6 +262,18 @@ func collect(ctn *xmltree.Node, base float64, rep *Report) []Effect {
 					e.Target = tgt
 				}
 				e.Bhv = append(e.Bhv, b)
+			}
+			if it != nil && (it.Attr("type") == "wd" || it.Attr("type") == "lt") {
+				e.Iterate = it.Attr("type")
+				if v := it.Child("tmAbs"); v != nil {
+					e.IterDelay = num(v.Attr("val"))
+				} else {
+					pct := 0.1
+					if v := it.Child("tmPct"); v != nil {
+						pct = num(v.Attr("val")) / 100000
+					}
+					e.IterDelay = pct * effectEnd(e)
+				}
 			}
 			if e.Target != "" && len(e.Bhv) > 0 {
 				out = append(out, e)
@@ -350,8 +415,29 @@ func appendOnce(list []string, s string) []string {
 	return append(list, s)
 }
 
-// transitions the player draws itself; everything else is played as a fade.
-var knownTransitions = map[string]bool{"fade": true, "push": true, "wipe": true, "cover": true, "pull": true, "cut": true, "split": true, "circle": true, "zoom": true, "dissolve": true}
+// transitions the player draws itself: in 2D with transforms and clip paths, in 3D with CSS
+// transforms, and as tiles with three.js (falling back to a fade without WebGL); everything
+// else is played as a fade. Transitions of PowerPoint 2010 and later (p14, p15) are known by
+// their local names, a p15:prstTrans by its preset.
+var knownTransitions = map[string]bool{
+	"morph": true, "fade": true, "push": true, "wipe": true, "cover": true, "pull": true, "cut": true, "split": true,
+	"circle": true, "zoom": true, "dissolve": true, "strips": true, "blinds": true, "checker": true, "comb": true,
+	"randomBar": true, "wheel": true, "wheelReverse": true, "wedge": true, "diamond": true, "plus": true, "newsflash": true,
+	"reveal": true, "flash": true, "flythrough": true, "warp": true,
+	// 3D
+	"prism": true, "flip": true, "gallery": true, "conveyor": true, "doors": true, "window": true, "ferris": true,
+	"pan": true, "switch": true,
+	// tiles (three.js)
+	"glitter": true, "honeycomb": true, "vortex": true, "shred": true, "ripple": true, "fracture": true, "crush": true,
+	"curtains": true, "wind": true, "prestige": true, "peelOff": true, "pageCurlDouble": true, "pageCurlSingle": true,
+	"airplane": true, "origami": true,
+}
+
+// WebGLTransitions are the transitions the player draws with three.js.
+var WebGLTransitions = map[string]bool{
+	"glitter": true, "honeycomb": true, "vortex": true, "shred": true, "ripple": true, "fracture": true, "crush": true,
+	"curtains": true, "wind": true, "prestige": true, "airplane": true, "origami": true,
+}
 
 func readTransition(sld *xmltree.Node, out *Slide, rep *Report) {
 	t := sld.Child("transition")
@@ -381,13 +467,20 @@ func readTransition(sld *xmltree.Node, out *Slide, rep *Report) {
 		if k.Name == "sndAc" || k.Name == "extLst" {
 			continue
 		}
-		tr := &Transition{Type: k.Name, Dur: dur, Dir: k.Attr("dir")}
+		name := k.Name
+		if name == "prstTrans" && k.Attr("prst") != "" {
+			name = k.Attr("prst")
+		}
+		tr := &Transition{Type: name, Dur: dur, Dir: k.Attr("dir")}
+		if k.Attr("invX") == "1" || k.Attr("isInverted") == "1" {
+			tr.Dir += "-inv"
+		}
 		if k.Name == "fade" && k.Bool("thruBlk", false) {
 			tr.Orig = "fadeThroughBlack"
 		}
-		if !knownTransitions[k.Name] {
-			tr.Orig, tr.Type = k.Name, "fade"
-			rep.Fallback = appendOnce(rep.Fallback, k.Name)
+		if !knownTransitions[name] {
+			tr.Orig, tr.Type = name, "fade"
+			rep.Fallback = appendOnce(rep.Fallback, name)
 		}
 		if k.Name == "cut" {
 			tr.Dur = 0

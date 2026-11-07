@@ -1,5 +1,5 @@
-// Browser tests for deckfold outputs (over file://). Firefox is not configured: the Playwright
-// build does not start on macOS 27.2 (see docs/spikes/S2-file-protocol.md).
+// Browser tests for deckfold outputs (over file://). Firefox runs only outside macOS: the
+// Playwright build does not start on macOS 27.2 (see docs/spikes/S2-file-protocol.md).
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
@@ -12,9 +12,16 @@ export default defineConfig({
   projects: [
     {
       name: 'chrome',
-      use: { browserName: 'chromium', channel: 'chrome', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } },
+      // SwiftShader gives WebGL (3D shapes) on machines without a GPU, such as the CI runners
+      use: { browserName: 'chromium', channel: 'chrome', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } },
       testIgnore: /webkit\.spec\.mjs/,
     },
     { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /webkit\.spec\.mjs/ },
+    // Firefox only where its Playwright build starts (not on macOS 27.2): the PowerPoint tests
+    ...(process.platform === 'darwin' ? [] : [{
+      name: 'firefox',
+      use: { browserName: 'firefox', launchOptions: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'webgl.force-enabled': true } } },
+      testMatch: /pptx\.spec\.mjs/,
+    }]),
   ],
 });

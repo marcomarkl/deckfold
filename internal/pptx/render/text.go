@@ -64,6 +64,9 @@ func (r *slideRenderer) styleFor(sp *xmltree.Node, owner ownerKind) *textStyle {
 }
 
 // line output
+// picBulletScale is the height of a picture bullet relative to the bullet size.
+const picBulletScale = 0.65
+
 type textSeg struct {
 	x, y      float64 // baseline start, px
 	text      string
@@ -74,7 +77,13 @@ type textSeg struct {
 	strike    bool
 	spacing   float64 // letter spacing px
 	href      string
-	para      int // paragraph index in the text body
+	para      int     // paragraph index in the text body
+	image     string  // picture bullet: asset name (text is empty)
+	imgW      float64 // picture bullet width, px (height is size)
+	bullet    bool    // the bullet of the line (character or picture)
+	wordSpace float64 // extra space per space character (justified lines), px
+	rtl       bool    // in a right-to-left paragraph
+	unit      int     // word or letter number in the paragraph (builds by word or letter)
 }
 
 type lineInfo struct {
@@ -205,6 +214,7 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 
 		// bullet
 		bullet, bulletFace, bulletSize, bulletColor := "", (*fonts.Face)(nil), 0.0, Color{}
+		bulletImg, bulletAspect := "", 1.0
 		firstRP := ip.endRP
 		if len(ip.runs) > 0 {
 			firstRP = ip.runs[0].rp
@@ -219,6 +229,14 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			switch bt.Name {
 			case "buChar":
 				bullet = bt.Attr("char")
+			case "buBlip":
+				if name, ok := r.blipAsset(bt.Child("blip"), r.partOfNode(bt)); ok {
+					bulletImg = name
+					if sz, ok := r.sizes[name]; ok && sz[1] > 0 {
+						bulletAspect = sz[0] / sz[1]
+					}
+					bullet = " " // takes the place of a character bullet in the layout below
+				}
 			case "buAutoNum":
 				start := int(bt.Int("startAt", 1))
 				if _, ok := autoNum[ip.lvl]; !ok {
@@ -309,16 +327,30 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			} else if bx+bw > x {
 				x = bx + bw + bulletSize*0.25
 			}
-			bulletFace.Use(bullet)
-			cur.segs = append(cur.segs, textSeg{x: bx, text: bullet, face: bulletFace, size: bulletSize, color: bulletColor})
-			cur.asc = math.Max(cur.asc, bulletFace.Ascent()*bulletSize)
-			cur.desc = math.Max(cur.desc, bulletFace.Descent()*bulletSize)
+			if bulletImg != "" {
+				// PowerPoint draws a picture bullet 0.65 times the bullet size high, keeps its
+				// aspect ratio, and starts the text right after it when it is wider than the
+				// hanging indent (measured against the PowerPoint reference of the bullets deck)
+				bw = picBulletScale * bulletSize * bulletAspect
+				x = math.Max(lineStartX(true), bx+bw)
+				if indent >= 0 {
+					x = bx + bw
+				}
+				cur.segs = append(cur.segs, textSeg{x: bx, face: bulletFace, size: bulletSize, image: bulletImg, imgW: bw, bullet: true})
+			} else {
+				bulletFace.Use(bullet)
+				cur.segs = append(cur.segs, textSeg{x: bx, text: bullet, face: bulletFace, size: bulletSize, color: bulletColor, bullet: true})
+				cur.asc = math.Max(cur.asc, bulletFace.Ascent()*bulletSize)
+				cur.desc = math.Max(cur.desc, bulletFace.Descent()*bulletSize)
+			}
 		}
 		flush := func() {
 			// width without trailing spaces
 			end := 0.0
 			for _, s := range cur.segs {
-				if strings.TrimSpace(s.text) != "" {
+				if s.image != "" {
+					end = math.Max(end, s.x+s.imgW)
+				} else if strings.TrimSpace(s.text) != "" {
 					end = math.Max(end, s.x+measure(s.face, s.text, s.size))
 				}
 			}
@@ -385,6 +417,18 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			case "r":
 				shift = avail - l.width
 			}
+			if pp.attr("rtl") == "1" {
+				// a right-to-left paragraph: the pieces of the line run from right to left
+				mirrorLine(l.segs, l.width)
+			}
+			switch algn {
+			case "just", "justLow", "dist", "thaiDist":
+				// justified: the space left on the line goes to the spaces between words; the
+				// last line of a paragraph stays left aligned, except with "dist"
+				if algn == "dist" || algn == "thaiDist" || li < len(lines)-1 {
+					justify(l.segs, avail-l.width)
+				}
+			}
 			if shift != 0 {
 				for i := range l.segs {
 					l.segs[i].x += shift
@@ -395,7 +439,9 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			// PowerPoint reference images, docs/spikes/S4-powerpoint-reference.md)
 			size := 0.0
 			for _, sg := range l.segs {
-				size = math.Max(size, sg.size)
+				if sg.image == "" { // a picture bullet does not make the line higher
+					size = math.Max(size, sg.size)
+				}
 			}
 			h := (l.asc + l.desc) * lnPct
 			if size > 0 {
@@ -458,4 +504,85 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 		y += l.asc + l.desc + spaceAfter[i]
 	}
 	return out
+}
+
+// justify spreads extra px over the spaces between the words of a line (not over leading or
+// trailing spaces, and not after the bullet) and moves the segments after each space.
+func justify(segs []textSeg, extra float64) {
+	if extra <= 0.01 {
+		return
+	}
+	// the spaces that count lie between the first and the last non-space character
+	first, last := -1, -1
+	var all []rune
+	var owner []int
+	for i, sg := range segs {
+		if sg.bullet {
+			continue
+		}
+		for _, c := range sg.text {
+			all = append(all, c)
+			owner = append(owner, i)
+		}
+	}
+	for k, c := range all {
+		if c != ' ' && c != '\u00a0' {
+			if first < 0 {
+				first = k
+			}
+			last = k
+		}
+	}
+	if first < 0 {
+		return
+	}
+	n := 0
+	for k := first; k <= last; k++ {
+		if all[k] == ' ' {
+			n++
+		}
+	}
+	if n == 0 {
+		return
+	}
+	ws := extra / float64(n)
+	before := make([]int, len(segs)) // counted spaces before each segment
+	cum := 0
+	for k := range all {
+		i := owner[k]
+		if k == 0 || owner[k-1] != i {
+			before[i] = cum
+		}
+		if k > first && k < last && all[k] == ' ' {
+			cum++
+		}
+	}
+	for i := range segs {
+		if segs[i].bullet {
+			continue
+		}
+		segs[i].x += float64(before[i]) * ws
+		segs[i].wordSpace = ws
+	}
+}
+
+// mirrorLine reverses the order of the pieces of a line within the span they cover, for
+// right-to-left paragraphs. The text inside a piece keeps its order; the browser lays it out
+// with the bidirectional algorithm (writeText marks right-to-left pieces).
+func mirrorLine(segs []textSeg, end float64) {
+	if len(segs) == 0 {
+		return
+	}
+	start := segs[0].x
+	for _, sg := range segs {
+		start = math.Min(start, sg.x)
+	}
+	for i := range segs {
+		w := segs[i].imgW
+		if segs[i].image == "" {
+			w = measure(segs[i].face, segs[i].text, segs[i].size)
+		}
+		segs[i].x = start + end - (segs[i].x + w)
+		segs[i].rtl = true
+	}
 }

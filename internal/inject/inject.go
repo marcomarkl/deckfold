@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"deckfold/internal/assets"
@@ -82,23 +83,9 @@ func MetaBlock(meta any) ([]byte, error) {
 
 // AssetBlocks encodes all assets as Base64 blocks (at most PartBytes binary per block).
 func AssetBlocks(s *assets.Store) []byte {
-	return AppendAssetBlocks(make([]byte, 0, AssetBlocksSize(s)), s)
-}
-
-// AssetBlocksSize returns the exact length of the asset blocks, so that callers can allocate
-// the output once instead of growing it (large media would otherwise be copied several times).
-func AssetBlocksSize(s *assets.Store) int {
-	n := 0
-	for _, h := range s.Order {
-		a := s.Get(h)
-		parts := partsOf(len(a.Data))
-		n += len(fmt.Sprintf(`<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts))
-		for i := 1; i < parts; i++ {
-			n += len(fmt.Sprintf(`<script type="application/octet-stream" id="df-a-%s-%d">`, h, i))
-		}
-		n += base64.StdEncoding.EncodedLen(len(a.Data)) + parts*len("</script>\n")
-	}
-	return n
+	var b bytes.Buffer
+	_ = WriteAssetBlocks(&b, s) // a bytes.Buffer does not fail
+	return b.Bytes()
 }
 
 func partsOf(size int) int {
@@ -108,8 +95,9 @@ func partsOf(size int) int {
 	return (size + PartBytes - 1) / PartBytes
 }
 
-// AppendAssetBlocks appends the asset blocks to dst.
-func AppendAssetBlocks(dst []byte, s *assets.Store) []byte {
+// WriteAssetBlocks writes the asset blocks to w, one part at a time, so that the encoded data
+// never has to be in memory as a whole: at most PartBytes of binary data per block, Base64.
+func WriteAssetBlocks(w io.Writer, s *assets.Store) error {
 	for _, h := range s.Order {
 		a := s.Get(h)
 		parts := partsOf(len(a.Data))
@@ -118,16 +106,28 @@ func AppendAssetBlocks(dst []byte, s *assets.Store) []byte {
 			if hi > len(a.Data) {
 				hi = len(a.Data)
 			}
+			var err error
 			if i == 0 {
-				dst = fmt.Appendf(dst, `<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts)
+				_, err = fmt.Fprintf(w, `<script type="application/octet-stream" id="df-a-%s-0" data-mime="%s" data-parts="%d">`, h, htmlAttr(a.Mime), parts)
 			} else {
-				dst = fmt.Appendf(dst, `<script type="application/octet-stream" id="df-a-%s-%d">`, h, i)
+				_, err = fmt.Fprintf(w, `<script type="application/octet-stream" id="df-a-%s-%d">`, h, i)
 			}
-			dst = base64.StdEncoding.AppendEncode(dst, a.Data[lo:hi])
-			dst = append(dst, "</script>\n"...)
+			if err != nil {
+				return err
+			}
+			enc := base64.NewEncoder(base64.StdEncoding, w)
+			if _, err := enc.Write(a.Data[lo:hi]); err != nil {
+				return err
+			}
+			if err := enc.Close(); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "</script>\n"); err != nil {
+				return err
+			}
 		}
 	}
-	return dst
+	return nil
 }
 
 func htmlAttr(s string) string {
@@ -185,36 +185,48 @@ func Replace(src, block []byte) ([]byte, error) {
 	return out, nil
 }
 
-// Markers around the player of a deck generated from PowerPoint (see internal/pptx/deck).
+// Markers around the player of a deck generated from PowerPoint (see internal/pptx/deck), and
+// around the three.js bundle, which only decks with 3D content have.
 const (
 	PlayerBegin = "<!--deckfold:pptx-player:begin-->"
 	PlayerEnd   = "<!--deckfold:pptx-player:end-->"
+	ThreeBegin  = "<!--deckfold:pptx-three:begin-->"
+	ThreeEnd    = "<!--deckfold:pptx-three:end-->"
 )
 
 // ReplacePlayer swaps the code of the PowerPoint player in an output. It keeps the script
 // element as embed rewrote it (deferred type) and only replaces its content. found is false
 // for outputs that are not PowerPoint decks.
 func ReplacePlayer(src []byte, js string) (out []byte, found bool, err error) {
-	i := bytes.LastIndex(src, []byte(PlayerBegin))
+	return replaceScript(src, js, PlayerBegin, PlayerEnd, "the PowerPoint player")
+}
+
+// ReplaceThree swaps the three.js bundle of a PowerPoint deck that has one, like ReplacePlayer.
+func ReplaceThree(src []byte, js string) (out []byte, found bool, err error) {
+	return replaceScript(src, js, ThreeBegin, ThreeEnd, "the three.js")
+}
+
+func replaceScript(src []byte, js, begin, endMark, what string) (out []byte, found bool, err error) {
+	i := bytes.LastIndex(src, []byte(begin))
 	if i < 0 {
 		return src, false, nil
 	}
-	j := bytes.Index(src[i:], []byte(PlayerEnd))
+	j := bytes.Index(src[i:], []byte(endMark))
 	if j < 0 {
-		return nil, true, errors.New("the PowerPoint player block is not terminated")
+		return nil, true, errors.New(what + " block is not terminated")
 	}
 	blk := src[i : i+j]
 	open := bytes.Index(blk, []byte("<script"))
 	if open < 0 {
-		return nil, true, errors.New("the PowerPoint player block has no script")
+		return nil, true, errors.New(what + " block has no script")
 	}
 	gt := bytes.IndexByte(blk[open:], '>')
 	end := bytes.LastIndex(blk, []byte("</script>"))
 	if gt < 0 || end < open+gt {
-		return nil, true, errors.New("the PowerPoint player script is malformed")
+		return nil, true, errors.New(what + " script is malformed")
 	}
 	if strings.Contains(strings.ToLower(js), "</script") {
-		return nil, true, errors.New("player code contains </script")
+		return nil, true, errors.New(what + " code contains </script")
 	}
 	start := i + open + gt + 1
 	stop := i + end

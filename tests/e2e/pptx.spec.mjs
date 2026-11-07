@@ -160,3 +160,179 @@ test('PowerPoint auto mode: source timing (advTm) after the last step', async ({
   expect(waited).toBeGreaterThan(2500);
   expect(waited).toBeLessThan(5000);
 });
+
+test('PowerPoint GIF: starts again from its first frame when its slide is entered', async ({ page }) => {
+  await solo(page, 'pptx-gifs.html');
+  const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
+  await expect(img).toHaveCount(1);
+  // The GIF shows red, green and blue for half a second each.
+  const color = async () => {
+    const box = await img.boundingBox();
+    const { PNG } = await import('pngjs');
+    const shot = PNG.sync.read(await page.screenshot({ clip: { x: box.x + box.width / 2, y: box.y + box.height / 2, width: 1, height: 1 } }));
+    const [r, g, b] = shot.data;
+    return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
+  };
+  await expect.poll(color, { timeout: 3000 }).toBe('green');
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => shown(page)).toBe(1);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => shown(page)).toBe(0);
+  expect(await color()).toBe('red');
+  expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
+});
+
+test('PowerPoint trigger: a click on the trigger shape plays its next step', async ({ page }) => {
+  await solo(page, 'pptx-triggers.html');
+  const trig = await page.evaluate(() => window.__dfPptx.deck.slides[0].anim.triggers[0]);
+  const star = page.locator(`.df-pptx-slide.df-on g[data-sid="${trig.steps[0].effects[0].target}"]`);
+  const button = page.locator(`.df-pptx-slide.df-on g[data-sid="${trig.shape}"]`);
+  const visible = () => star.evaluate((g) => getComputedStyle(g).visibility !== 'hidden' && parseFloat(getComputedStyle(g).opacity || '1') > 0.99);
+  expect(await visible()).toBe(false);
+  expect(await button.evaluate((g) => g.style.cursor)).toBe('pointer');
+  await button.click();
+  await expect.poll(visible).toBe(true);
+  await button.click();
+  await expect.poll(visible).toBe(false);
+  // the sequence starts over after its last step
+  await button.click();
+  await expect.poll(visible).toBe(true);
+  // the trigger does not change the slide or step
+  expect(await page.evaluate(() => window.__dfPptx.state())).toEqual({ slide: 0, step: 0 });
+  // leaving and coming back resets the slide
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => shown(page)).toBe(0);
+  expect(await visible()).toBe(false);
+});
+
+test('PowerPoint media: a click on the icon of an audio clip plays and pauses it', async ({ page }) => {
+  await solo(page, 'pptx-triggers.html');
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => shown(page)).toBe(1);
+  const audio = page.locator('.df-pptx-slide.df-on audio[data-df-pptx-media="click"]');
+  const icon = page.locator('.df-pptx-slide.df-on g[data-sid]', { has: page.locator('audio[data-df-pptx-media]') });
+  const paused = () => audio.evaluate((a) => a.paused);
+  expect(await paused()).toBe(true);
+  await icon.click();
+  await expect.poll(paused).toBe(false);
+  await icon.click();
+  await expect.poll(paused).toBe(true);
+});
+
+test('PowerPoint 3D: shapes are drawn with WebGL, the front keeps its fill color', async ({ page, context }) => {
+  const w = watch(context);
+  await solo(page, 'pptx-shapes3d.html');
+  const counts = async () => page.evaluate(() => ({
+    all: document.querySelectorAll('[data-df-pptx-3d]').length,
+    done: document.querySelectorAll('[data-df-pptx-3d-done=""]').length,
+    images: document.querySelectorAll('image[data-df-pptx-3d-image]').length,
+  }));
+  // the shapes of a slide are drawn when the slide is shown
+  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  await expect.poll(counts).toEqual({ all: 11, done: 11, images: 11 });
+  // a rectangle with a bevel, lit from the top: its middle has the fill color (70AD47)
+  await page.evaluate(() => window.__dfPptx.goTo(0, 0));
+  const shape = page.locator('.df-pptx-slide.df-on g[data-sid]', { has: page.locator('path[data-df-pptx-3d]') }).nth(2);
+  const box = await shape.boundingBox();
+  const { PNG } = await import('pngjs');
+  const shot = PNG.sync.read(await page.screenshot({ clip: { x: box.x + box.width * 0.75, y: box.y + box.height * 0.75, width: 1, height: 1 } }));
+  const [r, g, b] = shot.data;
+  expect(Math.abs(r - 0x70) + Math.abs(g - 0xad) + Math.abs(b - 0x47)).toBeLessThan(12);
+  expect(realErrors(w)).toEqual([]);
+});
+
+test('PowerPoint 3D: without WebGL and in previews the SVG approximation stays', async ({ page, context }) => {
+  await context.addInitScript(() => Object.defineProperty(window, '__dfThree', { get() { return undefined; }, set() {}, configurable: false }));
+  await solo(page, 'pptx-shapes3d.html');
+  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  expect(await page.locator('image[data-df-pptx-3d-image]').count()).toBe(0);
+  const filtered = await page.evaluate(() => [...document.querySelectorAll('path[data-df-pptx-3d]')].filter((p) => p.getAttribute('filter')).length);
+  expect(filtered).toBeGreaterThanOrEqual(8);
+});
+
+test('PowerPoint 3D: previews in the presenter view keep the approximation', async ({ page, context }) => {
+  const aud = await present(page, context, 'pptx-shapes3d.html');
+  await expect(page.locator('iframe[data-df-preview]')).toHaveCount(2);
+  await expect.poll(() => aud.evaluate(() => document.querySelectorAll('image[data-df-pptx-3d-image]').length)).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  const inPreviews = await page.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')]
+    .map((f) => f.contentDocument.querySelectorAll('image[data-df-pptx-3d-image]').length));
+  expect(inPreviews).toEqual([0, 0]);
+});
+
+test('PowerPoint builds by word and by letter: the units appear one after the other', async ({ page }) => {
+  await solo(page, 'pptx-text2.html');
+  await page.evaluate(() => window.__dfPptx.goTo(1, 0));
+  const vis = (sel) => page.evaluate((sel) => [...document.querySelectorAll(`.df-pptx-slide.df-on ${sel}`)]
+    .map((g) => getComputedStyle(g).visibility !== 'hidden' && parseFloat(getComputedStyle(g).opacity || '1') > 0.5), sel);
+  const words = await vis('g[data-w]'), letters = await vis('g[data-c]');
+  expect(words.length).toBe(6);
+  expect(letters.length).toBe('Andthisoneletterbyletter'.length);
+  expect(words.concat(letters).every((v) => !v)).toBe(true);
+  await page.keyboard.press('ArrowRight');
+  // each word starts 10 percent of the effect (500 ms) after the one before: 6 words take 1 s,
+  // so there is a moment when the first word is visible and the last is not
+  await expect.poll(async () => { const m = await vis('g[data-w]'); return m[0] && !m[5]; }, { timeout: 2000, intervals: [20] }).toBe(true);
+  await expect.poll(() => vis('g[data-w]')).toEqual([true, true, true, true, true, true]);
+  // a jump shows the end state of every unit
+  await page.evaluate(() => window.__dfPptx.goTo(1, 2));
+  expect((await vis('g[data-c]')).every((v) => v)).toBe(true);
+});
+
+test('PowerPoint morph: paired objects move from their old to their new place', async ({ page }) => {
+  await solo(page, 'pptx-morph.html');
+  expect(await page.evaluate(() => window.__dfPptx.deck.slides[1].anim.transition.type)).toBe('morph');
+  // the circle is paired by its "!!" name: x from 120 to 820, width from 160 to 320 (slide px)
+  const ball = () => page.evaluate(() => {
+    const s = document.querySelectorAll('.df-pptx-slide')[1];
+    const g = [...s.querySelectorAll('g[data-mk]')].find((g) => g.querySelector('ellipse, path'));
+    const r = g.getBoundingClientRect(), st = document.getElementById('df-pptx-stage').getBoundingClientRect();
+    const k = st.width / window.__dfPptx.deck.width;
+    return { x: (r.left - st.left) / k, w: r.width / k, moving: g.hasAttribute('transform') };
+  });
+  await page.keyboard.press('ArrowRight');
+  // during the transition (2 s) the circle is somewhere between its two places and sizes (with
+  // SwiftShader, as on the CI runners, the frames come slowly)
+  await expect.poll(async () => {
+    const m = await ball();
+    return m.moving && m.x > 125 && m.x < 815 && m.w > 161 && m.w < 319;
+  }, { timeout: 2500, intervals: [20] }).toBe(true);
+  await expect.poll(async () => (await ball()).moving, { timeout: 3000 }).toBe(false);
+  expect(Math.abs((await ball()).x - 820)).toBeLessThan(2);
+});
+
+test('PowerPoint transitions: every 2D, 3D and tile transition plays and ends on the next slide', async ({ page, context }) => {
+  test.setTimeout(300_000);
+  const w = watch(context);
+  await solo(page, 'pptx-transitions3d.html');
+  const types = await page.evaluate(() => window.__dfPptx.deck.slides.map((s) => (s.anim.transition || {}).type));
+  expect(types.slice(1).every((t) => t && t !== 'fade')).toBe(true);
+  for (let i = 1; i < types.length; i++) {
+    await page.evaluate((i) => window.__dfPptx.goTo(i - 1, 0), i);
+    await page.evaluate(() => window.__dfPptx.next());
+    // something moves while the transition runs (1.5 s)
+    await expect.poll(() => page.evaluate(() => {
+      if (document.querySelector('#df-pptx-stage > canvas')) return true;
+      return [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
+    }), { timeout: 6000, intervals: [20], message: types[i] }).toBe(true);
+    await expect.poll(() => shown(page), { timeout: 10000, message: types[i] }).toBe(i);
+    await expect.poll(() => page.evaluate(() => !document.querySelector('#df-pptx-stage > canvas') &&
+      [...document.querySelectorAll('.df-pptx-slide')].every((s) => !s.style.transform && !s.style.clipPath && !s.style.opacity)), { timeout: 10000, message: types[i] }).toBe(true);
+  }
+  expect(realErrors(w)).toEqual([]);
+});
+
+test('PowerPoint 3D charts: the plots are drawn with WebGL', async ({ page, context }) => {
+  const w = watch(context);
+  await solo(page, 'pptx-charts2.html');
+  const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
+  for (let i = 0; i < n; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  // five 3D charts in the generated deck; PowerPoint saves the surface chart as a 3D one too
+  await expect.poll(() => page.evaluate(() => {
+    const all = document.querySelectorAll('[data-df-pptx-chart3d]').length;
+    return all >= 5 && document.querySelectorAll('[data-df-pptx-chart3d][data-df-pptx-3d-done=""]').length === all;
+  })).toBe(true);
+  expect(realErrors(w)).toEqual([]);
+});

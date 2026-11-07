@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -66,14 +67,47 @@ type conv struct {
 
 // Convert produces the self-contained output.
 func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Report) ([]byte, adapter.Meta, error) {
+	var b bytes.Buffer
+	_, meta, err := ConvertTo(&b, in, ad, opt, rep)
+	if err != nil {
+		return nil, meta, err
+	}
+	return b.Bytes(), meta, nil
+}
+
+// ConvertTo converts like Convert and writes the output to w as it goes: the source with its
+// patches, then the encoded assets part by part, so that the output is never in memory as a
+// whole. It returns the number of bytes written.
+func ConvertTo(w io.Writer, in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Report) (int64, adapter.Meta, error) {
+	ps, meta, c, err := prepare(in, ad, opt, rep)
+	if err != nil {
+		return 0, meta, err
+	}
+	n, err := patch.WriteTo(w, in.Src, ps)
+	c.store.Release()
+	if err != nil {
+		return n, meta, err
+	}
+	for _, h := range c.store.Order {
+		a := c.store.Get(h)
+		rep.Assets = append(rep.Assets, report.Sized{Name: strings.Join(a.Names, ", "), Size: a.Size})
+	}
+	for h := range opt.Fetcher.Hosts {
+		rep.Hosts[h] = true
+	}
+	return n, meta, nil
+}
+
+// prepare collects the patches of a conversion; the asset blocks are written by the last one.
+func prepare(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Report) ([]patch.Patch, adapter.Meta, *conv, error) {
 	for _, t := range in.Doc.Tags {
 		if t.Name == "meta" && t.Value("name") == "deckfold:version" {
-			return nil, adapter.Meta{}, ErrAlreadyConverted
+			return nil, adapter.Meta{}, nil, ErrAlreadyConverted
 		}
 	}
 	meta, warns, err := ad.Meta(in)
 	if err != nil {
-		return nil, meta, err
+		return nil, meta, nil, err
 	}
 	rep.Format = ad.Name()
 	for _, w := range warns {
@@ -81,7 +115,7 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	}
 	res, err := assets.NewResolver(in.Root, opt.AllowOutside)
 	if err != nil {
-		return nil, meta, err
+		return nil, meta, nil, err
 	}
 	c := &conv{in: in, ad: ad, opt: opt, rep: rep, res: res, store: assets.NewStore(), seenRes: clean.Seen{},
 		fontFaces: clean.Seen{}, embedded: map[string]bool{}, frameOrig: map[string]bool{}, sprites: map[string]bool{},
@@ -106,7 +140,7 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	shim := map[string]string{}
 	extras, err := ad.Collect(in)
 	if err != nil {
-		return nil, meta, err
+		return nil, meta, nil, err
 	}
 	for _, e := range extras {
 		full := filepath.Join(in.Root, filepath.FromSlash(e.Path))
@@ -127,7 +161,7 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	}
 
 	if len(rep.Missing) > 0 && !opt.Lenient {
-		return nil, meta, ErrMissing
+		return nil, meta, nil, ErrMissing
 	}
 	for _, m := range rep.Missing {
 		rep.Warn("not embedded (--lenient): %s (%s)", m.Ref, m.Where)
@@ -144,7 +178,7 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	}
 	block, err := inject.Block(opt.Version, d, opt.Runtime)
 	if err != nil {
-		return nil, meta, err
+		return nil, meta, nil, err
 	}
 	// rewrite the CSP (after collecting embed origins and inline scripts)
 	c.rewriteCSP([]byte(opt.Runtime.JS))
@@ -161,31 +195,17 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	deckHash := assets.HashOf(append(append([]byte{}, in.Src...), []byte(strings.Join(c.store.Order, ","))...))
 	mb, err := inject.MetaBlock(map[string]any{"deck": meta, "shim": shim, "deckHash": deckHash})
 	if err != nil {
-		return nil, meta, err
+		return nil, meta, nil, err
 	}
-	// one allocation for the tail, then the raw asset data can go: it is now in the tail
-	tail := make([]byte, 0, 1+len(mb)+inject.AssetBlocksSize(c.store))
-	tail = append(append(tail, '\n'), mb...)
-	tail = inject.AppendAssetBlocks(tail, c.store)
-	c.store.Release()
+	// the asset blocks are written straight from the store when the output is written
 	end := len(in.Src)
 	if in.Doc.BodyClose >= 0 {
 		end = in.Doc.BodyClose
 	}
-	c.patches = append(c.patches, patch.Patch{Start: end, End: end, Repl: tail, Order: 10})
-
-	out, err := patch.Apply(in.Src, c.patches)
-	if err != nil {
-		return nil, meta, err
-	}
-	for _, h := range c.store.Order {
-		a := c.store.Get(h)
-		rep.Assets = append(rep.Assets, report.Sized{Name: strings.Join(a.Names, ", "), Size: a.Size})
-	}
-	for h := range opt.Fetcher.Hosts {
-		rep.Hosts[h] = true
-	}
-	return out, meta, nil
+	store := c.store
+	c.patches = append(c.patches, patch.Patch{Start: end, End: end, Repl: append([]byte{'\n'}, mb...), Order: 10,
+		Write: func(w io.Writer) error { return inject.WriteAssetBlocks(w, store) }})
+	return c.patches, meta, c, nil
 }
 
 // ---------- walk over the tags ----------

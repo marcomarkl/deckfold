@@ -6,6 +6,7 @@ deckfold is licensed under the MIT license (see LICENSE). The binaries also cont
 
 | Module | License | Used for |
 |---|---|---|
+| github.com/go-text/typesetting | BSD-3-Clause (chosen from Unlicense or BSD-3-Clause); the HarfBuzz port in it under MIT | text shaping for right-to-left text and complex scripts |
 | github.com/tdewolff/font | MIT | font parsing, subsetting |
 | github.com/tdewolff/parse/v2 | MIT | binary readers used by tdewolff/font |
 | github.com/andybalholm/brotli | MIT | WOFF2 decoding in tdewolff/font |
@@ -15,6 +16,14 @@ deckfold is licensed under the MIT license (see LICENSE). The binaries also cont
 | golang.org/x/text | BSD-3-Clause | Unicode normalization |
 
 Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
+
+## JavaScript
+
+| Library | License | Used for |
+|---|---|---|
+| three.js 0.186.1 | MIT | WebGL drawing of 3D shapes, 3D charts and tile transitions in the PowerPoint player |
+
+`scripts/three` bundles the parts of three.js the player uses into `runtime/dist/three.js`, which keeps the copyright line at the top. deckfold embeds it only in PowerPoint decks that need WebGL.
 
 ## Fonts
 
@@ -75,6 +84,12 @@ INTERNATIONAL DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LI
 WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY OWNERSHIP RIGHTS OR ANY
 IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 ```
+
+## MicroType Express
+
+`internal/pptx/fonts/mtx` decompresses fonts in the MicroType Express (MTX) format. It is written in Go from the W3C member submission "MicroType Express (MTX) Font Format" of 5 March 2008 (https://www.w3.org/Submission/MTX/); the coordinate table in `triplet.go` is taken from section 5.11 of that document.
+
+MicroType is a registered trademark of Monotype Imaging Inc. Monotype grants everyone a worldwide, non-exclusive, no-charge, royalty-free, irrevocable license under the patents that cover MTX (among them U.S. Patent No. 6,031,622) and under its copyright in the format and in the code of the W3C submission, to make, use, distribute and prepare derivative works of products that use them. The full statement is the "MicroType Express (MTX) License" at https://cms-prod.monotype.com/legal/mtx-licensing-statement (read on 2026-11-07).
 
 ## License texts
 
@@ -424,6 +439,131 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+### github.com/go-text/typesetting
+
+```
+This project is provided under the terms of the UNLICENSE or
+the BSD license denoted by the following SPDX identifier:
+
+SPDX-License-Identifier: Unlicense OR BSD-3-Clause
+
+You may use the project under the terms of either license.
+
+Both licenses are reproduced below.
+
+----
+The BSD 3 Clause License
+
+Copyright 2021 The go-text authors
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+---
+
+
+
+---
+The UNLICENSE
+
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org/>
+---
+```
+
+### github.com/go-text/typesetting/harfbuzz
+
+```
+MIT License
+
+Copyright (c) 2021 B. KUGLER
+Copyright © 2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020  Google, Inc.
+Copyright © 2018,2019,2020  Ebrahim Byagowi
+Copyright © 2019,2020  Facebook, Inc. 
+Copyright © 2012  Mozilla Foundation
+Copyright © 2011  Codethink Limited
+Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright © 2009  Keith Stribley
+Copyright © 2009  Martin Hosken and SIL International
+Copyright © 2007  Chris Wilson
+Copyright © 2006  Behdad Esfahbod
+Copyright © 2005  David Turner
+Copyright © 2004,2007,2008,2009,2010  Red Hat, Inc.
+Copyright © 1998-2004  David Turner and Werner Lemberg
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### three.js
+
+```
+The MIT License
+
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 ```
 
 ### SIL Open Font License 1.1 (Carlito)

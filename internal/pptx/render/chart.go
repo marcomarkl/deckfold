@@ -21,6 +21,8 @@ type series struct {
 	sppr   *xmltree.Node
 	node   *xmltree.Node // c:ser
 	labels bool
+	xs     []float64 // x values (scatter, bubble)
+	sizes  []float64 // bubble sizes
 }
 
 func (r *slideRenderer) chart(b *strings.Builder, gf, gd *xmltree.Node, part model.Part, box rect) bool {
@@ -40,27 +42,25 @@ func (r *slideRenderer) chart(b *strings.Builder, gf, gd *xmltree.Node, part mod
 	var kind *xmltree.Node
 	for _, k := range plot.Kids {
 		switch k.Name {
-		case "barChart", "bar3DChart", "lineChart", "line3DChart", "areaChart", "area3DChart", "pieChart", "pie3DChart", "doughnutChart":
+		case "barChart", "bar3DChart", "lineChart", "line3DChart", "areaChart", "area3DChart", "pieChart", "pie3DChart", "doughnutChart",
+			"scatterChart", "radarChart", "bubbleChart", "stockChart", "surfaceChart", "surface3DChart", "ofPieChart":
 			if kind == nil {
 				kind = k
-			}
-		case "scatterChart", "radarChart", "bubbleChart", "stockChart", "surfaceChart", "surface3DChart", "ofPieChart":
-			if kind == nil {
-				r.warnOnce("%s charts are shown as a placeholder (slide %d)", strings.TrimSuffix(k.Name, "Chart"), r.slide.Number)
-				return false
 			}
 		}
 	}
 	if kind == nil {
 		return false
 	}
-	if strings.Contains(kind.Name, "3D") {
-		r.warnOnce("3D charts are drawn flat (slide %d)", r.slide.Number)
-	}
+	r.curChart = cs
 	cx := r.colorCtx()
 	var ss []series
 	for i, s := range kind.Children("ser") {
 		se := series{cats: cacheStrings(s.Child("cat")), vals: cacheNums(s.Child("val")), sppr: s.Child("spPr"), node: s}
+		if s.Child("yVal") != nil {
+			se.vals, se.xs, se.cats = cacheNums(s.Child("yVal")), cacheNums(s.Child("xVal")), cacheStrings(s.Child("xVal"))
+			se.sizes = cacheNums(s.Child("bubbleSize"))
+		}
 		if names := cacheStrings(s.Child("tx")); len(names) > 0 {
 			se.name = strings.TrimSpace(names[0])
 		}
@@ -116,7 +116,7 @@ func (r *slideRenderer) chart(b *strings.Builder, gf, gd *xmltree.Node, part mod
 		}
 		names := []string{}
 		cols := []Color{}
-		if strings.HasPrefix(kind.Name, "pie") || kind.Name == "doughnutChart" {
+		if strings.HasPrefix(kind.Name, "pie") || kind.Name == "doughnutChart" || kind.Name == "ofPieChart" {
 			for i, c := range ss[0].cats {
 				names = append(names, c)
 				cols = append(cols, r.pointColor(kind.Children("ser")[0], i, cx))
@@ -168,8 +168,41 @@ func (r *slideRenderer) chart(b *strings.Builder, gf, gd *xmltree.Node, part mod
 		}
 	}
 	switch {
+	case kind.Name == "pie3DChart":
+		cols := []Color{}
+		for i := range ss[0].vals {
+			cols = append(cols, r.pointColor(kind.Children("ser")[0], i, cx))
+		}
+		fmt.Fprintf(b, `<g%s>`, r.chart3DAttr(cs, "pie", inner, 0, 0, ss[:1], cols, false, false))
+		r.pie(b, kind, ss[0], inner, cx, label, fs)
+		b.WriteString("</g>")
 	case strings.HasPrefix(kind.Name, "pie") || kind.Name == "doughnutChart":
 		r.pie(b, kind, ss[0], inner, cx, label, fs)
+	case kind.Name == "ofPieChart":
+		r.ofPie(b, kind, ss[0], inner, label, fs)
+	case kind.Name == "scatterChart" || kind.Name == "bubbleChart":
+		r.scatter(b, kind, plot, ss, inner, label, fs, text)
+	case kind.Name == "radarChart":
+		r.radar(b, kind, plot, ss, inner, label, fs, text)
+	case kind.Name == "surfaceChart" || kind.Name == "surface3DChart":
+		if kind.Name == "surface3DChart" {
+			lo, hi := math.Inf(1), math.Inf(-1)
+			for _, s := range ss {
+				for _, v := range s.vals {
+					lo, hi = math.Min(lo, v), math.Max(hi, v)
+				}
+			}
+			lo, hi, _ = niceRange(lo, hi, false)
+			cols := []Color{}
+			for i := 0; i < 12; i++ {
+				cols = append(cols, r.accent(i, cx))
+			}
+			fmt.Fprintf(b, `<g%s>`, r.chart3DAttr(cs, "surface", inner, lo, hi, ss, cols, false, false))
+			r.surface(b, kind, ss, inner, fs)
+			b.WriteString("</g>")
+		} else {
+			r.surface(b, kind, ss, inner, fs)
+		}
 	default:
 		r.xyChart(b, kind, plot, ss, inner, label, fs, text)
 	}
@@ -390,6 +423,20 @@ func (r *slideRenderer) xyChart(b *strings.Builder, kind, plot *xmltree.Node, ss
 	nser := float64(len(ss))
 	// bar width w with n bars per category: band = w*(n - (n-1)*overlap) + gap*w
 	w := band / (nser - (nser-1)*overlap + gap)
+	if kind.Name == "stockChart" {
+		r.stockMarks(b, kind, ss, plotR, band, valPos)
+		return
+	}
+	if strings.Contains(kind.Name, "3D") {
+		// the plot of a 3D chart: the player draws it with three.js
+		cols := []Color{}
+		for _, s := range ss {
+			cols = append(cols, s.color)
+		}
+		typ := map[string]string{"bar3DChart": "bar", "line3DChart": "line", "area3DChart": "area"}[kind.Name]
+		fmt.Fprintf(b, `<g%s>`, r.chart3DAttr(r.curChart, typ, plotR, lo, hi, ss, cols, stacked, horizontal))
+		defer b.WriteString("</g>")
+	}
 	if !isBar {
 		r.lines(b, kind, ss, plotR, band, valPos, horizontal, percent, stacked)
 		return

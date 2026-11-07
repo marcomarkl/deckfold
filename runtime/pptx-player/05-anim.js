@@ -207,7 +207,8 @@ var Anim = (function () {
       case "effect":
         var name = (b.filter || "").split("(")[0];
         if (name === "fade" || name === "dissolve" || name === "" || name === "image") {
-          st.op = (st.op === undefined ? 1 : st.op) * (b.transition === "out" ? 1 - p : p);
+          // an entrance starts from full opacity, even after an exit left the target at 0
+          st.op = b.transition === "out" ? (st.op === undefined ? 1 : st.op) * (1 - p) : p;
         } else {
           var c = clipFor(b.filter, b.transition, p);
           if (c) st.clip = p >= 1 && b.transition !== "out" ? "" : c;
@@ -245,13 +246,68 @@ var Anim = (function () {
   }
 
   // Slide holds the targets of one slide and computes states.
-  function Slide(el, data, W, H) {
-    this.el = el; this.data = data || { steps: [{ effects: [] }] }; this.W = W; this.H = H;
-    this.targets = {}; this.vars = {};
-    var self = this;
-    (this.data.steps || []).forEach(function (st) {
-      (st.effects || []).forEach(function (e) { if (!(e.target in self.targets)) self.targets[e.target] = find(el, e.target); });
+  function effectEnd(e) {
+    var end = 0;
+    (e.bhv || []).forEach(function (b) {
+      var d = (b.dur || 0) * (b.autoRev ? 2 : 1) * (b.repeat > 1 ? b.repeat : 1);
+      end = Math.max(end, (b.begin || 0) + d);
     });
+    return e.begin + end;
+  }
+
+  // expandIterate replaces an effect that runs word by word or letter by letter with one effect
+  // per unit (g[data-w] or g[data-c] in the target, in document order), each iterDelay later.
+  // A hidden target becomes hidden units, so that the units can appear one after the other.
+  function expandIterate(el, data) {
+    var hidden = {};
+    (data.hidden || []).forEach(function (t) { hidden[t] = true; });
+    var units = {};
+    var expand = function (steps) {
+      return (steps || []).map(function (st) {
+        var effects = [];
+        (st.effects || []).forEach(function (e) {
+          var g = e.iterate && find(el, e.target);
+          var list = g ? g.querySelectorAll(e.iterate === "lt" ? "g[data-c]" : "g[data-w]") : [];
+          if (!list.length) { effects.push(e); return; }
+          [].forEach.call(list, function (u, k) {
+            var key = e.target + "#" + k, c = {};
+            for (var p in e) c[p] = e[p];
+            c.target = key; c.begin = e.begin + k * (e.iterDelay || 0);
+            delete c.iterate;
+            units[key] = u;
+            if (hidden[e.target]) hidden[key] = true;
+            effects.push(c);
+          });
+          if (hidden[e.target]) hidden[e.target] = "units";
+        });
+        var dur = st.dur || 0;
+        effects.forEach(function (e) { dur = Math.max(dur, effectEnd(e)); });
+        return { effects: effects, dur: dur };
+      });
+    };
+    var out = {};
+    for (var k in data) out[k] = data[k];
+    out.steps = expand(data.steps);
+    out.triggers = (data.triggers || []).map(function (tr) { return { shape: tr.shape, steps: expand(tr.steps) }; });
+    out.hidden = Object.keys(hidden).filter(function (t) { return hidden[t] === true; });
+    return { data: out, units: units };
+  }
+
+  function Slide(el, data, W, H) {
+    var ex = expandIterate(el, data || { steps: [{ effects: [] }] });
+    this.el = el; this.data = ex.data; this.W = W; this.H = H;
+    this.targets = {}; this.vars = {};
+    // trig: the trigger steps played so far, as {t: trigger index, k: its step, after: main step}
+    this.trig = [];
+    var self = this;
+    var steps = (this.data.steps || []).slice();
+    (this.data.triggers || []).forEach(function (tr) { steps = steps.concat(tr.steps || []); });
+    steps.forEach(function (st) {
+      (st.effects || []).forEach(function (e) {
+        if (!(e.target in self.targets)) self.targets[e.target] = ex.units[e.target] || find(el, e.target);
+      });
+    });    // trigger shapes show the hand cursor, as in the PowerPoint slide show
+    (this.data.triggers || []).forEach(function (tr) { var g = find(el, tr.shape); if (g) g.style.cursor = "pointer"; });
   }
   Slide.prototype.initial = function () {
     var s = {}, hidden = {};
@@ -271,10 +327,10 @@ var Anim = (function () {
     return this.vars[t];
   };
   // state at time t (ms) of step k, starting from state `from`
-  Slide.prototype.at = function (k, t, from, fire) {
+  Slide.prototype.at = function (k, t, from, fire) { return this.atStep((this.data.steps || [])[k], t, from, fire); };
+  Slide.prototype.atStep = function (step, t, from, fire) {
     var st = {}, self = this;
     for (var key in from) { st[key] = copy(from[key]); var s0 = st[key]; s0._mx0 = s0.tx; s0._my0 = s0.ty; s0._r0 = s0.rot; s0._sx0 = s0.sx; s0._sy0 = s0.sy; }
-    var step = (this.data.steps || [])[k];
     if (!step) return st;
     (step.effects || []).forEach(function (e) {
       var s = st[e.target];
@@ -285,11 +341,31 @@ var Anim = (function () {
     return st;
   };
   Slide.prototype.after = function (k, from) { return this.at(k, 1e12, from); };
+  // the state after main step `step`, including the trigger steps played after it
   Slide.prototype.stateAt = function (step) {
-    var s = this.initial();
-    for (var k = 0; k <= step; k++) s = this.after(k, s);
+    var s = this.initial(), self = this;
+    for (var k = 0; k <= step; k++) {
+      s = this.after(k, s);
+      this.trig.forEach(function (p) { if (p.after === k) s = self.atStep(self.data.triggers[p.t].steps[p.k], 1e12, s); });
+    }
     return s;
   };
+  // triggerIndex returns the index of the trigger started by a click on shape sid, or -1.
+  Slide.prototype.triggerIndex = function (sid) {
+    var tr = this.data.triggers || [];
+    for (var i = 0; i < tr.length; i++) if (tr[i].shape === String(sid)) return i;
+    return -1;
+  };
+  // nextTrigger records the next step of trigger i (the sequence starts over after its last
+  // step) and returns it.
+  Slide.prototype.nextTrigger = function (i, mainStep) {
+    var n = 0;
+    this.trig.forEach(function (p) { if (p.t === i) n++; });
+    var p = { t: i, k: n % this.data.triggers[i].steps.length, after: mainStep };
+    this.trig.push(p);
+    return this.data.triggers[i].steps[p.k];
+  };
+  Slide.prototype.clearTriggers = function () { this.trig = []; };
   Slide.prototype.show = function (state) {
     for (var t in this.targets) render(this.targets[t], state[t] || base());
   };

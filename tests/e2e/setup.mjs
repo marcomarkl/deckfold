@@ -1,7 +1,7 @@
 // Builds deckfold and writes the test outputs to tests/.out/.
 //
-// The local corpus in testdata/ is not part of the repository (it holds private decks).
-// Expected layout: testdata/claude/*.html and testdata/keynote/<export>/index.html.
+// Public decks in fixtures/claude/*.html and fixtures/keynote/<export>/index.html are used
+// first; otherwise the local corpus in testdata/ (same layout, not part of the repository).
 // Tests that need a corpus entry skip themselves when it is missing (see corpus.json).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -36,12 +36,16 @@ function wav(file, seconds) {
   fs.writeFileSync(file, buf);
 }
 
+// The decks for the claude.ai and Keynote tests, as paths relative to the repository: public
+// decks in fixtures/ come first, the private corpus in testdata/ otherwise.
 function findCorpus() {
-  const td = path.join(ROOT, 'testdata');
-  const list = (d) => (fs.existsSync(d) ? fs.readdirSync(d).sort() : []);
-  const claude = list(path.join(td, 'claude')).filter((f) => f.endsWith('.html')).map((f) => path.join('claude', f))[0] || null;
-  const keynote = list(path.join(td, 'keynote')).map((d) => path.join('keynote', d))
-    .find((d) => fs.existsSync(path.join(td, d, 'assets', 'player', 'main.js'))) || null;
+  const list = (d) => (fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : []);
+  const pick = (kind, find) => find('fixtures/' + kind) || find('testdata/' + kind) || null;
+  const claude = pick('claude', (d) => list(d).filter((f) => f.endsWith('.html')).map((f) => path.join(d, f))[0]);
+  // Keynote exports contain Apple's player and stay local: tests/.out/keynote is made by
+  // scripts/keynoteref/keynoteref.sh
+  const exportIn = (d) => list(d).map((e) => path.join(d, e)).find((e) => fs.existsSync(path.join(ROOT, e, 'assets', 'player', 'main.js')));
+  const keynote = pick('keynote', exportIn) || exportIn('tests/.out/keynote') || null;
   return { claude, keynote };
 }
 
@@ -71,7 +75,7 @@ export default async function setup() {
   deckfold([path.join(gen, 'deck.html'), '-o', path.join(OUT, 'generic.html'), '--force', '--generic']);
 
   // PowerPoint feature decks (public, no corpus needed)
-  for (const name of ['basic', 'media', 'animations']) {
+  for (const name of ['basic', 'media', 'animations', 'gifs', 'triggers', 'shapes3d', 'text2', 'morph', 'transitions3d', 'charts2']) {
     deckfold([pptxFixture(name), '-o', path.join(OUT, `pptx-${name}.html`), '--force'], BUNDLED);
   }
   // every feature deck with PowerPoint reference images (pptx-fidelity.spec.mjs)
@@ -96,10 +100,10 @@ export default async function setup() {
   fs.writeFileSync(path.join(OUT, 'pptx-big.json'), JSON.stringify({ convertMs: Date.now() - t0 }));
 
   if (corpus.keynote) {
-    deckfold([path.join(ROOT, 'testdata', corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);
+    deckfold([path.join(ROOT, corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);
   }
   if (!corpus.claude) return;
-  const claudeSrc = path.join(ROOT, 'testdata', corpus.claude);
+  const claudeSrc = path.join(ROOT, corpus.claude);
   deckfold([claudeSrc, '-o', path.join(OUT, 'claude.html'), '--force']);
   // Auto mode with a 1 s interval
   deckfold([claudeSrc, '-o', path.join(OUT, 'claude-auto.html'), '--force', '--auto', '--auto-interval', '1', '--loop']);

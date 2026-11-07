@@ -158,11 +158,8 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 		data.Slides = append(data.Slides, sd)
 	}
 	ar := out.AnimReport
-	if ar.Triggers {
-		warn("animations started by clicking a shape (triggers) are not played")
-	}
-	if ar.Iterate {
-		warn("animations by word or by letter are played by paragraph")
+	if ar.Bookmarks {
+		warn("animations started by a bookmark in a video or audio clip are not played")
 	}
 	for _, t := range ar.Fallback {
 		warn("the %s transition is played as a fade", t)
@@ -182,7 +179,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 	if res.Slides == 0 {
 		return nil, fmt.Errorf("the presentation has no visible slides")
 	}
-	if err := deck.Write(dir, out, data, dfonts, dfruntime.PptxJS); err != nil {
+	if err := deck.Write(dir, out, data, dfonts, dfruntime.PptxJS, dfruntime.ThreeJS); err != nil {
 		return nil, err
 	}
 	return res, nil

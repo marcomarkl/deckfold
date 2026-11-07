@@ -24,12 +24,21 @@ Code comments and the spike notes refer to these decisions by their IDs: E1 to E
 |---|---|---|---|
 | P1 | Scope | PowerPoint files (.pptx, .ppsx, .pptm) are converted directly; deckfold renders the slides and plays them with its own player; the control layer stays the same | a PPTX file has no player of its own, and the Keynote route needs a Mac with Keynote and loses the notes |
 | P2 | Approach | native Go: slides as SVG, a timing model for animations; the Keynote route stays possible | the only way that needs no installation, keeps the MIT license and runs on all platforms |
-| P3 | Scope of the first version | static content plus the animation core; 3D transitions and Morph are played as a fade | covers most real decks |
+| P3 | Scope of the first version (revised by P9) | static content plus the animation core; 3D transitions and Morph are played as a fade | covers most real decks |
 | P4 | Text layout | deckfold lays out text itself with the font metrics | text is the largest risk for fidelity, and the result is the same in every browser |
 | P5 | Fonts | cascade: fonts embedded in the presentation, then installed fonts, then the bundled OFL fonts; fsType is honoured; subsets are embedded | line breaks match, font licenses are respected |
 | P6 | Charts | own SVG drawing for the common chart types, from the data cache in the file | chart slides stay presentable |
 | P7 | EMF and WMF | own converter for the common records | logos and older pictures stay visible |
 | P8 | Test decks | generated public feature decks with PowerPoint reference images, compared by SSIM | fidelity can be measured and regressions show up |
+| P9 | Scope after the first release | every known gap of the converter is closed, also features no real deck used so far | decks from other sources use them |
+| P10 | Order | features by how often they occur in real decks: embedded fonts, GIFs, triggers, 3D, picture bullets, effects; then the rest | the most visible gains first |
+| P11 | Morph and 3D transitions | objects are paired by "!!" names, otherwise by kind and text, and interpolated in position, size, rotation, color and opacity; geometric 3D transitions with CSS 3D | visible motion without morphing outlines |
+| P12 | 3D shape effects | drawn with WebGL (three.js) from the shape's outline | close to PowerPoint |
+| P13 | Without WebGL | an SVG approximation (lighting filter for bevels, offset copy for extrusions) is the base drawing; previews keep it | the overview and machines without WebGL stay usable |
+| P14 | Tile transitions | WebGL, with the slides drawn into textures; a fade without WebGL | the same graphics basis as P12 |
+| P15 | PowerPoint references | made in one announced run per group of decks | few rounds of access dialogs for the maintainer |
+| P16 | Keynote and claude.ai decks for the tests | Keynote exports stay local (they contain Apple's player); a neutral claude.ai deck comes from the maintainer | no third-party player code in the repository |
+| P17 | WebGL library | three.js, bundled into a classic script with only the parts the player uses, embedded only in decks that need it | a proven library; decks without 3D stay small |
 
 Defaults that were set without a separate decision:
 

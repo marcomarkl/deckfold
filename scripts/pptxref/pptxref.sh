@@ -64,13 +64,20 @@ if [ "$#" -eq 0 ]; then
 	set -- $(cd "$src" && ls *.pptx | sed 's/\.pptx$//')
 fi
 
+failed=""
 for name in "$@"; do
 	# fixed file names per deck, so that PowerPoint sees the same paths on every run
 	in="$work/$name-in.pptx" out="$work/$name-out.pptx" pdf="$work/$name.pdf" png="$work/$name-png"
 	rm -rf "$png"
 	mkdir -p "$png"
 	cp "$src/$name.pptx" "$in"
-	osascript "$repo/scripts/pptxref/export.applescript" "$in" "$out" "$pdf"
+	rm -f "$out" "$pdf"
+	# a deck PowerPoint reports as damaged (repair prompt) is not saved; go on with the next one
+	if ! osascript "$repo/scripts/pptxref/export.applescript" "$in" "$out" "$pdf" || [ ! -s "$out" ] || [ ! -s "$pdf" ]; then
+		echo "pptxref: PowerPoint did not save $name (was it reported as damaged?); no reference written" >&2
+		failed="$failed $name"
+		continue
+	fi
 	# slide size in CSS pixels (EMU / 9525)
 	size=$(unzip -p "$out" ppt/presentation.xml | grep -o '<p:sldSz[^>]*>' | head -1)
 	cx=$(echo "$size" | sed -E 's/.*cx="([0-9]+)".*/\1/')
@@ -86,4 +93,8 @@ for name in "$@"; do
 	echo "reference written: $name ($i slides)"
 done
 
+if [ -n "$failed" ]; then
+	echo "pptxref: no reference for:$failed" >&2
+	exit 1
+fi
 # PowerPoint is quit and the fonts are removed by cleanup (trap above).

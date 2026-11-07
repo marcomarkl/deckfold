@@ -8,9 +8,10 @@ import (
 // Timeline builds a p:timing element the way PowerPoint writes it: a main sequence of click
 // groups, each with sub-groups that start after a delay, each holding effects.
 type Timeline struct {
-	id     int
-	groups []string
-	builds []string
+	id       int
+	groups   []string
+	builds   []string
+	triggers []string // interactive sequences
 }
 
 // Group is a click group (or, when Auto is set, a group that starts after the previous one).
@@ -34,6 +35,7 @@ type Eff struct {
 	Subtype  int
 	NodeType string // clickEffect, withEffect, afterEffect
 	Delay    int
+	Iterate  string // "wd" or "lt": by word or by letter, 10 percent of the effect apart
 	Bhv      func(tl *Timeline, tgt string) string
 }
 
@@ -47,8 +49,22 @@ func (e Eff) target() string {
 
 func (tl *Timeline) next() int { tl.id++; return tl.id }
 
-// Add appends a group.
-func (tl *Timeline) Add(g Group) {
+// Add appends a group to the main sequence.
+func (tl *Timeline) Add(g Group) { tl.groups = append(tl.groups, tl.group(g)) }
+
+// Trigger adds an interactive sequence: each click on shape spid plays the next of the groups.
+func (tl *Timeline) Trigger(spid int, groups ...Group) {
+	cond := fmt.Sprintf(`<p:cond evt="onClick" delay="0"><p:tgtEl><p:spTgt spid="%d"/></p:tgtEl></p:cond>`, spid)
+	var b strings.Builder
+	fmt.Fprintf(&b, `<p:seq concurrent="1" nextAc="seek"><p:cTn id="%d" restart="whenNotActive" fill="hold" evtFilter="cancelBubble" nodeType="interactiveSeq"><p:stCondLst>%s</p:stCondLst><p:endSync evt="end" delay="0"><p:rtn val="all"/></p:endSync><p:childTnLst>`, tl.next(), cond)
+	for _, g := range groups {
+		b.WriteString(tl.group(g))
+	}
+	fmt.Fprintf(&b, `</p:childTnLst></p:cTn><p:nextCondLst>%s</p:nextCondLst></p:seq>`, cond)
+	tl.triggers = append(tl.triggers, b.String())
+}
+
+func (tl *Timeline) group(g Group) string {
 	var b strings.Builder
 	cond := `<p:cond delay="indefinite"/>`
 	if g.Auto {
@@ -58,8 +74,12 @@ func (tl *Timeline) Add(g Group) {
 	for _, s := range g.Subs {
 		fmt.Fprintf(&b, `<p:par><p:cTn id="%d" fill="hold"><p:stCondLst><p:cond delay="%d"/></p:stCondLst><p:childTnLst>`, tl.next(), s.Delay)
 		for _, e := range s.Effects {
-			fmt.Fprintf(&b, `<p:par><p:cTn id="%d" presetID="%d" presetClass="%s" presetSubtype="%d" fill="hold" grpId="0" nodeType="%s"><p:stCondLst><p:cond delay="%d"/></p:stCondLst><p:childTnLst>%s</p:childTnLst></p:cTn></p:par>`,
-				tl.next(), e.Preset, e.Class, e.Subtype, e.NodeType, e.Delay, e.Bhv(tl, e.target()))
+			it := ""
+			if e.Iterate != "" {
+				it = `<p:iterate type="` + e.Iterate + `"><p:tmPct val="10000"/></p:iterate>`
+			}
+			fmt.Fprintf(&b, `<p:par><p:cTn id="%d" presetID="%d" presetClass="%s" presetSubtype="%d" fill="hold" grpId="0" nodeType="%s"><p:stCondLst><p:cond delay="%d"/></p:stCondLst>%s<p:childTnLst>%s</p:childTnLst></p:cTn></p:par>`,
+				tl.next(), e.Preset, e.Class, e.Subtype, e.NodeType, e.Delay, it, e.Bhv(tl, e.target()))
 			if e.Para >= 0 {
 				b := fmt.Sprintf(`<p:bldP spid="%d" grpId="0" build="p"/>`, e.Spid)
 				if !contains(tl.builds, b) {
@@ -70,7 +90,7 @@ func (tl *Timeline) Add(g Group) {
 		b.WriteString(`</p:childTnLst></p:cTn></p:par>`)
 	}
 	b.WriteString(`</p:childTnLst></p:cTn></p:par>`)
-	tl.groups = append(tl.groups, b.String())
+	return b.String()
 }
 
 func contains(list []string, s string) bool {
@@ -88,11 +108,14 @@ func (tl *Timeline) XML() string {
 	if len(tl.builds) > 0 {
 		bld = `<p:bldLst>` + strings.Join(tl.builds, "") + `</p:bldLst>`
 	}
+	main := ""
+	if len(tl.groups) > 0 {
+		main = `<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>` + strings.Join(tl.groups, "") +
+			`</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>` +
+			`<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>`
+	}
 	return `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>` +
-		`<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>` + strings.Join(tl.groups, "") +
-		`</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>` +
-		`<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>` +
-		`</p:childTnLst></p:cTn></p:par></p:tnLst>` + bld + `</p:timing>`
+		main + strings.Join(tl.triggers, "") + `</p:childTnLst></p:cTn></p:par></p:tnLst>` + bld + `</p:timing>`
 }
 
 // behavior helpers (the XML PowerPoint writes for the common presets)

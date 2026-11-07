@@ -3,8 +3,11 @@ package pptxgen
 import (
 	"bytes"
 	"fmt"
+
+	"deckfold/internal/pptx/fonts"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/png"
 	"strings"
 )
@@ -12,14 +15,26 @@ import (
 // Fixtures returns the public feature decks by name.
 func Fixtures() map[string]*Deck {
 	return map[string]*Deck{
-		"basic":      Basic(),
-		"shapes":     Shapes(),
-		"tables":     Tables(),
-		"hostile":    Hostile(),
-		"media":      Media(),
-		"text":       Text(),
-		"animations": Animations(),
-		"charts":     Charts(),
+		"basic":         Basic(),
+		"shapes":        Shapes(),
+		"tables":        Tables(),
+		"hostile":       Hostile(),
+		"media":         Media(),
+		"text":          Text(),
+		"animations":    Animations(),
+		"charts":        Charts(),
+		"gifs":          GIFs(),
+		"triggers":      Triggers(),
+		"shapes3d":      Shapes3D(),
+		"bullets":       Bullets(),
+		"effects":       Effects(),
+		"fontembed":     FontEmbed(),
+		"text2":         Text2(),
+		"morph":         Morph(),
+		"transitions3d": Transitions3D(),
+		"wmf":           WMF(),
+		"charts2":       Charts2(),
+		"ink":           InkDeck(),
 	}
 }
 
@@ -89,6 +104,319 @@ func TestPNG(w, h int) []byte {
 	var b bytes.Buffer
 	_ = png.Encode(&b, img)
 	return b.Bytes()
+}
+
+// TestGIF returns an animated GIF of w x h pixels that shows red, green and blue for half a
+// second each and loops.
+func TestGIF(w, h int) []byte {
+	pal := color.Palette{color.RGBA{220, 40, 40, 255}, color.RGBA{40, 180, 60, 255}, color.RGBA{40, 80, 220, 255}}
+	g := &gif.GIF{}
+	for i := range pal {
+		im := image.NewPaletted(image.Rect(0, 0, w, h), pal)
+		for p := range im.Pix {
+			im.Pix[p] = uint8(i)
+		}
+		g.Image = append(g.Image, im)
+		g.Delay = append(g.Delay, 50)
+	}
+	var b bytes.Buffer
+	_ = gif.EncodeAll(&b, g)
+	return b.Bytes()
+}
+
+// GIFs has an animated GIF, which starts again from its first frame whenever its slide is
+// shown, and a second slide to leave it for.
+func GIFs() *Deck {
+	d := New("Animated GIF feature deck")
+	s := d.Add(LayoutBlank)
+	s.TextBox("Caption", Box{X: 120, Y: 120, W: 1040, H: 80}, "",
+		Para{Text: "An animated GIF: red, green, blue", RPr: `sz="3200" b="1"`})
+	s.Picture(d, "Animated GIF", Box{X: 490, Y: 260, W: 300, H: 300}, "gif", "image/gif", TestGIF(60, 60), "", "")
+	s = d.Add(LayoutContent)
+	s.Placeholder("title", Para{Text: "A slide without a GIF"})
+	s.Placeholder("body", Para{Text: "Going back shows the GIF from its first frame again"})
+	return d
+}
+
+// Triggers has an interactive sequence: each click on a button shape plays the next click group
+// (show a star, hide it again), and an audio clip that plays and pauses when its own icon is
+// clicked, which the player handles as a medium.
+func Triggers() *Deck {
+	d := New("Trigger feature deck")
+	s := d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 40, W: 1100, H: 60}, "", Para{Text: "Click the button to show or hide the star", RPr: `sz="3200"`})
+	btn := s.Shape("Button", "roundRect", Box{X: 120, Y: 300, W: 300, H: 120}, solid("4472C4"), "", Para{Text: "Button", RPr: `sz="2800"`})
+	star := s.Shape("Star", "star5", Box{X: 700, Y: 220, W: 300, H: 300}, solid("FFC000"), line(12700, "7F6000", ""))
+	tl := &Timeline{id: 2}
+	tl.Trigger(btn,
+		Group{Subs: []Sub{{Effects: []Eff{{Spid: star, Para: -1, Class: "entr", Preset: 10, NodeType: "clickEffect", Bhv: FadeIn}}}}},
+		Group{Subs: []Sub{{Effects: []Eff{{Spid: star, Para: -1, Class: "exit", Preset: 10, NodeType: "clickEffect", Bhv: FadeOut}}}}})
+	s.Timing = tl.XML()
+	s.Notes = "The star is hidden until the button is clicked."
+
+	s = d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 40, W: 1100, H: 60}, "", Para{Text: "Click the icon to play or pause the tone", RPr: `sz="3200"`})
+	tone := s.MediaShape(d, "audio", "Tone", Box{X: 600, Y: 300, W: 80, H: 80}, "wav", "audio/wav", WAV(2), TestPNG(80, 80))
+	tl = &Timeline{id: 2}
+	tl.Trigger(tone, Group{Subs: []Sub{{Effects: []Eff{{Spid: tone, Para: -1, Class: "mediacall", Preset: 2, NodeType: "clickEffect",
+		Bhv: func(tl *Timeline, tgt string) string {
+			return `<p:cmd type="call" cmd="togglePause"><p:cBhvr>` + ctn(tl, 1, 0, "") + tgt + `</p:cBhvr></p:cmd>`
+		}}}}}})
+	s.Timing = tl.XML()
+	return d
+}
+
+// WMF has a Windows Metafile picture (TestWMF).
+func WMF() *Deck {
+	d := New("WMF feature deck")
+	s := d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: "A Windows Metafile picture", RPr: `sz="3200"`})
+	s.Picture(d, "Metafile", Box{X: 320, Y: 150, W: 640, H: 480}, "wmf", "image/x-wmf", TestWMF(), "", "")
+	return d
+}
+
+// TransitionNames lists the transitions of the transitions3d deck, in slide order (slide 1 has
+// none): the 2D transitions of PresentationML, the 3D ones of PowerPoint 2010 (p14) and the
+// presets of PowerPoint 2013 (p15).
+var TransitionNames = []string{
+	"strips", "blinds", "checker", "comb", "randomBar", "wheel", "wedge", "diamond", "plus", "newsflash",
+	// the p14 and p15 elements exactly as PowerPoint 16 writes them (set with AppleScript)
+	`p14:prism`, `p14:flip dir="l"`, `p14:gallery dir="l"`, `p14:conveyor dir="l"`, `p14:doors dir="vert"`,
+	`p14:window dir="vert"`, `p14:ferris dir="l"`, `p14:pan dir="u"`, `p14:switch dir="l"`, `p14:flythrough`,
+	`p14:warp dir="in"`, `p14:flash`, `p14:reveal`, `p14:glitter dir="r"`, `p14:honeycomb`, `p14:vortex`,
+	`p14:shred`, `p14:ripple`,
+	`p15:fracture`, `p15:crush`, `p15:curtains`, `p15:wind invX="1"`, `p15:prestige`, `p15:peelOff`,
+	`p15:pageCurlDouble`, `p15:airplane invX="1"`, `p15:origami invX="1"`,
+}
+
+// TransitionType returns the local name of an entry of TransitionNames.
+func TransitionType(n string) string {
+	n = n[strings.Index(n, ":")+1:]
+	if i := strings.IndexByte(n, ' '); i >= 0 {
+		n = n[:i]
+	}
+	return n
+}
+
+// transitionXML returns the p:transition, wrapped for p14 and p15 transitions as PowerPoint 16
+// writes it (no p14:dur; the speed is spd).
+func transitionXML(name string) string {
+	switch {
+	case strings.HasPrefix(name, "p14:"):
+		return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p14">` +
+			`<p:transition spd="slow"><` + name + `/></p:transition>` +
+			`</mc:Choice><mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>`
+	case strings.HasPrefix(name, "p15:"):
+		rest := strings.TrimPrefix(name, "p15:")
+		attrs := ""
+		if i := strings.IndexByte(rest, ' '); i >= 0 {
+			rest, attrs = rest[:i], rest[i:]
+		}
+		return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:p15="http://schemas.microsoft.com/office/powerpoint/2012/main" Requires="p15">` +
+			`<p:transition spd="slow"><p15:prstTrans prst="` + rest + `"` + attrs + `/></p:transition>` +
+			`</mc:Choice><mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>`
+	}
+	return fmt.Sprintf(`<p:transition spd="slow"><p:%s/></p:transition>`, name)
+}
+
+// Transitions3D has one slide per transition of TransitionNames, each with its name as the
+// title and a colored panel, so that the browser test can see the slides change.
+func Transitions3D() *Deck {
+	d := New("Transition feature deck")
+	colors := []string{"4472C4", "ED7D31", "70AD47", "FFC000", "5B9BD5", "A5A5A5"}
+	add := func(i int, title, tr string) {
+		s := d.Add(LayoutBlank)
+		s.Transition = tr
+		s.Shape("Panel", "rect", Box{X: 0, Y: 0, W: 1280, H: 720}, solid(colors[i%len(colors)]), "")
+		s.TextBox("Title", Box{X: 80, Y: 300, W: 1120, H: 120}, "", Para{Text: title, RPr: `sz="6000" b="1"`})
+	}
+	add(0, "Transitions", "")
+	for i, n := range TransitionNames {
+		add(i+1, TransitionType(n), transitionXML(n))
+	}
+	return d
+}
+
+// MorphTransition returns the transition element PowerPoint writes for Morph (with a fade as
+// the fallback for older readers).
+func MorphTransition(ms int) string {
+	return `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:p159="http://schemas.microsoft.com/office/powerpoint/2015/09/main" xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" Requires="p159">` +
+		fmt.Sprintf(`<p:transition spd="slow" p14:dur="%d"><p159:morph option="byObject"/></p:transition>`, ms) +
+		`</mc:Choice><mc:Fallback><p:transition spd="slow"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>`
+}
+
+// Morph has two slides joined by the Morph transition: a circle paired by its "!!" name moves,
+// grows and changes color, a shape paired by its text moves, a star disappears and
+// a new shape appears.
+func Morph() *Deck {
+	d := New("Morph feature deck")
+	s := d.Add(LayoutBlank)
+	s.Shape("!!Ball", "ellipse", Box{X: 120, Y: 260, W: 160, H: 160}, solid("4472C4"), "")
+	s.Shape("Label", "rect", Box{X: 420, Y: 120, W: 400, H: 80}, solid("A5A5A5"), "", Para{Text: "Moving label", RPr: `sz="2800"`})
+	s.Shape("Star", "star5", Box{X: 900, Y: 400, W: 200, H: 200}, solid("FFC000"), "")
+	s = d.Add(LayoutBlank)
+	s.Transition = MorphTransition(2000)
+	s.Shape("!!Ball", "ellipse", Box{X: 820, Y: 180, W: 320, H: 320}, solid("ED7D31"), "")
+	s.Shape("Label", "rect", Box{X: 140, Y: 520, W: 400, H: 80}, solid("A5A5A5"), "", Para{Text: "Moving label", RPr: `sz="2800"`})
+	s.Shape("New", "triangle", Box{X: 200, Y: 160, W: 220, H: 200}, solid("70AD47"), "")
+	return d
+}
+
+// Text2 covers justified text, a right-to-left paragraph (Hebrew, with Arial for the complex
+// script) and builds by word and by letter.
+func Text2() *Deck {
+	d := New("Text feature deck 2")
+	s := d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: "Justified and right-to-left text", RPr: `sz="3200"`})
+	s.TextBox("Justified", Box{X: 60, Y: 120, W: 560, H: 300}, `<a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr>`,
+		Para{Text: "Justified text spreads the space left on each line over the gaps between its words, so that both edges of the paragraph are straight. The last line of the paragraph stays aligned to the left.", PPr: `algn="just"`, RPr: `sz="2000"`})
+	he := "\u05d6\u05d4\u05d5 \u05d8\u05e7\u05e1\u05d8 \u05de\u05d9\u05de\u05d9\u05df \u05dc\u05e9\u05de\u05d0\u05dc"
+	s.TextBox("Right to left", Box{X: 680, Y: 120, W: 540, H: 120}, `<a:bodyPr wrap="square" rtlCol="1"><a:spAutoFit/></a:bodyPr>`,
+		Para{Text: he, PPr: `algn="r" rtl="1"`, RPr: `sz="2800"`, RKids: `<a:latin typeface="Arial"/><a:cs typeface="Arial"/>`})
+
+	s = d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: "Builds by word and by letter", RPr: `sz="3200"`})
+	w := s.TextBox("By word", Box{X: 100, Y: 180, W: 1080, H: 80}, "", Para{Text: "This sentence appears word by word", RPr: `sz="3600"`})
+	l := s.TextBox("By letter", Box{X: 100, Y: 360, W: 1080, H: 80}, "", Para{Text: "And this one letter by letter", RPr: `sz="3600"`})
+	tl := &Timeline{id: 2}
+	tl.Add(Group{Subs: []Sub{{Effects: []Eff{{Spid: w, Para: -1, Class: "entr", Preset: 10, NodeType: "clickEffect", Iterate: "wd", Bhv: FadeIn}}}}})
+	tl.Add(Group{Subs: []Sub{{Effects: []Eff{{Spid: l, Para: -1, Class: "entr", Preset: 10, NodeType: "clickEffect", Iterate: "lt", Bhv: FadeIn}}}}})
+	s.Timing = tl.XML()
+	return d
+}
+
+// FontEmbed has a font embedded as PowerPoint embeds fonts (EOT with MicroType Express): a
+// subset of Liberation Serif renamed to "Deckfold Embedded Test". The name is not one deckfold
+// or PowerPoint can find elsewhere, and a fallback would be a sans serif font, so a wrong
+// result shows.
+func FontEmbed() *Deck {
+	const family = "Deckfold Embedded Test"
+	text := []string{"Text in an embedded font", "The quick brown fox jumps over the lazy dog.", "Umlauts and accents: \u00c4\u00d6\u00dc \u00e4\u00f6\u00fc \u00e9 \u00e8 \u00e7 \u00f1, digits 0123456789"}
+	var chars string
+	for _, t := range text {
+		chars += t
+	}
+	sfnt, err := fonts.BundledSubset("LiberationSerif", family, chars)
+	if err != nil {
+		panic(err)
+	}
+	eot, err := fonts.EOT(sfnt)
+	if err != nil {
+		panic(err)
+	}
+	d := New("Embedded font feature deck")
+	d.Fonts = []Font{{Typeface: family, Regular: eot}}
+	s := d.Add(LayoutBlank)
+	for i, t := range text {
+		size := "4000"
+		if i > 0 {
+			size = "2800"
+		}
+		s.TextBox(fmt.Sprintf("Line %d", i+1), Box{X: 100, Y: 140 + float64(i)*140, W: 1080, H: 100}, "",
+			Para{Text: t, RPr: `sz="` + size + `"`, RKids: `<a:latin typeface="` + family + `"/>`})
+	}
+	return d
+}
+
+// Effects covers the shape effects beyond outer shadow and glow: inner shadow, soft edges,
+// reflection, blur, a preset shadow, an effect graph, and the same effects on a picture.
+func Effects() *Deck {
+	d := New("Effects feature deck")
+	s := d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: "Inner shadow, soft edges, reflection, blur", RPr: `sz="3200"`})
+	fx := func(e string) string { return `<a:ln><a:noFill/></a:ln><a:effectLst>` + e + `</a:effectLst>` }
+	s.Shape("Inner shadow", "roundRect", Box{X: 80, Y: 160, W: 250, H: 180}, solid("4472C4"),
+		fx(`<a:innerShdw blurRad="114300" dist="38100" dir="2700000"><a:prstClr val="black"><a:alpha val="60000"/></a:prstClr></a:innerShdw>`))
+	s.Shape("Soft edges", "ellipse", Box{X: 380, Y: 160, W: 250, H: 180}, solid("ED7D31"), fx(`<a:softEdge rad="190500"/>`))
+	s.Shape("Reflection", "rect", Box{X: 680, Y: 160, W: 250, H: 180}, solid("70AD47"),
+		fx(`<a:reflection blurRad="6350" stA="52000" endA="300" endPos="35000" dir="5400000" sy="-100000" algn="bl" rotWithShape="0"/>`))
+	s.Shape("Blur", "star5", Box{X: 980, Y: 160, W: 220, H: 200}, solid("FFC000"), fx(`<a:blur rad="63500"/>`))
+	s.Shape("Preset shadow", "rect", Box{X: 80, Y: 460, W: 250, H: 160}, solid("A5A5A5"),
+		fx(`<a:prstShdw prst="shdw17" dist="38100" dir="2700000"><a:srgbClr val="404040"/></a:prstShdw>`))
+	s.Shape("Effect graph", "rect", Box{X: 380, Y: 460, W: 250, H: 160}, solid("5B9BD5"),
+		`<a:ln><a:noFill/></a:ln><a:effectDag><a:cont type="sib"><a:outerShdw blurRad="76200" dist="38100" dir="2700000"><a:srgbClr val="000000"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:cont></a:effectDag>`)
+
+	s = d.Add(LayoutBlank)
+	s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: "Effects on pictures", RPr: `sz="3200"`})
+	id := s.Picture(d, "Picture with reflection", Box{X: 140, Y: 160, W: 400, H: 225}, "png", "image/png", TestPNG(400, 225), "", "")
+	id2 := s.Picture(d, "Picture with soft edges and shadow", Box{X: 700, Y: 160, W: 400, H: 225}, "png", "image/png", TestPNG(400, 225), "", "")
+	addPicFx := func(id int, e string) {
+		for i, sh := range s.Shapes {
+			tag := fmt.Sprintf(`<p:cNvPr id="%d" `, id)
+			if strings.Contains(sh, tag) {
+				s.Shapes[i] = strings.Replace(sh, `</a:prstGeom></p:spPr>`, `</a:prstGeom><a:effectLst>`+e+`</a:effectLst></p:spPr>`, 1)
+			}
+		}
+	}
+	addPicFx(id, `<a:reflection blurRad="12700" stA="38000" endPos="28000" dist="5000" dir="5400000" sy="-100000" algn="bl" rotWithShape="0"/>`)
+	addPicFx(id2, `<a:outerShdw blurRad="190500" dist="76200" dir="2700000" algn="tl" rotWithShape="0"><a:prstClr val="black"><a:alpha val="50000"/></a:prstClr></a:outerShdw><a:softEdge rad="63500"/>`)
+	return d
+}
+
+// Bullets has picture bullets (a:buBlip): a square and a wide picture, at the text size and at
+// 150 percent.
+func Bullets() *Deck {
+	d := New("Picture bullet feature deck")
+	s := d.Add(LayoutContent)
+	s.Placeholder("title", Para{Text: "Picture bullets"})
+	sq := s.Rel(relImage, "../media/"+d.Media("png", "image/png", TestPNG(48, 48)), "")
+	wide := s.Rel(relImage, "../media/"+d.Media("png", "image/png", TestPNG(96, 48)), "")
+	blip := func(rid, size string) string {
+		return `<a:buSzPct val="` + size + `"/><a:buBlip><a:blip r:embed="` + rid + `"/></a:buBlip>`
+	}
+	s.Placeholder("body",
+		Para{Text: "A square picture as the bullet", PKids: blip(sq, "100000")},
+		Para{Text: "The same picture at 150 percent", PKids: blip(sq, "150000")},
+		Para{Text: "A wide picture on level two", Level: 1, PKids: blip(wide, "100000")},
+		Para{Text: "Back to a character bullet"})
+	return d
+}
+
+// threeD returns a:scene3d and a:sp3d for a shape.
+func threeD(camera, rig, dir, sp3d string) string {
+	return `<a:scene3d><a:camera prst="` + camera + `"/><a:lightRig rig="` + rig + `" dir="` + dir + `"/></a:scene3d>` + sp3d
+}
+
+// Shapes3D covers 3D shape effects: bevels with the light rigs and contours seen in real decks,
+// other bevel profiles and materials, and extrusions seen through turned and perspective cameras.
+func Shapes3D() *Deck {
+	d := New("3D shape feature deck")
+	title := func(s *Slide, t string) {
+		s.TextBox("Title", Box{X: 60, Y: 30, W: 1160, H: 60}, "", Para{Text: t, RPr: `sz="3200"`})
+	}
+	s := d.Add(LayoutBlank)
+	title(s, "Bevels seen from the front")
+	for i, v := range []struct{ name, prst, color, rig string }{
+		{"Bevel three point", "roundRect", "4472C4", "threePt"},
+		{"Bevel contrasting", "ellipse", "ED7D31", "contrasting"},
+		{"Bevel two point", "rect", "70AD47", "twoPt"},
+	} {
+		sp3d := `<a:sp3d contourW="7620"><a:bevelT/><a:contourClr><a:srgbClr val="FFFFFF"/></a:contourClr></a:sp3d>`
+		s.Shape(v.name, v.prst, Box{X: 100 + float64(i)*380, Y: 200, W: 300, H: 200}, solid(v.color), `<a:ln><a:noFill/></a:ln>`+threeD("orthographicFront", v.rig, "t", sp3d),
+			Para{Text: v.rig, RPr: `sz="2000"`})
+	}
+	s.Shape("Thick contour", "rect", Box{X: 100, Y: 480, W: 1060, H: 120}, solid("5B9BD5"),
+		`<a:ln><a:noFill/></a:ln>`+threeD("orthographicFront", "threePt", "t", `<a:sp3d contourW="38100"><a:bevelT w="101600" h="25400"/><a:contourClr><a:srgbClr val="1F3864"/></a:contourClr></a:sp3d>`))
+
+	s = d.Add(LayoutBlank)
+	title(s, "Bevel profiles and materials")
+	for i, v := range []struct{ prst, material string }{
+		{"angle", "plastic"}, {"softRound", "warmMatte"}, {"coolSlant", "metal"}, {"divot", "matte"},
+	} {
+		sp3d := `<a:sp3d prstMaterial="` + v.material + `"><a:bevelT w="152400" h="76200" prst="` + v.prst + `"/></a:sp3d>`
+		s.Shape(v.prst, "rect", Box{X: 80 + float64(i)*290, Y: 220, W: 240, H: 240}, solid("A5A5A5"), `<a:ln><a:noFill/></a:ln>`+threeD("orthographicFront", "balanced", "tl", sp3d),
+			Para{Text: v.prst + ", " + v.material, RPr: `sz="1600"`})
+	}
+
+	s = d.Add(LayoutBlank)
+	title(s, "Extrusions seen at an angle")
+	s.Shape("Isometric cube", "rect", Box{X: 140, Y: 240, W: 240, H: 240}, solid("4472C4"),
+		`<a:ln><a:noFill/></a:ln>`+threeD("isometricTopUp", "threePt", "t", `<a:sp3d extrusionH="1143000"><a:extrusionClr><a:srgbClr val="2F5597"/></a:extrusionClr></a:sp3d>`))
+	s.Shape("Perspective star", "star5", Box{X: 520, Y: 220, W: 280, H: 280}, solid("FFC000"),
+		`<a:ln><a:noFill/></a:ln>`+threeD("perspectiveContrastingRightFacing", "threePt", "t", `<a:sp3d extrusionH="457200" prstMaterial="plastic"><a:bevelT w="38100" h="38100"/></a:sp3d>`))
+	s.Shape("Turned ring", "donut", Box{X: 900, Y: 220, W: 280, H: 280}, solid("70AD47"),
+		`<a:ln><a:noFill/></a:ln><a:scene3d><a:camera prst="orthographicFront"><a:rot lat="1200000" lon="1800000" rev="0"/></a:camera><a:lightRig rig="threePt" dir="t"/></a:scene3d><a:sp3d extrusionH="228600"><a:bevelT/></a:sp3d>`)
+	return d
 }
 
 func solid(hex string) string { return `<a:solidFill><a:srgbClr val="` + hex + `"/></a:solidFill>` }
