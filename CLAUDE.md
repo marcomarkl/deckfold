@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What deckfold is
 
-A Go CLI that turns HTML exports of presentations (Keynote, claude.ai decks) into one self-contained HTML file that runs offline. The source player stays unchanged; deckfold embeds every asset and adds its own control layer (runtime in JS): start screen, presenter view, auto mode, screen choice, keyboard and clicker control. PowerPoint and Google Slides go through PPTX, then Keynote, then the Keynote HTML export. Design decisions E1 to E13 are listed in `docs/decisions.md`.
+A Go CLI that turns presentations into one self-contained HTML file that runs offline: PowerPoint files (also Google Slides via its PPTX download) and the HTML exports of Keynote and claude.ai. For HTML exports the source player stays unchanged; PowerPoint files are rendered by deckfold into an HTML deck with its own player. deckfold embeds every asset and adds its own control layer (runtime in JS): start screen, presenter view, auto mode, screen choice, keyboard and clicker control. Design decisions E1 to E13 and P1 to P8 (PowerPoint) are listed in `docs/decisions.md`.
 
 ## Commands
 
@@ -21,7 +21,9 @@ go vet ./...
 go test ./...                  # includes a test that runtime/dist matches runtime/src
 go test -run TestGoldenKeynote -v ./cmd/deckfold
 DECKFOLD_OFFLINE=1 go test ./...   # skips the golden test that downloads remote fonts
-go run ./cmd/deckfold <deck.html|export-folder> -o /tmp/x.html --force
+go run ./cmd/deckfold <deck.html|export-folder|deck.pptx> -o /tmp/x.html --force
+go run ./scripts/pptxgen          # rewrite the public PowerPoint feature decks in fixtures/pptx/src
+DECKFOLD_BUNDLED_FONTS=1 go run ./cmd/deckfold deck.pptx -o /tmp/x.html --force   # ignore installed fonts
 scripts/release.sh 0.1.0       # six binaries (darwin/windows/linux x amd64/arm64, CGO_ENABLED=0) into dist/
 ```
 
@@ -35,11 +37,11 @@ npx playwright test e2e/claude.spec.mjs -g "recovery" --project=chrome
 
 Projects: `chrome` (channel `chrome`, autoplay without a gesture allowed) and `webkit` (only `webkit.spec.mjs`, the fallback browser). Firefox is not configured because the Playwright Firefox does not start on macOS 27.2. Tests pick buttons by position (`.df-start-buttons button:nth-child(n)`) because the UI language follows the browser. `helpers.mjs` has `need(kind)` to skip without a corpus entry and `expected(page, ops)` to compute expected states with the runtime's own model.
 
-CI (`.github/workflows/ci.yml`) runs on every push to main, every pull request and every `v*` tag: `go vet`, `go test` and the smoke test on Linux, Windows and macOS (x64 and arm64), on Linux also as an unprivileged user. Run the smoke test locally with `go run ./scripts/smoke -bin <binary>`. A `v*` tag also builds the six binaries with `scripts/release.sh` and publishes them as a pre-release. To release, add `docs/release-notes/<tag>.md` first (the job stops without it), then push the tag. The two-screen checks that CI cannot do are in `docs/manual-test.md`.
+CI (`.github/workflows/ci.yml`) runs on every push to main, every pull request and every `v*` tag: `go vet`, `go test` and the smoke test on Linux, Windows and macOS (x64 and arm64), on Linux also as an unprivileged user. The `fidelity` job runs the PowerPoint browser tests (`tests/e2e/pptx*.spec.mjs`, `perf.spec.mjs`) in Chrome on Linux. Run the smoke test locally with `go run ./scripts/smoke -bin <binary>`. A `v*` tag also builds the six binaries with `scripts/release.sh` and publishes them as a pre-release. To release, add `docs/release-notes/<tag>.md` first (the job stops without it), then push the tag. The two-screen checks that CI cannot do are in `docs/manual-test.md`.
 
 Every output contains the runtime bundle, and the bundle contains marker strings such as `text/df-css`, `text/df-deferred`, `data-df-` and `deckfold:`. When a Go test asserts on an output, count tags or attributes with `internal/htmlscan` (see `cmd/deckfold/main_test.go`), never substring occurrences in the whole file.
 
-Local corpus layout (not in the repository): `testdata/claude/*.html` and `testdata/keynote/<export>/index.html`.
+Local corpus layout (not in the repository): `testdata/claude/*.html` and `testdata/keynote/<export>/index.html`. The public PowerPoint decks are in `fixtures/pptx/` and are committed.
 
 ## Architecture
 
@@ -51,18 +53,28 @@ Local corpus layout (not in the repository): `testdata/claude/*.html` and `testd
 - **CSP** (`internal/csp`): extended (`blob:`, embed origins), embedded Google hosts removed. If the source uses `'unsafe-inline'` without hashes or nonces, NO hashes may be added (that would block the source scripts). The loader decodes with `atob`, never with `fetch` or a worker (the claude.ai CSP forbids both).
 - **Boundaries:** `assets.Resolver` resolves only inside the input folder (symlinks checked, `--allow-outside` as the exception), in stages: exact, URL decoding, NFC/NFD, case-insensitive (every fix is reported as a warning). `assets.Fetcher` refuses private, loopback and link-local targets.
 
-**Adapters** (`internal/adapter/{claude,keynote,generic}`, Go side): `Detect`, `Collect` (files loaded at runtime through computed paths, which end up in the shim table), `Meta` (slides, steps, auto flags, delays, notes, thumbnails). Each format also has a JS adapter in `runtime/src/20-model.js`. To add a format, follow `docs/adding-a-format.md`.
+**PowerPoint** (`internal/pptx`): `main.go` sends `.pptx`/`.ppsx`/`.pptm` (and ZIP or OLE files without an HTML extension) through `pptx.Convert` into a temporary folder before `detect.Load`; from there the regular pipeline runs with the `pptx` adapter.
+- `opc` (ZIP with size and path limits, relationships), `xmltree` (element tree by local names; `mc:AlternateContent` is resolved while parsing, only the PowerPoint 2010+ namespaces count as supported), `model` (slides, layouts, masters, themes, placeholder inheritance slide -> layout by idx -> master by type), `geom` (the unchanged Ecma `presetShapeDefinitions.xml` with a formula evaluator), `fonts` (cascade embedded -> installed -> bundled Carlito/Liberation, fsType, subsets renamed because of the Reserved Font Names), `render` (one SVG per slide; every slide shape is `<g data-sid>`, paragraphs are `<g data-p>`; text layout is deckfold's own), `emf`, `anim` (timing -> steps), `deck` (writes `index.html`, `#df-pptx-deck`, the player between `<!--deckfold:pptx-player:begin/end-->`).
+- The player (`runtime/pptx-player`, bundled into `runtime/dist/pptx-player.js`) belongs to deckfold, so the JS adapter drives it through `window.__dfPptx` (`goTo`, `next`, `prev`, `showAll`, `state`); this is the exception to the rule below about synthetic keys. `goTo` jumps without animation, only `next` animates; previews never animate or play media. `--refresh` also replaces the player code.
+- Text from the presentation is data: everything is escaped, links are limited to http, https and mailto, SVG pictures are referenced through `<image>`, asset names are content hashes. `TestHostileDeck` checks this.
+- Tests: `internal/pptx/pptx_test.go` (structure of the feature decks), `tests/e2e/pptx.spec.mjs` (browser; expected animation states come from `fixtures/pptx/src/animations.spec.json`), `tests/e2e/pptx-fidelity.spec.mjs` (SSIM against PowerPoint images in `fixtures/pptx/ref/`, skipped until `scripts/pptxref/pptxref.sh` has made them). Convert test decks with `DECKFOLD_BUNDLED_FONTS=1` so that the output does not depend on the machine.
+
+**Adapters** (`internal/adapter/{claude,keynote,pptx,generic}`, Go side): `Detect`, `Collect` (files loaded at runtime through computed paths, which end up in the shim table), `Meta` (slides, steps, auto flags, delays, notes, thumbnails). Each format also has a JS adapter in `runtime/src/20-model.js`. To add a format, follow `docs/adding-a-format.md`.
 - claude.ai: detected by `meta[name^="hz:"]` + `#deck-motion`; notes come from `data-speaker-notes`; the player advances auto steps itself. Strict structure check; an unknown structure is an error.
 - Keynote 15.4 (export format 1.2): detected by `assets/header.json(p)` + `assets/player/main.js`. The whole `assets/` folder is embedded, because the audience window on `file:` uses JSONP/PDFP while the srcdoc previews load `.json`/`.pdf`/CMaps through XHR/fetch. No notes panel (Keynote exports no notes). Details and key codes: `docs/spikes/S1-keynote.md`.
 
 **Runtime** (`runtime/src/*.js`, bundled in name order into one IIFE; the bundler emits ASCII only). Roles (`00-core.js`): `start` (the window the file was opened in: start screen, then presenter view; never runs the source scripts), `audience` (popup with `window.name = "df-audience:<token>"`, or solo through `sessionStorage df-solo`; owns the state and the auto timer), `preview` (srcdoc iframes in the presenter view; get their assets through `parent.__deckfold.assets`).
 - `10-loader.js`: placeholders to blob URLs, activate styles and attributes, shim for `setAttribute`, `src` setters, XHR, fetch, Worker and `<style>` inserted at runtime, start the deferred scripts and replay a missed `DOMContentLoaded`/`load`.
-- `20-model.js`: state model (slide, step). The runtime keeps the state itself and drives players only through synthetic keys (with `keyCode`) or `#n`; never read internal player variables.
+- `20-model.js`: state model (slide, step). The runtime keeps the state itself and drives source players only through synthetic keys (with `keyCode`) or `#n`; never read internal player variables. The PowerPoint player is deckfold's own and is driven through its API (see above). A negative entry in `delay` means "no source timing for this step".
 - `30-keys.js`: capture listeners on `window` are registered as soon as the runtime loads (before any source script); bound keys never reach the player, Escape included. Channel: `postMessage` with sender and token checks (no BroadcastChannel: messages do not arrive in WebKit).
 - `40-audience.js` / `50-presenter.js`: the audience window is the authority for the state; the presenter view sends commands, buffers them until it reconnects, and answers `hello` with `init`. Heartbeat, recovery through `sessionStorage`, wake lock, full-screen fallback, offline placeholder for live embeds.
 - Settings: defaults from `#df-config`, differences in `localStorage` under `deckfold:<deckHash>` (Chrome shares `localStorage` across all `file://` pages).
 
 Background measurements on `file://` behaviour (Window Management API, blob URLs in popups and iframes) and on large files: `docs/spikes/S2-file-protocol.md`, `docs/spikes/S3-large-files.md`.
+
+## PowerPoint automation
+
+`scripts/pptxref/pptxref.sh` drives PowerPoint through AppleScript to make the reference images (see `fixtures/pptx/README.md` and `docs/spikes/S4-powerpoint-reference.md`). PowerPoint does not answer Apple events while a start dialog is open; close it first. Work only in folders below `~/Documents` and quit PowerPoint afterwards when no presentation is open.
 
 ## Keynote automation
 

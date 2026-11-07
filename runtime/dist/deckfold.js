@@ -449,7 +449,8 @@ DF.quietMedia = quietMedia;
 
 // --- 20-model.js ---
 // State model (slide, step) per format, and adapters that drive the source player in the document.
-// The runtime keeps the state itself; it never reads internal variables of the player.
+// The runtime keeps the state itself; it never reads internal variables of a source player. The
+// player of PowerPoint decks belongs to deckfold and is driven through its public API.
 
 function slidesOf() { return (DF.meta && DF.meta.deck && DF.meta.deck.slides) || []; }
 DF.slides = slidesOf;
@@ -573,6 +574,25 @@ DF.adapters = {
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; }
+  },
+  // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
+  pptx: {
+    _ready: null,
+    ready: function () {
+      if (this._ready) return this._ready;
+      this._ready = new Promise(function (res) {
+        if (window.__dfPptx) { res(); return; }
+        window.addEventListener("df-pptx-ready", function () { res(); });
+      });
+      return this._ready;
+    },
+    forward: function () { if (window.__dfPptx) window.__dfPptx.next(); },
+    back: function () { if (window.__dfPptx) window.__dfPptx.prev(); },
+    jump: function (target) {
+      if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
+      return Promise.resolve();
+    },
+    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; }
   },
   generic: {
     ready: function () { return Promise.resolve(); },
@@ -838,7 +858,8 @@ DF.startAudience = function () {
   // ---------- auto mode (E7): the timer runs here, in the visible window ----------
   function sourceDelay() {
     var sl = DF.slides()[st.slide];
-    if (sl && sl.delay && sl.delay[st.step] != null) return sl.delay[st.step] * 1000;
+    // a negative delay means: no timing from the source for this step
+    if (sl && sl.delay && sl.delay[st.step] != null && sl.delay[st.step] >= 0) return sl.delay[st.step] * 1000;
     return null;
   }
   function playingMedia() {
@@ -1255,7 +1276,7 @@ DF.startPresenter = function (snapshotHTML) {
     if (on) markOverview();
   }
   function buildOverview() {
-    var srcSlides = document.querySelectorAll(".deck-slide");
+    var srcSlides = document.querySelectorAll(meta.slideSelector || ".deck-slide");
     var w = meta.width || 1920, h = meta.height || 1080;
     slides.forEach(function (s, i) {
       var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: function () { command("goto", i); toggleOverview(); } });

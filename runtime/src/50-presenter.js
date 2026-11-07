@@ -212,7 +212,7 @@ DF.startPresenter = function (snapshotHTML) {
     if (on) markOverview();
   }
   function buildOverview() {
-    var srcSlides = document.querySelectorAll(".deck-slide");
+    var srcSlides = document.querySelectorAll(meta.slideSelector || ".deck-slide");
     var w = meta.width || 1920, h = meta.height || 1080;
     slides.forEach(function (s, i) {
       var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: function () { command("goto", i); toggleOverview(); } });

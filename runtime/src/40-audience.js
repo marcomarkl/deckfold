@@ -131,7 +131,8 @@ DF.startAudience = function () {
   // ---------- auto mode (E7): the timer runs here, in the visible window ----------
   function sourceDelay() {
     var sl = DF.slides()[st.slide];
-    if (sl && sl.delay && sl.delay[st.step] != null) return sl.delay[st.step] * 1000;
+    // a negative delay means: no timing from the source for this step
+    if (sl && sl.delay && sl.delay[st.step] != null && sl.delay[st.step] >= 0) return sl.delay[st.step] * 1000;
     return null;
   }
   function playingMedia() {

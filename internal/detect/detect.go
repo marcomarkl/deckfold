@@ -11,6 +11,7 @@ import (
 	"deckfold/internal/adapter/claude"
 	"deckfold/internal/adapter/generic"
 	"deckfold/internal/adapter/keynote"
+	"deckfold/internal/adapter/pptx"
 	"deckfold/internal/htmlscan"
 )
 
@@ -48,7 +49,7 @@ func Load(arg string) (*adapter.Input, error) {
 
 // Choose picks the adapter. With useGeneric, the generic adapter applies when no other matches.
 func Choose(in *adapter.Input, useGeneric bool) (adapter.Adapter, error) {
-	for _, a := range []adapter.Adapter{keynote.Adapter{}, claude.Adapter{}} {
+	for _, a := range []adapter.Adapter{keynote.Adapter{}, claude.Adapter{}, pptx.Adapter{}} {
 		if a.Detect(in) {
 			return a, nil
 		}

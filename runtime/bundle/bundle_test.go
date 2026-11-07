@@ -19,7 +19,15 @@ func TestDistUpToDate(t *testing.T) {
 	if string(djs) != js || string(dcss) != css {
 		t.Fatal("runtime/dist is out of date: run go generate ./runtime")
 	}
-	for _, c := range js + css {
+	pjs, _, err := BundleNamed("../pptx-player", "deckfold PowerPoint player, generated from runtime/pptx-player")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dp, err := os.ReadFile("../dist/pptx-player.js")
+	if err != nil || string(dp) != pjs {
+		t.Fatal("runtime/dist/pptx-player.js is out of date: run go generate ./runtime")
+	}
+	for _, c := range js + css + pjs {
 		if c > 127 {
 			t.Fatal("bundle contains non-ASCII characters")
 		}

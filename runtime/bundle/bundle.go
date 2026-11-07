@@ -13,6 +13,11 @@ import (
 // Bundle assembles the sources in srcDir: all *.js in name order inside one IIFE,
 // all *.css concatenated.
 func Bundle(srcDir string) (js, css string, err error) {
+	return BundleNamed(srcDir, "deckfold runtime, generated from runtime/src")
+}
+
+// BundleNamed is Bundle with another header comment.
+func BundleNamed(srcDir, label string) (js, css string, err error) {
 	var jsParts, cssParts []string
 	ents, err := os.ReadDir(srcDir)
 	if err != nil {
@@ -35,15 +40,15 @@ func Bundle(srcDir string) (js, css string, err error) {
 			cssParts = append(cssParts, "/* --- "+n+" --- */\n"+string(b))
 		}
 	}
-	js = "/* deckfold runtime, generated from runtime/src, do not edit by hand */\n(function(){\"use strict\";\n" + strings.Join(jsParts, "\n") + "\n})();\n"
-	css = "/* deckfold runtime, generated from runtime/src */\n" + strings.Join(cssParts, "\n")
+	js = "/* " + label + ", do not edit by hand */\n(function(){\"use strict\";\n" + strings.Join(jsParts, "\n") + "\n})();\n"
+	css = "/* " + label + " */\n" + strings.Join(cssParts, "\n")
 	// Emit ASCII only, so the runtime is correct whatever the charset of the source.
 	js, css = asciiJS(js), asciiCSS(css)
-	if strings.Contains(strings.ToLower(js), "</script") {
-		return "", "", fmt.Errorf("runtime/src contains </script")
+	if strings.Contains(strings.ToLower(js), "</script") || strings.Contains(js, "<!--") {
+		return "", "", fmt.Errorf("%s contains </script or <!--", srcDir)
 	}
 	if strings.Contains(strings.ToLower(css), "</style") {
-		return "", "", fmt.Errorf("runtime/src contains </style")
+		return "", "", fmt.Errorf("%s contains </style", srcDir)
 	}
 	return js, css, nil
 }

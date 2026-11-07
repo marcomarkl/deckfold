@@ -89,8 +89,12 @@ func Convert(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	if ns, ok := meta.Extra["netSlides"].([]string); ok {
 		rep.NetSlides = append(rep.NetSlides, ns...)
 	}
+	slideClass := "deck-slide"
+	if sel := meta.SlideSelector; strings.HasPrefix(sel, ".") && !strings.ContainsAny(sel[1:], " .#[:>") {
+		slideClass = sel[1:]
+	}
 	for _, t := range in.Doc.Tags {
-		if t.Name == "section" && strings.Contains(" "+t.Value("class")+" ", " deck-slide ") {
+		if t.Name == "section" && strings.Contains(" "+t.Value("class")+" ", " "+slideClass+" ") {
 			c.slideAt = append(c.slideAt, t.Start)
 		}
 	}

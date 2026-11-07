@@ -160,3 +160,43 @@ func Replace(src, block []byte) ([]byte, error) {
 	out = append(out, src[j:]...)
 	return out, nil
 }
+
+// Markers around the player of a deck generated from PowerPoint (see internal/pptx/deck).
+const (
+	PlayerBegin = "<!--deckfold:pptx-player:begin-->"
+	PlayerEnd   = "<!--deckfold:pptx-player:end-->"
+)
+
+// ReplacePlayer swaps the code of the PowerPoint player in an output. It keeps the script
+// element as embed rewrote it (deferred type) and only replaces its content. found is false
+// for outputs that are not PowerPoint decks.
+func ReplacePlayer(src []byte, js string) (out []byte, found bool, err error) {
+	i := bytes.LastIndex(src, []byte(PlayerBegin))
+	if i < 0 {
+		return src, false, nil
+	}
+	j := bytes.Index(src[i:], []byte(PlayerEnd))
+	if j < 0 {
+		return nil, true, errors.New("the PowerPoint player block is not terminated")
+	}
+	blk := src[i : i+j]
+	open := bytes.Index(blk, []byte("<script"))
+	if open < 0 {
+		return nil, true, errors.New("the PowerPoint player block has no script")
+	}
+	gt := bytes.IndexByte(blk[open:], '>')
+	end := bytes.LastIndex(blk, []byte("</script>"))
+	if gt < 0 || end < open+gt {
+		return nil, true, errors.New("the PowerPoint player script is malformed")
+	}
+	if strings.Contains(strings.ToLower(js), "</script") {
+		return nil, true, errors.New("player code contains </script")
+	}
+	start := i + open + gt + 1
+	stop := i + end
+	out = make([]byte, 0, len(src)-(stop-start)+len(js))
+	out = append(out, src[:start]...)
+	out = append(out, js...)
+	out = append(out, src[stop:]...)
+	return out, true, nil
+}

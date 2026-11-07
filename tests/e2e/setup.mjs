@@ -13,9 +13,18 @@ export const ROOT = path.resolve(here, '..', '..');
 export const OUT = path.join(ROOT, 'tests', '.out');
 const BIN = path.join(OUT, process.platform === 'win32' ? 'deckfold.exe' : 'deckfold');
 
-function deckfold(args) {
-  return execFileSync(BIN, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+function deckfold(args, env) {
+  return execFileSync(BIN, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(env || {}) } });
 }
+
+// Public PowerPoint feature decks: the PowerPoint-saved copy in fixtures/pptx when it exists,
+// otherwise the generator output in fixtures/pptx/src. Converted with the bundled fonts only,
+// so the output does not depend on the fonts installed on the machine.
+export function pptxFixture(name) {
+  const saved = path.join(ROOT, 'fixtures', 'pptx', name + '.pptx');
+  return fs.existsSync(saved) ? saved : path.join(ROOT, 'fixtures', 'pptx', 'src', name + '.pptx');
+}
+const BUNDLED = { DECKFOLD_BUNDLED_FONTS: '1' };
 
 // WAV file with a sine tone (duration in seconds), for the "auto mode waits for media" test.
 function wav(file, seconds) {
@@ -56,6 +65,31 @@ export default async function setup() {
 <script>window.keys=[];document.addEventListener('keydown',function(e){window.keys.push(e.key);document.getElementById('k').textContent=e.key;});</script>
 </body></html>`);
   deckfold([path.join(gen, 'deck.html'), '-o', path.join(OUT, 'generic.html'), '--force', '--generic']);
+
+  // PowerPoint feature decks (public, no corpus needed)
+  for (const name of ['basic', 'media', 'animations']) {
+    deckfold([pptxFixture(name), '-o', path.join(OUT, `pptx-${name}.html`), '--force'], BUNDLED);
+  }
+  // every feature deck with PowerPoint reference images (pptx-fidelity.spec.mjs)
+  const ref = path.join(ROOT, 'fixtures', 'pptx', 'ref');
+  for (const name of fs.existsSync(ref) ? fs.readdirSync(ref) : []) {
+    if (fs.existsSync(path.join(ref, name, 'source.sha256'))) {
+      deckfold([pptxFixture(name), '-o', path.join(OUT, `pptx-ref-${name}.html`), '--force'], BUNDLED);
+    }
+  }
+  // auto mode: 1 s per step without source timing, the source timing (advTm) on slide 3
+  deckfold([pptxFixture('animations'), '-o', path.join(OUT, 'pptx-animations-auto.html'), '--force', '--auto', '--auto-interval', '1'], BUNDLED);
+  // the same deck with an old player in the output, for the --refresh test
+  const old = fs.readFileSync(path.join(OUT, 'pptx-basic.html'), 'utf8')
+    .replace(/(<!--deckfold:pptx-player:begin--><script[^>]*>)[\s\S]*?(<\/script><!--deckfold:pptx-player:end-->)/, '$1window.__dfOldPlayer=true;$2');
+  fs.writeFileSync(path.join(OUT, 'pptx-old.html'), old);
+  deckfold(['--refresh', path.join(OUT, 'pptx-old.html'), '-o', path.join(OUT, 'pptx-refreshed.html'), '--force']);
+  // 200 slides for the performance test (generated, not committed); the conversion is timed
+  const pgen = path.join(OUT, 'pptxgen');
+  execFileSync('go', ['run', './scripts/pptxgen', '-big', '-out', pgen], { cwd: ROOT, stdio: 'ignore' });
+  const t0 = Date.now();
+  deckfold([path.join(pgen, 'big.pptx'), '-o', path.join(OUT, 'pptx-big.html'), '--force'], BUNDLED);
+  fs.writeFileSync(path.join(OUT, 'pptx-big.json'), JSON.stringify({ convertMs: Date.now() - t0 }));
 
   if (corpus.keynote) {
     deckfold([path.join(ROOT, 'testdata', corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);

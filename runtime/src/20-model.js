@@ -1,5 +1,6 @@
 // State model (slide, step) per format, and adapters that drive the source player in the document.
-// The runtime keeps the state itself; it never reads internal variables of the player.
+// The runtime keeps the state itself; it never reads internal variables of a source player. The
+// player of PowerPoint decks belongs to deckfold and is driven through its public API.
 
 function slidesOf() { return (DF.meta && DF.meta.deck && DF.meta.deck.slides) || []; }
 DF.slides = slidesOf;
@@ -123,6 +124,25 @@ DF.adapters = {
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; }
+  },
+  // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
+  pptx: {
+    _ready: null,
+    ready: function () {
+      if (this._ready) return this._ready;
+      this._ready = new Promise(function (res) {
+        if (window.__dfPptx) { res(); return; }
+        window.addEventListener("df-pptx-ready", function () { res(); });
+      });
+      return this._ready;
+    },
+    forward: function () { if (window.__dfPptx) window.__dfPptx.next(); },
+    back: function () { if (window.__dfPptx) window.__dfPptx.prev(); },
+    jump: function (target) {
+      if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
+      return Promise.resolve();
+    },
+    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; }
   },
   generic: {
     ready: function () { return Promise.resolve(); },
