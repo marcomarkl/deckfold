@@ -82,10 +82,11 @@ DF.adapters = {
     // jump: slide via hash (the player goes to step 0), then single steps up to the target.
     // The player runs auto steps by itself, each after a timer of at least 140 ms, and a key
     // press during such a run moves it on by one step only. So when the target is the end of the
-    // auto run that starts the slide, the audience sees the run play; otherwise (and always in a
-    // preview, which shows the end state at once) every step is pressed, 60 ms apart, which is
-    // faster than the player's own timer.
+    // auto run that starts the slide, the audience sees the run play; otherwise every step is
+    // pressed, 60 ms apart, which is faster than the player's own timer. A preview reaches the
+    // target at once (jumpAtOnce).
     jump: function (target, current) {
+      if (DF.role === "preview") return this.jumpAtOnce(target);
       var self = this;
       var cur = current;
       var p = Promise.resolve();
@@ -108,15 +109,59 @@ DF.adapters = {
         return wait(60).then(loop);
       });
     },
-    mediaRoot: function (slide) { return document.querySelectorAll(".deck-slide")[slide] || null; }
+    // jumpAtOnce: the whole move in one task, so that the browser paints only the target state. A
+    // real change of the address would deliver hashchange as a task of its own, with a paint of
+    // step 0 before the steps; so the address is changed with replaceState and the player's
+    // hashchange listener gets the event at once. The player goes to the slide of the address
+    // only when it is another one, so the slide is entered through a neighbouring slide first;
+    // then every step is pressed. The player's own timers for auto steps find the state changed
+    // and do nothing.
+    jumpAtOnce: function (target) {
+      var enter = function (n) {
+        // the full address of this document (about:srcdoc in a preview) with the new fragment
+        try { history.replaceState(history.state, "", location.href.split("#")[0] + "#" + n); }
+        catch (e) { return false; }
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        return true;
+      };
+      var n = slidesOf().length;
+      if (n > 1) enter(target.slide === 0 ? 2 : target.slide);
+      if (!enter(target.slide + 1)) return this.jumpAtOnceFallback(target);
+      for (var i = 0; i < target.step; i++) this.forward();
+      return Promise.resolve();
+    },
+    // without replaceState (a sandboxed document) the address is changed for real
+    jumpAtOnceFallback: function (target) {
+      var self = this;
+      return new Promise(function (res) {
+        var on = function () { window.removeEventListener("hashchange", on); for (var i = 0; i < target.step; i++) self.forward(); res(); };
+        window.addEventListener("hashchange", on);
+        location.hash = "#" + (target.slide + 1);
+      });
+    },
+    mediaRoot: function (slide) { return document.querySelectorAll(".deck-slide")[slide] || null; },
+    // the player's click listener on the document moves it on any click outside links and text
+    guardClicks: true,
+    // shown: the slide the player shows, the one .deck-slide without data-off. In a viewport not
+    // wider than high the player shows all slides in a scroll view; then there is no single one.
+    shown: function () {
+      var all = document.querySelectorAll(".deck-slide"), at = null, n = 0;
+      for (var i = 0; i < all.length; i++) if (!all[i].hasAttribute("data-off")) { at = i; n++; }
+      return n === 1 ? at : null;
+    }
   },
   keynote: {
     _ready: null,
+    _at: null,
     ready: function () {
       if (this._ready) return this._ready;
+      var self = this;
       this._ready = new Promise(function (res) {
         var done = false;
-        document.addEventListener("ShowController:SlideIndexDidChangeEvent", function () { if (!done) { done = true; setTimeout(res, 300); } });
+        document.addEventListener("ShowController:SlideIndexDidChangeEvent", function (e) {
+          if (e.detail && typeof e.detail.slideIndex === "number") self._at = e.detail.slideIndex;
+          if (!done) { done = true; setTimeout(res, 300); }
+        });
         setTimeout(function () { if (!done) { done = true; res(); } }, 15000);
       });
       return this._ready;
@@ -141,7 +186,14 @@ DF.adapters = {
         return wait(250).then(loop);
       });
     },
-    mediaRoot: function () { return document.getElementById("stage") || document.body; }
+    mediaRoot: function () { return document.getElementById("stage") || document.body; },
+    // shown: the slide index of the player's last slide change event. A self-playing export (its
+    // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
+    // is not compared there.
+    shown: function () {
+      var selfPlaying = slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
+      return selfPlaying ? null : this._at;
+    }
   },
   // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
   pptx: {
@@ -160,27 +212,32 @@ DF.adapters = {
       if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
       return Promise.resolve();
     },
-    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; }
+    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; },
+    // videos, audio icons and trigger shapes act by themselves (their handlers are on the document)
+    interactive: function (t) { return !!(window.__dfPptx && window.__dfPptx.interactive && window.__dfPptx.interactive(t)); },
+    shown: function () { return window.__dfPptx ? window.__dfPptx.state().slide : null; }
   },
   generic: {
     ready: function () { return Promise.resolve(); },
     forward: function () { }, back: function () { },
     jump: function () { return Promise.resolve(); },
-    mediaRoot: function () { return document.body; }
+    mediaRoot: function () { return document.body; },
+    shown: function () { return null; }
   }
 };
 DF.adapter = function () { return DF.adapters[DF.format()] || DF.adapters.generic; };
 
 // Bring the player to a target state: single steps as a key press (animated), otherwise jump.
 // On a claude.ai slide with auto steps the player may still be in its auto run, where a key
-// press moves it by one step only, so a move away from such a slide is a jump. A preview also
-// jumps onto such a slide, which presses every step instead of waiting for the player's timers.
+// press moves it by one step only, so a move away from such a slide is a jump. A preview always
+// jumps, which reaches every state at once.
 DF.drive = function (from, to) {
   var a = DF.adapter();
   if (!to) return Promise.resolve();
+  // a preview shows every state at once, without the steps in between
+  if (DF.role === "preview") return a.jump(to, from);
   var claude = DF.format() === "claude";
   if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
-  if (claude && DF.role === "preview" && hasAuto(to.slide)) return a.jump(to, null);
   if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
   if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
   return a.jump(to, from);

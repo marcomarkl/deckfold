@@ -89,7 +89,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	auto := fs.Bool("auto", false, "start in auto mode")
 	autoInterval := fs.Float64("auto-interval", 0, "auto mode interval in seconds (when the source has no timings)")
 	loop := fs.Bool("loop", false, "loop in auto mode")
-	elements := fs.String("presenter-elements", "", "presenter view elements: current,next,notes,time,overview")
+	elements := fs.String("presenter-elements", "", "presenter view elements: current,audience,next,notes,time,overview")
 	notesSize := fs.Int("notes-font-size", 0, "notes font size in px")
 	target := fs.Int("target-minutes", -1, "target duration of the talk in minutes (0 = none)")
 	refresh := fs.Bool("refresh", false, "update the runtime of an existing deckfold output")
@@ -290,13 +290,25 @@ func mergeKnown(def, old config.Config) config.Config {
 		keys[k] = v
 	}
 	for k, v := range old.Keys {
-		if config.KnownAction(k) { // actions retired since then are dropped
+		// actions retired since then are dropped; a default list of an earlier version (which the
+		// file never chose) gives way to the current default
+		if config.KnownAction(k) && !config.FormerDefaultKeys(k, v) {
 			keys[k] = v
 		}
 	}
 	c.Keys = keys
-	if c.Presenter.Layout == (config.Layout{}) {
-		c.Presenter.Layout = def.Presenter.Layout
+	if config.FormerDefaultElements(c.Presenter.Elements) {
+		c.Presenter.Elements = append([]string(nil), def.Presenter.Elements...)
+	}
+	// a share the file does not have yet (0) takes its default; a file of v0.3 has main and side
+	l, d := &c.Presenter.Layout, def.Presenter.Layout
+	for _, p := range []struct {
+		v *float64
+		d float64
+	}{{&l.Main, d.Main}, {&l.Side, d.Side}, {&l.Audience, d.Audience}} {
+		if *p.v == 0 {
+			*p.v = p.d
+		}
 	}
 	if c.WarnSize == "" {
 		c.WarnSize = def.WarnSize

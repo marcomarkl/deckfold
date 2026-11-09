@@ -116,7 +116,7 @@ test('overview band of the presenter view: click, arrows, switch', async ({ page
   await page.waitForTimeout(400);
   expect(await audState(page)).toEqual({ slide: 2, step: 0 });
   // the status bar holds the switches; "overview" hides the band, also after a reload
-  await expect(pres.locator('.df-status [data-df-el]')).toHaveCount(5);
+  await expect(pres.locator('.df-status [data-df-el]')).toHaveCount(6);
   await pres.click('.df-status [data-df-el="overview"]');
   await expect(pres.locator('.df-overview')).toBeHidden();
   await pres.reload();
@@ -124,8 +124,8 @@ test('overview band of the presenter view: click, arrows, switch', async ({ page
   await expect(pres.locator('.df-overview')).toBeHidden();
 });
 
-test('back on the first slide does nothing; after the last slide the end slide appears', async ({ page }) => {
-  await solo(page, 'pptx-basic.html');
+test('back on the first slide does nothing; after the last slide the end slide appears and stays', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(300);
   expect(await audState(page)).toEqual({ slide: 0, step: 0 });
@@ -133,6 +133,19 @@ test('back on the first slide does nothing; after the last slide the end slide a
   await page.keyboard.press('End');
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.df-endslide.df-on')).toHaveCount(1);
+  // more steps, in the presentation, by click and from the presenter view: the end slide stays
+  await page.keyboard.press('ArrowRight');
+  await page.mouse.click(600, 400);
+  await pres.keyboard.press('ArrowRight');
+  await page.waitForTimeout(800);
+  await expect(page.locator('.df-endslide.df-on')).toHaveCount(1);
+  expect(await page.locator('.df-start').count()).toBe(0);
+  expect((await page.evaluate(() => window.__deckfold.audience.info())).ended).toBe(true);
+  // back shows the last slide again; Escape still ends
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.df-endslide.df-on')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
 });
 
 test('start screen: arrows at the strip, auto fields only with auto mode, no hash before the start', async ({ page }) => {
@@ -150,7 +163,7 @@ test('start screen: arrows at the strip, auto fields only with auto mode, no has
   await expect(page.locator('[data-df-loop]')).toBeDisabled();
   await page.check('[data-df-auto]');
   await expect(page.locator('[data-df-interval]')).toBeEnabled();
-  await expect(page.locator('[data-df-keychips] kbd')).not.toHaveCount(0);
+  await expect(page.locator('[data-df-keyhelp] kbd')).not.toHaveCount(0);
 });
 
 test('Escape in full screen ends the presentation (Keyboard Lock)', async ({ page }) => {
@@ -214,12 +227,13 @@ test('start screen: tiles of equal width; the preview shows the chosen slide aft
 // ---------- previews, reload, full-screen button (found in a test with a real deck) ----------
 
 const previewFrames = (pres) => pres.locator('iframe[data-df-preview]');
-// [visible slide, number of hidden builds on it, running animations] in each preview of the presenter view
-const previewInfo = (pres) => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => {
+// [visible slide, number of hidden builds on it, running animations] in the previews "Current" and "Next"
+// of the presenter view (sel: other previews, such as the audience pane)
+const previewInfo = (pres, sel = '.df-current iframe[data-df-preview], .df-next iframe[data-df-preview]') => pres.evaluate((sel) => [...document.querySelectorAll(sel)].map((f) => {
   const d = f.contentDocument, i = [...d.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'));
   const sl = d.querySelectorAll('.deck-slide')[i];
   return [i, sl ? sl.querySelectorAll('[data-build-hidden]').length : -1, d.getAnimations().filter((a) => a.playState === 'running').length];
-}));
+}), sel);
 // first slide with at least three steps and builds that hide content at its first step
 const multiStepSlide = (page) => page.evaluate(() => window.__deckfold.slides().findIndex((s, i, all) => s.steps >= 3 && i + 1 < all.length && !(s.auto || []).some(Boolean)));
 
@@ -228,8 +242,11 @@ test('claude.ai presenter view: a narrow pane shows only the current slide', asy
   const pres = await present(page, context, 'claude.html');
   await pres.setViewportSize({ width: 420, height: 900 });
   await pres.keyboard.press('ArrowRight');
-  await expect.poll(() => visibleSlide(page)).toBeGreaterThan(-1);
-  const shown = await visibleSlide(page);
+  // wait for the step to arrive before reading which slide the presentation shows
+  const s1 = await expected(page, ['next']);
+  await expect.poll(() => audState(page)).toEqual(s1);
+  await expect.poll(() => visibleSlide(page)).toBe(s1.slide);
+  const shown = s1.slide;
   // the player switches to a scroll view with all slides in a viewport that is not wider than high
   await expect.poll(() => pres.evaluate(() => document.querySelector('iframe[data-df-preview]').contentWindow.matchMedia('(max-aspect-ratio: 1/1)').matches)).toBe(false);
   await expect.poll(async () => (await previewInfo(pres))[0][0], { timeout: 10000 }).toBe(shown);
@@ -423,4 +440,245 @@ test('claude.ai auto steps: moving on while they play keeps the player and deckf
   await page.waitForTimeout(3000);
   expect(await visibleSlide(page)).toBe(k - 1);
   expect((await audState(page)).slide).toBe(k - 1);
+});
+
+test('claude.ai auto runs: "next" moves to the next slide at once, by key, click and from the presenter view', async ({ page, context }) => {
+  need('claudeSteps');
+  const pres = await present(page, context, 'claude-steps.html');
+  // slides with an auto run and a slide after them, from the metadata
+  const runs = await page.evaluate(() => window.__deckfold.slides().map((s, i, all) => (s.auto && s.auto.some(Boolean) && i + 1 < all.length ? i : -1)).filter((i) => i >= 0));
+  expect(runs.length).toBeGreaterThan(0);
+  for (const k of runs) {
+    for (const [how, delay] of [['key', 50], ['click', 300], ['presenter', 1000], ['key', 1000], ['click', 50], ['presenter', 300]]) {
+      await page.evaluate((k) => window.__deckfold.audience.act('goto', k), k);
+      await expect.poll(() => visibleSlide(page)).toBe(k);
+      await page.waitForTimeout(delay);
+      if (how === 'key') await page.keyboard.press('ArrowRight');
+      else if (how === 'click') await page.mouse.click(900, 400);
+      else await pres.keyboard.press('ArrowRight');
+      await expect.poll(() => audState(page), { message: `${how} after ${delay} ms on slide ${k}` }).toEqual(await expected(page, [['goto', k + 1]]));
+      await expect.poll(() => visibleSlide(page), { message: `${how} after ${delay} ms on slide ${k}` }).toBe(k + 1);
+    }
+  }
+});
+
+test('Enter: starts on the start screen, does nothing in the presentation and in the presenter view', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.bringToFront();
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  await page.waitForTimeout(500);
+  const s = await audState(page);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(600);
+  expect(await audState(page)).toEqual(s);
+  // in the presenter view a switch that was clicked keeps the focus; Enter must not press it
+  const notes = pres.locator('.df-status [data-df-el="notes"]');
+  const pressed = () => notes.getAttribute('aria-pressed');
+  await notes.click();
+  const before = await pressed();
+  await pres.keyboard.press('Enter');
+  await pres.waitForTimeout(600);
+  expect(await pressed()).toBe(before);
+  expect(await audState(page)).toEqual(s);
+  await notes.click(); // back on for later tests
+});
+
+test('start screen: the key help lists every bound key, grouped, and the fixed keys', async ({ page }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const help = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-df-keyhelp] [data-df-action]')];
+    return { groups: document.querySelectorAll('[data-df-keyhelp] [data-df-keygroup]').length,
+      rows: rows.map((r) => [r.getAttribute('data-df-action'), JSON.parse(r.getAttribute('data-df-keys'))]),
+      keys: window.__deckfold.settings().keys };
+  });
+  expect(help.groups).toBeGreaterThanOrEqual(4);
+  // every key of every action is shown in a row of that action, and no row shows a key the action does not have
+  for (const [act, keys] of Object.entries(help.keys)) {
+    const shown = help.rows.filter(([a]) => a === act).flatMap(([, k]) => k);
+    expect(shown.length, act).toBeGreaterThan(0);
+    for (const k of keys) expect(shown, `${act}: ${JSON.stringify(k)}`).toContain(k);
+    for (const k of shown) expect(keys, `${act}: ${JSON.stringify(k)}`).toContain(k);
+  }
+  // the fixed keys: Enter starts, digits + Enter choose a slide, a click moves on
+  const acts = help.rows.map(([a]) => a);
+  for (const a of ['start', 'goto', 'click']) expect(acts).toContain(a);
+});
+
+// Every frame a preview paints, recorded inside the preview: the slide the player shows, its hidden
+// builds and whether the preview is visible at all (the iframe is hidden until it shows its first
+// state).
+const recordPreviewFrames = () => {
+  let fe = null;
+  try { fe = window.frameElement; } catch (e) { }
+  if (!fe || !fe.hasAttribute('data-df-preview')) return;
+  window.__frames = [];
+  const loop = () => {
+    const all = [...document.querySelectorAll('.deck-slide')];
+    const on = all.filter((s) => !s.hasAttribute('data-off'));
+    const i = on.length === 1 ? all.indexOf(on[0]) : -1;
+    const vis = getComputedStyle(fe).visibility !== 'hidden' && getComputedStyle(fe.parentElement).visibility !== 'hidden';
+    const k = [i, i >= 0 ? on[0].querySelectorAll('[data-build-hidden]').length : -1, vis];
+    const l = window.__frames[window.__frames.length - 1];
+    if (!l || l.join() !== k.join()) window.__frames.push(k);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+};
+const paintedFrames = (doc, sel) => doc.evaluate((sel) => [...document.querySelectorAll(sel)].map((f) => f.contentWindow.__frames || []), sel);
+// a painted, visible frame shows one slide in one state: per slide only one count of hidden builds
+const intermediate = (frames) => {
+  const per = {};
+  for (const [s, h, vis] of frames) if (vis && s >= 0) (per[s] = per[s] || new Set()).add(h);
+  return Object.entries(per).filter(([, set]) => set.size > 1).map(([s, set]) => `slide ${s}: ${[...set].join('/')} hidden builds`);
+};
+
+test('previews paint no step between two states and nothing before their first state', async ({ page, context }) => {
+  need('claudeSteps');
+  await context.addInitScript(recordPreviewFrames);
+  await page.goto(fileURL('claude-steps.html'));
+  await page.waitForSelector('.df-start [data-df-start]');
+  const k = await multiStepSlide(page);
+  expect(k).toBeGreaterThan(0);
+  await page.waitForTimeout(2500);
+  // first load: the first visible frame already shows the chosen slide
+  let [start] = await paintedFrames(page, '.df-start-stage iframe');
+  const firstVisible = start.find(([, , vis]) => vis);
+  expect(firstVisible && firstVisible[0]).toBe(0);
+  // choosing slides: no step in between
+  for (const i of [k, 1, k, 0, k]) { await page.click(`.df-strip .df-tile[data-i="${i}"]`); await page.waitForTimeout(900); }
+  [start] = await paintedFrames(page, '.df-start-stage iframe');
+  expect(intermediate(start)).toEqual([]);
+  // presenter view: current and next while the show moves through the slides with builds
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  // the states the audience sees (forward, and back within slides), as the presentation shows them
+  const seen = new Set();
+  const note = async () => seen.add((await page.evaluate(() => {
+    const all = [...document.querySelectorAll('.deck-slide')], i = all.findIndex((x) => !x.hasAttribute('data-off'));
+    return [i, all[i].querySelectorAll('[data-build-hidden]').length];
+  })).join());
+  for (const key of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowLeft', 'ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'ArrowRight', 'ArrowRight']) {
+    await pres.keyboard.press(key);
+    await pres.waitForTimeout(700);
+    await note();
+  }
+  const [current, audience, next] = await paintedFrames(pres, 'iframe[data-df-preview]');
+  // "Current" and "Next" show whole slides only
+  for (const f of [current, next]) {
+    expect(intermediate(f)).toEqual([]);
+    const first = f.find(([, , vis]) => vis);
+    expect(first && first[0]).toBeGreaterThanOrEqual(0);
+  }
+  // the audience pane paints only states the audience saw, nothing in between
+  const painted = audience.filter(([s, , vis]) => vis && s >= 0).map(([s, h]) => [s, h].join());
+  expect(painted.length).toBeGreaterThan(0);
+  expect(painted.filter((p) => !seen.has(p))).toEqual([]);
+});
+
+// The audience pane (below "Current"): what the audience sees when it is not the whole slide.
+test('presenter view: the audience pane shows the step, black, white and the end, and is empty at the last step', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-animations.html');
+  const aud = pres.locator('.df-audience');
+  const view = () => aud.getAttribute('data-df-audience');
+  const audFrame = () => pres.evaluate(() => { const f = document.querySelector('.df-audience iframe'); return f.contentWindow.__dfPptx ? f.contentWindow.__dfPptx.state() : null; });
+  const steps = await page.evaluate(() => window.__deckfold.slides()[0].steps);
+  expect(steps).toBeGreaterThan(1);
+  // step 0 of a slide with steps: the audience pane shows that step
+  await expect.poll(view).toBe('slide');
+  await expect.poll(audFrame, { timeout: 10000 }).toEqual({ slide: 0, step: 0 });
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(audFrame).toEqual({ slide: 0, step: 1 });
+  // back within the slide
+  await pres.keyboard.press('ArrowLeft');
+  await expect.poll(audFrame).toEqual({ slide: 0, step: 0 });
+  // the last step: the audience sees what "Current" shows, the pane is empty
+  for (let i = 1; i < steps; i++) await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => audState(page)).toEqual({ slide: 0, step: steps - 1 });
+  await expect.poll(view).toBe('empty');
+  await pres.keyboard.press('b');
+  await expect.poll(view).toBe('black');
+  await pres.keyboard.press('b');
+  await expect.poll(view).toBe('empty');
+  await pres.keyboard.press('w');
+  await expect.poll(view).toBe('white');
+  await pres.keyboard.press('w');
+  await pres.keyboard.press('End');
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => page.evaluate(() => window.__deckfold.audience.info().ended)).toBe(true);
+  await expect.poll(view).toBe('end');
+  // the switch hides and shows it; the divider above it is dragged and the share is kept
+  await pres.click('.df-status [data-df-el="audience"]');
+  await expect(aud).toBeHidden();
+  await pres.click('.df-status [data-df-el="audience"]');
+  await expect(aud).toBeVisible();
+  const box = await pres.locator('[data-df-split="audience"]').boundingBox();
+  await pres.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await pres.mouse.down();
+  await pres.mouse.move(box.x + box.width / 2, box.y - 80, { steps: 5 });
+  await pres.mouse.up();
+  const share = await pres.evaluate(() => window.__deckfold.settings().presenter.layout.audience);
+  expect(share).toBeLessThan(0.6);
+  await pres.reload();
+  await pres.waitForSelector('.df-presenter');
+  expect(await pres.evaluate(() => window.__deckfold.settings().presenter.layout.audience)).toBeCloseTo(share, 5);
+});
+
+test('claude.ai presenter view: the audience pane shows the builds the audience sees', async ({ page, context }) => {
+  need('claudeSteps');
+  const pres = await present(page, context, 'claude-steps.html');
+  const k = await multiStepSlide(page);
+  await pres.click(`.df-overview .df-tile[data-i="${k}"]`);
+  await expect.poll(() => visibleSlide(page)).toBe(k);
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => audState(page)).toEqual(await expected(page, ['next'], { slide: k, step: 0 }));
+  await page.waitForTimeout(1500);
+  const inShow = await page.evaluate((k) => document.querySelectorAll('.deck-slide')[k].querySelectorAll('[data-build-hidden]').length, k);
+  await expect.poll(async () => (await previewInfo(pres, '.df-audience iframe[data-df-preview]'))[0].slice(0, 2), { timeout: 10000 }).toEqual([k, inShow]);
+});
+
+// Presenter view in windows of every size (the maintainer's narrow window included): no preview
+// squeezed to nothing, no control out of reach, a bar of one line.
+test('presenter view: the layout fits windows from 1400 x 900 down to 300 x 900', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  for (const [w, h] of [[1400, 900], [1200, 760], [1000, 650], [800, 600], [600, 800], [400, 900], [300, 900]]) {
+    await pres.setViewportSize({ width: w, height: h });
+    await pres.waitForTimeout(400);
+    const m = await pres.evaluate(() => {
+      const ui = document.querySelector('.df-presenter');
+      const bar = document.querySelector('.df-bar');
+      const stages = [...document.querySelectorAll('.df-pane:not(.df-hidden) .df-stage')].map((s) => Math.round(s.getBoundingClientRect().height));
+      // a control out of the window must sit in a container that scrolls to it
+      const lost = [...document.querySelectorAll('.df-bar button, .df-bar input, .df-status button')].filter((b) => {
+        const r = b.getBoundingClientRect();
+        if (r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1) return false;
+        const c = b.closest('.df-bar, .df-status');
+        return !(c && c.scrollWidth > c.clientWidth);
+      }).map((b) => b.textContent || b.getAttribute('data-df-el'));
+      return { narrow: ui.classList.contains('df-narrow'), barH: Math.round(bar.getBoundingClientRect().height), stages, lost };
+    });
+    expect(m.narrow, `${w}x${h}`).toBe(w < 760);
+    expect(m.barH, `${w}x${h} bar`).toBeLessThan(60);
+    for (const s of m.stages) expect(s, `${w}x${h} stages ${m.stages}`).toBeGreaterThanOrEqual(60);
+    expect(m.lost, `${w}x${h}`).toEqual([]);
+  }
+});
+
+test('presenter view: closes with the window of the presentation, stays when that window reloads', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  // a reload of the presentation window ends the show and keeps the presenter view
+  await page.reload();
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.waitForTimeout(2500);
+  expect(pres.isClosed()).toBe(false);
+  await pres.waitForSelector('.df-presenter');
+  // closing it closes the presenter view
+  const closed = pres.waitForEvent('close', { timeout: 4000 });
+  await page.close();
+  await closed;
+  expect(pres.isClosed()).toBe(true);
 });

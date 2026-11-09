@@ -108,20 +108,53 @@ DF.startAudience = function (opts) {
     }
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
-    st = { slide: target.slide, step: target.step };
+    var to = st = { slide: target.slide, step: target.step };
     lastShown = st;
-    driving = driving.then(function () { return (o && o.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
+    drive(function () { return (o && o.jump) ? adapter.jump(to, from) : DF.drive(from, to); });
     report();
     scheduleAuto();
   }
+  // drive: one move of the player after the ones before it; a move that fails does not stop the
+  // later ones
+  var moving = 0, quietUntil = 0;
+  function drive(move) {
+    moving++;
+    var done = function () { moving--; quietUntil = Date.now() + QUIET; };
+    driving = driving.then(move).then(done, function (err) { done(); console.error("deckfold:", err); });
+    return driving;
+  }
+
+  // ---------- player and deckfold kept together (decision E15) ----------
+  // After the moves have settled, and once a second, the slide the player shows is compared with
+  // deckfold's state; a player that went elsewhere (an input that reached it past deckfold, its
+  // own timer) is brought back with a jump. At most two jumps for the same state, so that a
+  // player that cannot go there is not jumped at forever (and its media not restarted).
+  // QUIET: the slowest player took 223 ms from a jump to showing the slide (Keynote, measured).
+  var QUIET = 1000, retry = { key: "", n: 0 };
+  function check() {
+    if (generic || moving || Date.now() < quietUntil || !adapter.shown) return;
+    var at = adapter.shown();
+    if (at == null || at === st.slide) return;
+    var key = st.slide + ":" + st.step;
+    if (retry.key !== key) retry = { key: key, n: 0 };
+    if (retry.n >= 2) {
+      if (retry.n === 2) console.error("deckfold: the player stays on slide " + (at + 1) + " instead of " + (st.slide + 1));
+      retry.n = 3;
+      return;
+    }
+    retry.n++;
+    var to = { slide: st.slide, step: st.step };
+    drive(function () { return adapter.jump(to, null); });
+  }
+  setInterval(check, 1000);
   function finish() {
     stopAuto();
     opts.onEnd(lastShown || st);
   }
   function act(a, arg) {
     switch (a) {
-      // after the end slide, one more step returns to the start screen (as in PowerPoint)
-      case "next": return st.ended ? finish() : go(DF.model.next(st));
+      // the end slide stays until the presentation is ended (Escape, "End show")
+      case "next": return st.ended ? undefined : go(DF.model.next(st));
       // on the first slide there is nothing before it: no end slide
       case "prev": if (st.ended) return go(st); var pv = DF.model.prev(st); return pv ? go(pv) : undefined;
       case "first": return go(DF.model.first());
@@ -185,6 +218,8 @@ DF.startAudience = function (opts) {
     act(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
+  // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
+  if (!generic) DF.installPointer({ next: function () { act("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
 
   DF.audience = {
     act: act,

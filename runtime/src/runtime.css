@@ -58,18 +58,26 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 .df-start-hint { display: none; padding: 8px 12px; background: #3a2a0c; color: #ffe2a8; border: 1px solid #6b4e12; border-radius: 6px; }
 .df-start-hint.df-on { display: block; }
 [data-df-ui] .df-start-btn { flex: 0 0 auto; min-width: 180px; padding: 14px 36px; font-size: 22px; font-weight: 650; border-radius: 10px; }
-.df-keychips { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--df-mute); font-size: 13px; }
-.df-chip { display: inline-flex; align-items: center; gap: 5px; }
-.df-chip kbd { font: 12px/1 ui-monospace, Menlo, monospace; color: var(--df-fg); background: var(--df-panel); border: 1px solid var(--df-line);
-  border-bottom-width: 2px; border-radius: 5px; padding: 3px 6px; min-width: 22px; text-align: center; }
+.df-keyhelp { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 18px; color: var(--df-mute); font-size: 12px; }
+.df-keygroup[data-df-keygroup="slides"] { grid-column: span 2; }
+.df-keygroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.df-keygroup h4 { margin: 0 0 1px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); }
+.df-keyrow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.df-keylabel { flex: 0 0 auto; min-width: 5.5em; color: var(--df-fg); }
+.df-caps { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.df-keyhelp kbd { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--df-fg); background: var(--df-panel); border: 1px solid var(--df-line);
+  border-bottom-width: 2px; border-radius: 4px; padding: 2px 4px; min-width: 18px; text-align: center; }
 
 /* presenter view */
 html.df-presenter-mode, html.df-presenter-mode body { background: #15161a !important; overflow: hidden !important; height: 100% !important; margin: 0 !important; }
 html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-presenter { position: fixed; inset: 0; z-index: 2147483500; background: var(--df-bg); display: flex; flex-direction: column; }
-.df-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--df-line); flex-wrap: wrap; }
-.df-bar .df-title { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw; }
-.df-counter { color: var(--df-mute); margin-right: auto; font-variant-numeric: tabular-nums; }
+/* the bar stays one line; what does not fit scrolls sideways */
+.df-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--df-line);
+  flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+.df-bar > * { flex: 0 0 auto; }
+.df-bar .df-title { flex: 0 1 auto; min-width: 3em; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw; }
+.df-counter { color: var(--df-mute); margin-right: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .df-time-group, .df-auto-group { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .df-clock { color: var(--df-mute); }
 .df-elapsed { font-size: 20px; font-weight: 600; }
@@ -77,8 +85,9 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-remain.df-warn { color: var(--df-warn); }
 .df-remain.df-over { color: var(--df-danger); font-weight: 700; }
 .df-autoinfo { color: var(--df-mute); min-width: 4em; }
-.df-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 3fr) 8px minmax(0, 2fr); gap: 4px; padding: 12px; }
-.df-side { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.df-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--df-cols, minmax(0, 3fr) 8px minmax(0, 2fr)); gap: 4px; padding: 12px; }
+.df-left, .df-side { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.df-left > .df-pane, .df-side > .df-next { flex: var(--df-flex, 1 1 auto); }
 .df-split { background: transparent; border-radius: 4px; touch-action: none; }
 .df-split:hover { background: var(--df-line); }
 .df-split-v { cursor: col-resize; }
@@ -91,10 +100,28 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-pane { background: var(--df-panel); border: 1px solid var(--df-line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0; position: relative; }
 .df-pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); font-weight: 600; }
 .df-current { min-height: 0; }
-.df-stage { position: relative; flex: 1; min-height: 0; background: #000; border-radius: 4px; overflow: hidden; }
+.df-stage { position: relative; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden; }
+/* the audience pane: empty while the audience sees what "Current" shows; black, white or the end
+   slide while the audience sees one of them */
+.df-audience:not([data-df-audience="slide"]) .df-stage iframe { visibility: hidden !important; }
+.df-audcover { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: #888; font-size: 14px; border-radius: 4px; }
+.df-audience[data-df-audience="black"] .df-audcover { display: flex; background: #000; }
+.df-audience[data-df-audience="black"] .df-audcover span, .df-audience[data-df-audience="white"] .df-audcover span { display: none; }
+.df-audience[data-df-audience="white"] .df-audcover { display: flex; background: #fff; }
+.df-audience[data-df-audience="end"] .df-audcover { display: flex; background: #000; }
 .df-stage iframe { position: absolute; left: 0; top: 0; transform-origin: 0 0; border: 0; display: block; background: #000; }
 .df-shield { position: absolute; inset: 0; }
 .df-next { flex: 0 0 45%; }
+
+/* narrow window: the panes one below the other, each preview in the shape of the slide; the middle
+   scrolls; the dividers have no use there */
+.df-presenter.df-narrow .df-grid { grid-template-columns: minmax(0, 1fr); align-content: start; overflow-y: auto; }
+.df-presenter.df-narrow .df-left, .df-presenter.df-narrow .df-side { min-height: auto; }
+.df-presenter.df-narrow .df-pane { flex: none !important; }
+.df-presenter.df-narrow .df-stage { flex: none; aspect-ratio: var(--df-ratio, 16 / 9); }
+.df-presenter.df-narrow .df-split { display: none !important; }
+.df-presenter.df-narrow .df-notes { min-height: 8em; }
+.df-presenter.df-narrow .df-bar .df-title { display: none; }
 .df-endlabel { display: none; position: absolute; inset: 30px 8px 8px; align-items: center; justify-content: center; color: var(--df-mute); background: #000; border-radius: 4px; }
 .df-next.df-at-end .df-endlabel { display: flex; }
 .df-notes { flex: 1; overflow: hidden; }
@@ -103,7 +130,9 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-overview { flex: 0 0 auto; padding: 0 12px; border-top: 1px solid var(--df-line); }
 .df-overview .df-strip { padding-top: 8px; }
 [data-df-ui] .df-overview .df-tile { flex: 0 0 132px; width: 132px; min-width: 0; scroll-snap-align: start; }
-.df-status { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--df-line); min-height: 40px; }
+.df-status { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--df-line); min-height: 40px;
+  overflow-x: auto; scrollbar-width: thin; }
+.df-status .df-toggles { flex: 0 0 auto; }
 .df-status .df-banner { flex: 1; min-width: 0; display: block; padding: 0; background: none; border: 0; color: var(--df-mute); font-size: 13px; }
 .df-status .df-banner.df-on { color: #ffe2a8; }
 .df-status .df-toggles { margin-left: auto; }
@@ -128,10 +157,6 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-fs-overlay.df-on { display: flex; }
 [data-df-ui].df-fs-overlay button { font-size: 22px; padding: 16px 28px; background: var(--df-accent); border-color: var(--df-accent); color: #fff; }
 
-@media (max-width: 760px) {
-  .df-grid { grid-template-columns: 1fr; overflow: auto; }
-  .df-bar .df-title { max-width: 60vw; }
-}
 
 /* previews (role "preview"): CSS animations and transitions end at once, so that a preview shows
    the end state without playing it; set only for players that do not wait for their end events */
@@ -139,3 +164,6 @@ html.df-still *, html.df-still *::before, html.df-still *::after {
   animation-duration: 0s !important; animation-delay: 0s !important;
   transition-duration: 0s !important; transition-delay: 0s !important;
 }
+/* previews of Keynote decks: the player shows its slide number display while deckfold jumps by
+   digits and Enter (its only way to jump); it is the player's control, not part of a slide */
+html.df-preview #slideNumberControl, html.df-preview #slideNumberDisplay { display: none !important; }

@@ -52,7 +52,7 @@ test('PowerPoint deck with 200 slides', async ({ page, context }) => {
   await page.waitForFunction(() => window.__dfPptx && window.__deckfold && window.__deckfold.audience && !document.querySelector('.df-start'));
   const firstSlide = Date.now() - t1;
   await pres.waitForFunction(() => [...document.querySelectorAll('iframe[data-df-preview]')].filter((f) =>
-    f.contentDocument && f.contentDocument.querySelector('.df-pptx-slide.df-on')).length === 2);
+    f.contentDocument && f.contentDocument.querySelector('.df-pptx-slide.df-on')).length === 3); // current, audience, next
   const ready = Date.now() - t1;
   // the overview band of the presenter view: ready when its first tiles are built
   const t2 = Date.now();

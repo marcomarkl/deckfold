@@ -54,12 +54,16 @@ var TEXT = {
     startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.",
     loading: "Wird geladen \u2026",
     clickFs: "Klicken f\u00fcr Vollbild",
-    current: "Aktuell", next: "Als N\u00e4chstes", notes: "Notizen", time: "Zeit", overview: "\u00dcbersicht",
+    current: "Aktuell", audience: "Publikum", next: "Als N\u00e4chstes", notes: "Notizen", time: "Zeit", overview: "\u00dcbersicht",
     end: "Ende", endShow: "Beenden", noNotes: "Keine Notizen", elapsed: "Verstrichen", remaining: "Rest",
     clock: "Uhr", pause: "Pause", resume: "Weiter", autoOn: "Auto an", autoOff: "Auto aus", reset: "Zur\u00fccksetzen",
     target: "Ziel", smaller: "Notizen kleiner", larger: "Notizen gr\u00f6\u00dfer",
     endOfShow: "Ende der Pr\u00e4sentation", step: "Schritt",
     offline: "Live-Inhalt \u2013 ohne Netz nicht verf\u00fcgbar", media: "Medien laufen",
+    keysStart: "Startbildschirm", keysSlides: "Folien", keysDisplay: "Anzeige", keysRun: "Ablauf",
+    chooseSlide: "Folie w\u00e4hlen", firstSlide: "Erste Folie", lastSlide: "Letzte Folie", gotoSlide: "Folie n",
+    black: "Schwarz", white: "Wei\u00df", timerReset: "Zeit zur\u00fccksetzen", click: "Klick",
+    keySpace: "Leertaste", keyPgDn: "Bild \u2193", keyPgUp: "Bild \u2191", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "R\u00fcckschritt", keyDigits: "1 2 3 \u2026",
   },
   en: {
     slides: "slides", generic: "Unknown format: no presenter view, overview or auto mode.",
@@ -70,12 +74,16 @@ var TEXT = {
     startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.",
     loading: "Loading \u2026",
     clickFs: "Click for full screen",
-    current: "Current", next: "Next", notes: "Notes", time: "Time", overview: "Overview",
+    current: "Current", audience: "Audience", next: "Next", notes: "Notes", time: "Time", overview: "Overview",
     end: "End", endShow: "End show", noNotes: "No notes", elapsed: "Elapsed", remaining: "Left",
     clock: "Clock", pause: "Pause", resume: "Resume", autoOn: "Auto on", autoOff: "Auto off", reset: "Reset",
     target: "Target", smaller: "Smaller notes", larger: "Larger notes",
     endOfShow: "End of presentation", step: "Step",
     offline: "Live content \u2013 not available offline", media: "media playing",
+    keysStart: "Start screen", keysSlides: "Slides", keysDisplay: "Display", keysRun: "Show",
+    chooseSlide: "Choose slide", firstSlide: "First slide", lastSlide: "Last slide", gotoSlide: "Slide n",
+    black: "Black", white: "White", timerReset: "Reset time", click: "Click",
+    keySpace: "Space", keyPgDn: "Page Down", keyPgUp: "Page Up", keyHome: "Home", keyEnd: "End", keyBackspace: "Backspace", keyDigits: "1 2 3 \u2026",
   }
 };
 function t(k) { return (TEXT[LANG] && TEXT[LANG][k]) || TEXT.en[k] || k; }
@@ -573,10 +581,11 @@ DF.adapters = {
     // jump: slide via hash (the player goes to step 0), then single steps up to the target.
     // The player runs auto steps by itself, each after a timer of at least 140 ms, and a key
     // press during such a run moves it on by one step only. So when the target is the end of the
-    // auto run that starts the slide, the audience sees the run play; otherwise (and always in a
-    // preview, which shows the end state at once) every step is pressed, 60 ms apart, which is
-    // faster than the player's own timer.
+    // auto run that starts the slide, the audience sees the run play; otherwise every step is
+    // pressed, 60 ms apart, which is faster than the player's own timer. A preview reaches the
+    // target at once (jumpAtOnce).
     jump: function (target, current) {
+      if (DF.role === "preview") return this.jumpAtOnce(target);
       var self = this;
       var cur = current;
       var p = Promise.resolve();
@@ -599,15 +608,59 @@ DF.adapters = {
         return wait(60).then(loop);
       });
     },
-    mediaRoot: function (slide) { return document.querySelectorAll(".deck-slide")[slide] || null; }
+    // jumpAtOnce: the whole move in one task, so that the browser paints only the target state. A
+    // real change of the address would deliver hashchange as a task of its own, with a paint of
+    // step 0 before the steps; so the address is changed with replaceState and the player's
+    // hashchange listener gets the event at once. The player goes to the slide of the address
+    // only when it is another one, so the slide is entered through a neighbouring slide first;
+    // then every step is pressed. The player's own timers for auto steps find the state changed
+    // and do nothing.
+    jumpAtOnce: function (target) {
+      var enter = function (n) {
+        // the full address of this document (about:srcdoc in a preview) with the new fragment
+        try { history.replaceState(history.state, "", location.href.split("#")[0] + "#" + n); }
+        catch (e) { return false; }
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        return true;
+      };
+      var n = slidesOf().length;
+      if (n > 1) enter(target.slide === 0 ? 2 : target.slide);
+      if (!enter(target.slide + 1)) return this.jumpAtOnceFallback(target);
+      for (var i = 0; i < target.step; i++) this.forward();
+      return Promise.resolve();
+    },
+    // without replaceState (a sandboxed document) the address is changed for real
+    jumpAtOnceFallback: function (target) {
+      var self = this;
+      return new Promise(function (res) {
+        var on = function () { window.removeEventListener("hashchange", on); for (var i = 0; i < target.step; i++) self.forward(); res(); };
+        window.addEventListener("hashchange", on);
+        location.hash = "#" + (target.slide + 1);
+      });
+    },
+    mediaRoot: function (slide) { return document.querySelectorAll(".deck-slide")[slide] || null; },
+    // the player's click listener on the document moves it on any click outside links and text
+    guardClicks: true,
+    // shown: the slide the player shows, the one .deck-slide without data-off. In a viewport not
+    // wider than high the player shows all slides in a scroll view; then there is no single one.
+    shown: function () {
+      var all = document.querySelectorAll(".deck-slide"), at = null, n = 0;
+      for (var i = 0; i < all.length; i++) if (!all[i].hasAttribute("data-off")) { at = i; n++; }
+      return n === 1 ? at : null;
+    }
   },
   keynote: {
     _ready: null,
+    _at: null,
     ready: function () {
       if (this._ready) return this._ready;
+      var self = this;
       this._ready = new Promise(function (res) {
         var done = false;
-        document.addEventListener("ShowController:SlideIndexDidChangeEvent", function () { if (!done) { done = true; setTimeout(res, 300); } });
+        document.addEventListener("ShowController:SlideIndexDidChangeEvent", function (e) {
+          if (e.detail && typeof e.detail.slideIndex === "number") self._at = e.detail.slideIndex;
+          if (!done) { done = true; setTimeout(res, 300); }
+        });
         setTimeout(function () { if (!done) { done = true; res(); } }, 15000);
       });
       return this._ready;
@@ -632,7 +685,14 @@ DF.adapters = {
         return wait(250).then(loop);
       });
     },
-    mediaRoot: function () { return document.getElementById("stage") || document.body; }
+    mediaRoot: function () { return document.getElementById("stage") || document.body; },
+    // shown: the slide index of the player's last slide change event. A self-playing export (its
+    // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
+    // is not compared there.
+    shown: function () {
+      var selfPlaying = slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
+      return selfPlaying ? null : this._at;
+    }
   },
   // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
   pptx: {
@@ -651,27 +711,32 @@ DF.adapters = {
       if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
       return Promise.resolve();
     },
-    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; }
+    mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; },
+    // videos, audio icons and trigger shapes act by themselves (their handlers are on the document)
+    interactive: function (t) { return !!(window.__dfPptx && window.__dfPptx.interactive && window.__dfPptx.interactive(t)); },
+    shown: function () { return window.__dfPptx ? window.__dfPptx.state().slide : null; }
   },
   generic: {
     ready: function () { return Promise.resolve(); },
     forward: function () { }, back: function () { },
     jump: function () { return Promise.resolve(); },
-    mediaRoot: function () { return document.body; }
+    mediaRoot: function () { return document.body; },
+    shown: function () { return null; }
   }
 };
 DF.adapter = function () { return DF.adapters[DF.format()] || DF.adapters.generic; };
 
 // Bring the player to a target state: single steps as a key press (animated), otherwise jump.
 // On a claude.ai slide with auto steps the player may still be in its auto run, where a key
-// press moves it by one step only, so a move away from such a slide is a jump. A preview also
-// jumps onto such a slide, which presses every step instead of waiting for the player's timers.
+// press moves it by one step only, so a move away from such a slide is a jump. A preview always
+// jumps, which reaches every state at once.
 DF.drive = function (from, to) {
   var a = DF.adapter();
   if (!to) return Promise.resolve();
+  // a preview shows every state at once, without the steps in between
+  if (DF.role === "preview") return a.jump(to, from);
   var claude = DF.format() === "claude";
   if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
-  if (claude && DF.role === "preview" && hasAuto(to.slide)) return a.jump(to, null);
   if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
   if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
   return a.jump(to, from);
@@ -708,6 +773,46 @@ var keyRouters = { keydown: null, keyup: null, keypress: null };
 ["keydown", "keyup", "keypress"].forEach(function (type) {
   window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
 });
+
+// Pointer input in the presentation (decision E15). A source player may move by itself on a click,
+// on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves on a
+// swipe), which would leave deckfold's state behind. These capture listeners are registered with
+// the key listeners, before any source script: a click on the slide becomes "next" through deckfold,
+// the wheel and touch moves never reach the player. A click on something that acts by itself (a
+// link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own controls) is left
+// to its target; where the player would take it as a step as well (adapter.guardClicks), it is
+// stopped on <html>, before the player's listener on the document.
+var pointerRouter = null;
+["click", "wheel", "touchstart", "touchmove", "touchend"].forEach(function (type) {
+  window.addEventListener(type, function (e) { if (pointerRouter) pointerRouter(e); }, { capture: true, passive: false });
+});
+document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
+
+// opts: next() moves on; interactive(target) tells whether the player handles a click on target
+// itself; guardClicks keeps such clicks away from the player's document listener.
+DF.installPointer = function (opts) {
+  function own(t) {
+    if (!t || !t.closest) return true;
+    if (t.closest(".df-blank.df-on, .df-endslide.df-on")) return false; // black, white, end: like "next"
+    if (t.closest("[data-df-ui]")) return true;
+    if (t.closest("a[href], video, audio, input, select, textarea, button, label, [contenteditable]")) return true;
+    if (opts.interactive && opts.interactive(t)) return true;
+    try { var sel = window.getSelection && window.getSelection(); if (sel && String(sel) !== "") return true; } catch (e) { }
+    return false;
+  }
+  pointerRouter = function (e) {
+    if (e.__deckfold) return;
+    if (e.type === "click") {
+      if (e.button !== 0) return;
+      if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
+      e.preventDefault(); e.stopImmediatePropagation();
+      opts.next();
+      return;
+    }
+    // wheel and touch moves: never to the player (a tap still ends in a click, see above)
+    e.stopImmediatePropagation();
+  };
+};
 
 // Keyboard Lock (Chrome, Edge): in full screen, Escape reaches the key handler above instead of only
 // leaving full screen, so that one Escape ends the presentation; holding Escape still leaves full
@@ -760,6 +865,9 @@ DF.installKeys = function (handler, opts) {
       return;
     }
     var act = actionFor(e);
+    // Enter without digits starts the presentation from the start screen (fixed, like digits +
+    // Enter); unless the configuration binds it, it does nothing else
+    if (!act && e.key === "Enter") act = "start";
     if (!act) {
       // Unbound keys do not reach the source player (its state would drift apart),
       // except in input fields (excluded above).
@@ -821,6 +929,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   var W = 1280, H = Math.round(W * (meta.height || 1080) / (meta.width || 1920));
   var f = DF.el("iframe", { "data-df-preview": "", tabindex: "-1", inert: true, title: "preview", "aria-hidden": "true" });
   f.style.width = W + "px"; f.style.height = H + "px";
+  // until it has reached the first state asked of it, the iframe shows the first slide of a
+  // freshly loaded player, which is not what it is meant to show
+  f.style.visibility = "hidden";
   f.srcdoc = snapshotHTML;
   host.appendChild(f);
   host.appendChild(DF.el("div", { class: "df-shield" }));
@@ -837,7 +948,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   rec.show = function (s) { rec.want = s; push(); };
   function push() {
     if (!rec.ready || !rec.want) return;
-    try { f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    var done = null;
+    try { done = f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    if (f.style.visibility === "hidden") Promise.resolve(done).then(function () { f.style.visibility = ""; });
   }
   f.addEventListener("load", function () {
     var w = f.contentWindow;
@@ -916,10 +1029,27 @@ DF.slideStrip = function (opts) {
   };
 };
 
-// keyChips: a compact row of key caps with a short word each.
-DF.keyChips = function (list) {
-  return DF.el("div", { class: "df-keychips", "data-df-keychips": "" }, list.map(function (it) {
-    return DF.el("span", { class: "df-chip" }, it[0].map(function (k) { return DF.el("kbd", { text: k }); }).concat([DF.el("span", { text: it[1] })]));
+// keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
+// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
+// Each row carries data-df-action and data-df-keys (the configured keys), so tests read it
+// without depending on the language.
+var KEYNAMES = { ArrowRight: "\u2192", ArrowLeft: "\u2190", ArrowUp: "\u2191", ArrowDown: "\u2193", " ": "keySpace", PageDown: "keyPgDn", PageUp: "keyPgUp",
+  Home: "keyHome", End: "keyEnd", Backspace: "keyBackspace", Escape: "Esc" };
+function keyCap(k) {
+  var n = KEYNAMES[k];
+  if (n) return n.length > 1 && n.indexOf("key") === 0 ? DF.t(n) : n;
+  return k.length === 1 ? k.toUpperCase() : k;
+}
+DF.keyCap = keyCap;
+DF.keyHelp = function (groups) {
+  return DF.el("div", { class: "df-keyhelp", "data-df-keyhelp": "" }, groups.map(function (g) {
+    return DF.el("div", { class: "df-keygroup", "data-df-keygroup": g.name }, [DF.el("h4", { text: g.title })].concat(g.rows.map(function (r) {
+      var caps = r.caps || [];
+      if (!r.caps) (r.keys || []).forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+      return DF.el("div", { class: "df-keyrow", "data-df-action": r.action, "data-df-keys": JSON.stringify(r.keys || []) }, [
+        DF.el("span", { class: "df-keylabel", text: r.label }),
+        DF.el("span", { class: "df-caps" }, caps.map(function (c) { return DF.el("kbd", { text: c }); }))]);
+    })));
   }));
 };
 
@@ -1011,12 +1141,32 @@ DF.startShow = function (snapshotHTML) {
       generic ? null : strip.el,
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
       hintEl,
-      DF.keyChips(generic ? [[["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]] :
-        [[["\u2190", "\u2192"], DF.t("slide")], [["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]]),
+      DF.keyHelp(keyGroups()),
       DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
     ])
   ]);
   document.body.appendChild(root);
+
+  // the complete key help, built from the keys as configured, so that it always matches them:
+  // start screen, slides, display, show, presenter view
+  function keyGroups() {
+    var k = cfg.keys || {};
+    var row = function (action, label) { return { action: action, keys: k[action] || [], label: label }; };
+    var start = { name: "start", title: DF.t("keysStart"), rows: [] };
+    // choosing the start slide takes every key of back and next; the first of each stands for them
+    if (!generic) start.rows.push({ action: "choose", keys: (k.prev || []).concat(k.next || []), label: DF.t("chooseSlide"),
+      caps: [(k.prev || [])[0], (k.next || [])[0]].filter(Boolean).map(DF.keyCap) });
+    start.rows.push({ action: "start", caps: ["Enter"], label: DF.t("start") });
+    var display = { name: "display", title: DF.t("keysDisplay"), rows: [row("fullscreen", DF.t("fullscreen")), row("black", DF.t("black")), row("white", DF.t("white"))] };
+    if (generic) return [start, display, { name: "run", title: DF.t("keysRun"), rows: [row("end", DF.t("endShow"))] }];
+    return [start,
+      { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
+        row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
+        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }] },
+      display,
+      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
+      { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
+  }
   try { performance.mark("deckfold:start-screen"); } catch (e) { }
   if (!generic) {
     // the preview runs the source player in an iframe on this window's thread; it is created after
@@ -1091,7 +1241,8 @@ DF.startShow = function (snapshotHTML) {
   // ---------- keys on the start screen ----------
   DF.installKeys(function (a, e) {
     if (phase !== "start") return true;
-    if (e && e.key === "Enter" && a !== "goto") { begin(); return true; }
+    // Enter starts here even where a configuration binds it to an action
+    if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
     switch (a) {
       case "digits": return true;
       case "goto": setSel(e.slide); return true;
@@ -1249,20 +1400,53 @@ DF.startAudience = function (opts) {
     }
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
-    st = { slide: target.slide, step: target.step };
+    var to = st = { slide: target.slide, step: target.step };
     lastShown = st;
-    driving = driving.then(function () { return (o && o.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
+    drive(function () { return (o && o.jump) ? adapter.jump(to, from) : DF.drive(from, to); });
     report();
     scheduleAuto();
   }
+  // drive: one move of the player after the ones before it; a move that fails does not stop the
+  // later ones
+  var moving = 0, quietUntil = 0;
+  function drive(move) {
+    moving++;
+    var done = function () { moving--; quietUntil = Date.now() + QUIET; };
+    driving = driving.then(move).then(done, function (err) { done(); console.error("deckfold:", err); });
+    return driving;
+  }
+
+  // ---------- player and deckfold kept together (decision E15) ----------
+  // After the moves have settled, and once a second, the slide the player shows is compared with
+  // deckfold's state; a player that went elsewhere (an input that reached it past deckfold, its
+  // own timer) is brought back with a jump. At most two jumps for the same state, so that a
+  // player that cannot go there is not jumped at forever (and its media not restarted).
+  // QUIET: the slowest player took 223 ms from a jump to showing the slide (Keynote, measured).
+  var QUIET = 1000, retry = { key: "", n: 0 };
+  function check() {
+    if (generic || moving || Date.now() < quietUntil || !adapter.shown) return;
+    var at = adapter.shown();
+    if (at == null || at === st.slide) return;
+    var key = st.slide + ":" + st.step;
+    if (retry.key !== key) retry = { key: key, n: 0 };
+    if (retry.n >= 2) {
+      if (retry.n === 2) console.error("deckfold: the player stays on slide " + (at + 1) + " instead of " + (st.slide + 1));
+      retry.n = 3;
+      return;
+    }
+    retry.n++;
+    var to = { slide: st.slide, step: st.step };
+    drive(function () { return adapter.jump(to, null); });
+  }
+  setInterval(check, 1000);
   function finish() {
     stopAuto();
     opts.onEnd(lastShown || st);
   }
   function act(a, arg) {
     switch (a) {
-      // after the end slide, one more step returns to the start screen (as in PowerPoint)
-      case "next": return st.ended ? finish() : go(DF.model.next(st));
+      // the end slide stays until the presentation is ended (Escape, "End show")
+      case "next": return st.ended ? undefined : go(DF.model.next(st));
       // on the first slide there is nothing before it: no end slide
       case "prev": if (st.ended) return go(st); var pv = DF.model.prev(st); return pv ? go(pv) : undefined;
       case "first": return go(DF.model.first());
@@ -1326,6 +1510,8 @@ DF.startAudience = function (opts) {
     act(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
+  // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
+  if (!generic) DF.installPointer({ next: function () { act("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
 
   DF.audience = {
     act: act,
@@ -1399,7 +1585,7 @@ DF.startPresenter = function (snapshotHTML) {
   var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
   var autoInfo = DF.el("span", { class: "df-autoinfo" });
   var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
-  var toggles = DF.el("span", { class: "df-toggles" }, ["current", "next", "notes", "time", "overview"].map(function (k) {
+  var toggles = DF.el("span", { class: "df-toggles" }, ["current", "audience", "next", "notes", "time", "overview"].map(function (k) {
     return DF.el("button", { type: "button", "data-df-el": k, text: DF.t(k), onclick: function () { toggleElement(k); } });
   }));
   var bar = DF.el("header", { class: "df-bar" }, [
@@ -1414,13 +1600,19 @@ DF.startPresenter = function (snapshotHTML) {
     endBtn
   ]);
   var cur = pane("current", DF.t("current"));
+  // audience: what the audience sees right now, when it is not the whole slide shown above (a step
+  // before the last one, black, white, the end slide); empty otherwise
+  var aud = pane("audience", DF.t("audience"));
+  aud.querySelector(".df-stage").appendChild(DF.el("div", { class: "df-audcover" }, [DF.el("span", { text: DF.t("endOfShow") })]));
   var nxt = pane("next", DF.t("next"));
   var notesEl = DF.el("div", { class: "df-notes-text" });
   var notes = DF.el("section", { class: "df-pane df-notes", "data-k": "notes" }, [DF.el("h3", { text: DF.t("notes") }), notesEl]);
   var splitV = DF.el("div", { class: "df-split df-split-v", "data-df-split": "main" });
   var splitH = DF.el("div", { class: "df-split df-split-h", "data-df-split": "side" });
+  var splitA = DF.el("div", { class: "df-split df-split-h", "data-df-split": "audience" });
+  var left = DF.el("div", { class: "df-left" }, [cur, splitA, aud]);
   var side = DF.el("div", { class: "df-side" }, [nxt, splitH, notes]);
-  var grid = DF.el("main", { class: "df-grid" }, [cur, splitV, side]);
+  var grid = DF.el("main", { class: "df-grid" }, [left, splitV, side]);
   // overview: a band of all slides above the status bar; a click jumps there (before the start it
   // chooses the start slide); the arrows choose the start slide before the start and only scroll
   // the band during the show, so that a click never moves the audience on by accident
@@ -1431,8 +1623,14 @@ DF.startPresenter = function (snapshotHTML) {
   var overviewEl = DF.el("div", { class: "df-overview", "data-k": "overview" }, [strip.el]);
   var status = DF.el("footer", { class: "df-status" }, [bannerEl, toggles]);
   ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(overviewEl); ui.appendChild(status);
+  ui.style.setProperty("--df-ratio", (meta.width || 1920) + " / " + (meta.height || 1080));
   document.body.appendChild(ui);
-  var frames = { current: DF.previewFrame(cur.querySelector(".df-stage"), snapshotHTML), next: DF.previewFrame(nxt.querySelector(".df-stage"), snapshotHTML) };
+  var frames = { current: DF.previewFrame(cur.querySelector(".df-stage"), snapshotHTML), audience: DF.previewFrame(aud.querySelector(".df-stage"), snapshotHTML),
+    next: DF.previewFrame(nxt.querySelector(".df-stage"), snapshotHTML) };
+  // narrow window: the panes stand one below the other and the middle scrolls (class df-narrow)
+  function narrow() { ui.classList.toggle("df-narrow", ui.clientWidth < 760); }
+  if ("ResizeObserver" in window) new ResizeObserver(narrow).observe(ui); else window.addEventListener("resize", narrow);
+  narrow();
   function pane(k, title) {
     return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", { text: title }),
       DF.el("div", { class: "df-stage" }), DF.el("div", { class: "df-endlabel", text: DF.t("end") })]);
@@ -1449,15 +1647,19 @@ DF.startPresenter = function (snapshotHTML) {
     cfg.presenter.notesFontSize = Math.max(8, Math.min(96, cfg.presenter.notesFontSize + d));
     DF.saveSettings(cfg); render();
   }
-  // panes: the divider between the current slide and the side column, and the one between the next
-  // step and the notes, can be dragged; the shares are stored in presenter.layout
-  function layout() { return cfg.presenter.layout || { main: 0.6, side: 0.45 }; }
+  // panes: the dividers between the left column and the side column, between the current slide and
+  // the audience, and between the next slide and the notes can be dragged; the shares are stored
+  // in presenter.layout
+  function layout() {
+    var l = cfg.presenter.layout || {};
+    return { main: l.main || 0.6, side: l.side || 0.45, audience: l.audience || 0.6 };
+  }
   function drag(el, key) {
     el.addEventListener("pointerdown", function (e) {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       var move = function (ev) {
-        var r = (key === "main" ? grid : side).getBoundingClientRect();
+        var r = (key === "main" ? grid : key === "audience" ? left : side).getBoundingClientRect();
         var f = key === "main" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
         var l = layout();
         l[key] = Math.max(0.2, Math.min(0.8, f));
@@ -1471,16 +1673,22 @@ DF.startPresenter = function (snapshotHTML) {
       el.addEventListener("pointermove", move); el.addEventListener("pointerup", up);
     });
   }
-  drag(splitV, "main"); drag(splitH, "side");
+  drag(splitV, "main"); drag(splitH, "side"); drag(splitA, "audience");
+  // the shares go into CSS variables; the class df-narrow lays the panes out one below the other
+  // and ignores them (an inline grid template would override the narrow layout)
   function applyLayout() {
     var l = layout(), els = cfg.presenter.elements;
-    var showCur = els.indexOf("current") >= 0, showNext = els.indexOf("next") >= 0, showNotes = els.indexOf("notes") >= 0 && hasNotes;
-    var showSide = showNext || showNotes;
-    splitV.classList.toggle("df-hidden", !(showCur && showSide));
+    var showCur = els.indexOf("current") >= 0, showAud = els.indexOf("audience") >= 0;
+    var showNext = els.indexOf("next") >= 0, showNotes = els.indexOf("notes") >= 0 && hasNotes;
+    var showLeft = showCur || showAud, showSide = showNext || showNotes;
+    left.classList.toggle("df-hidden", !showLeft);
     side.classList.toggle("df-hidden", !showSide);
-    grid.style.gridTemplateColumns = showCur && showSide ? "minmax(0," + l.main + "fr) 8px minmax(0," + (1 - l.main) + "fr)" : "minmax(0,1fr)";
+    splitV.classList.toggle("df-hidden", !(showLeft && showSide));
+    splitA.classList.toggle("df-hidden", !(showCur && showAud));
     splitH.classList.toggle("df-hidden", !(showNext && showNotes));
-    nxt.style.flex = showNext && showNotes ? "0 0 calc(" + (l.side * 100) + "% - 4px)" : (showNext ? "1 1 auto" : "");
+    grid.style.setProperty("--df-cols", showLeft && showSide ? "minmax(0," + l.main + "fr) 8px minmax(0," + (1 - l.main) + "fr)" : "minmax(0,1fr)");
+    cur.style.setProperty("--df-flex", showCur && showAud ? "0 0 calc(" + (l.audience * 100) + "% - 4px)" : "1 1 auto");
+    nxt.style.setProperty("--df-flex", showNext && showNotes ? "0 0 calc(" + (l.side * 100) + "% - 4px)" : "1 1 auto");
   }
   var hasNotes = slides.some(function (s) { return s.notes; });
 
@@ -1504,6 +1712,9 @@ DF.startPresenter = function (snapshotHTML) {
     // both previews show a whole slide after all its steps: the slide the audience sees and the
     // one after it
     frames.current.show(DF.model.end(s.slide));
+    var as = audienceView();
+    aud.setAttribute("data-df-audience", as);
+    if (as === "slide") frames.audience.show({ slide: st.slide, step: st.step });
     var nx = s.slide + 1 < n ? DF.model.end(s.slide + 1) : null;
     nxt.classList.toggle("df-at-end", !nx);
     if (nx) frames.next.show(nx);
@@ -1513,6 +1724,15 @@ DF.startPresenter = function (snapshotHTML) {
     if (s.slide !== marked) { marked = s.slide; strip.mark(s.slide); }
     strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
     banners();
+  }
+  // what the audience pane shows: empty (before the start, or the audience sees the whole slide
+  // shown in "Current"), the end slide, black, white, or the slide at the step the audience sees
+  function audienceView() {
+    if (phase !== "show") return "empty";
+    if (remote.ended) return "end";
+    if (remote.blank === "black" || remote.blank === "white") return remote.blank;
+    var sl = slides[st.slide];
+    return !sl || st.step >= (sl.steps || 1) - 1 ? "empty" : "slide";
   }
   function tickClock() {
     var d = new Date();
@@ -1579,6 +1799,16 @@ DF.startPresenter = function (snapshotHTML) {
   }
   function beat() { send({ type: "hb" }); banners(); }
   setInterval(beat, 1000);
+  // the window of the start screen and the presentation is closed: this window goes with it. Once
+  // that window is closed, window.opener is null in Chrome and WebKit (measured), not a closed
+  // window; a reload of that window keeps it. A presenter view that had no opener from the start
+  // stays.
+  var hadShow = !!show;
+  setInterval(function () {
+    var o = null;
+    try { o = window.opener; } catch (e) { o = null; }
+    if (hadShow && (!o || o.closed)) window.close();
+  }, 1000);
   setInterval(tickClock, 500);
 
   // ---------- keys ----------
@@ -1586,9 +1816,11 @@ DF.startPresenter = function (snapshotHTML) {
     if (a === "digits") return true;
     if (a === "fullscreen") { DF.toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
+    // Enter cannot start from here (full screen needs a click in the presentation window); it is
+    // consumed, so that it does not press a focused button either
+    if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }
     if (phase !== "show") {
-      // before the start: choose the slide; Enter cannot start from here (full screen needs a click there)
-      if (e && e.key === "Enter" && a !== "goto") { flashBanner("startInShow"); return true; }
+      // before the start: choose the slide
       if (a === "end") return true;
     }
     if (a === "goto") { command("goto", e.slide); return true; }
@@ -1638,13 +1870,15 @@ function bootPreview() {
   if (DF.format() !== "pptx") document.documentElement.classList.add("df-still");
   var cur = { slide: 0, step: 0 }, queue = Promise.resolve(), ready;
   DF.previewReady = new Promise(function (res) { ready = res; });
+  // setPreviewState returns a promise that settles once the state is shown
   DF.setPreviewState = function (s) {
     queue = queue.then(function () {
       if (DF.model.same(cur, s)) return;
       var from = cur;
       cur = { slide: s.slide, step: s.step };
       return DF.drive(from, cur).then(function () { finishAll(); return DF.wait(30); }).then(finishAll);
-    });
+    }).then(null, function (err) { console.error("deckfold:", err); });
+    return queue;
   };
   DF.activate({ runScripts: true }).then(function () {
     document.documentElement.classList.remove("df-loading");

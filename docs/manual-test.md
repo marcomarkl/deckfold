@@ -13,7 +13,12 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Switch "Presenter view" on | A second window opens, without a permission prompt and without a hint about the screens; "Full screen" can always be chosen | |
 | Drag the presenter view to the other screen | Nothing changes in either window | |
 | Presenter view before the start | It shows the chosen start slide, the slide after it and the notes; the arrow keys there change the start slide on the start screen too | |
-| Previews on a slide with builds, in a narrow presenter view | "Current" shows only this slide, "Next" only the next one, each with all builds shown and nothing playing | |
+| Previews on a slide with builds, in a narrow presenter view | "Current" shows only this slide, "Next" only the next one, each with all builds shown and nothing playing; no step appears on the way | |
+| Audience pane on a slide with builds: step 0, last step, B, W, end slide | Step 0 with the builds hidden; empty at the last step; black, white, "End of presentation" | |
+| Make the presenter view narrow (about 300 px) and wide again | Narrow: the panes one below the other, the bar one line that scrolls sideways; every control can be reached | |
+| Mouse over a slide tile and over a button of the presenter view, on the second screen, then keep the mouse still | The highlight stays while the mouse rests | |
+| Note where the presenter view is, then click "Start" (with and without "Full screen") | The presenter view keeps its place and size | |
+| Close the presentation window | The presenter view closes too; reloading the presentation window does not close it | |
 | Click "Start" with "Full screen" on | The presentation fills its screen at the chosen slide; the presenter view follows | |
 | Click "Full screen" in the presenter view | The presenter view fills its screen; the button now reads "Window" and takes it back | |
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
@@ -33,7 +38,9 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | B or the clicker's blank key | Black screen in the presentation; pressed again, the slide comes back | |
 | One Escape in full screen, in the presentation or in the presenter view | The presentation ends: full screen is left, the start screen appears with the last slide chosen, the presenter view stays open and shows the start state | |
 | Back on the first slide | Nothing happens; no end slide | |
-| One step after the last slide | The black end slide appears; one more step returns to the start screen | |
+| Click on the slide; turn the mouse wheel; swipe on the trackpad | The click moves on, in both windows; wheel and swipe do nothing | |
+| Enter during the presentation | Nothing happens | |
+| One step after the last slide | The black end slide appears and stays on further steps (key, click, presenter view); Escape returns to the start screen | |
 
 ## Auto mode
 

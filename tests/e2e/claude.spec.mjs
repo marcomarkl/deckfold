@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need, fileURL } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need, fileURL, visibleSlide } from './helpers.mjs';
 
 test.beforeEach(() => need('claude'));
 
@@ -49,7 +49,7 @@ test('presenter view: sync, previews, notes, overview', async ({ page, context }
   const w = watch(context);
   const pres = await present(page, context, 'claude.html');
   await expect(pres.locator('.df-presenter')).toBeVisible();
-  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2);
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(3); // current, audience, next
   const n = await slideCount(pres);
   for (let i = 0; i < 3; i++) await pres.keyboard.press('ArrowRight');
   const s3 = await expected(pres, ['next', 'next', 'next']);
@@ -57,7 +57,7 @@ test('presenter view: sync, previews, notes, overview', async ({ page, context }
   await expect.poll(() => counter(pres)).toContain(`${s3.slide + 1} / ${n}`);
   // previews: slide shown by the player in the current and the next preview (the slide after it)
   const nx = { slide: s3.slide + 1 };
-  const visible = () => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) =>
+  const visible = () => pres.evaluate(() => [...document.querySelectorAll('.df-current iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) =>
     [...f.contentDocument.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'))));
   await expect.poll(visible, { timeout: 10000 }).toEqual([s3.slide, nx.slide]);
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off')))).toBe(s3.slide);
@@ -133,4 +133,79 @@ test('start slide: three starts in a row each begin at the chosen slide', async 
   }
   // let the reload after the last end finish before the test closes the browser context
   await page.waitForSelector('[data-df-start]');
+});
+
+// Mouse, wheel and touch in the presentation (decision E15): the claude.ai player moves by itself
+// on a click (left half back, right half on), on the wheel and on a swipe. A click goes through
+// deckfold as "next"; the wheel and swipes do nothing, so the player never leaves deckfold's state.
+test.describe('pointer input', () => {
+  test.use({ hasTouch: true });
+  test('claude.ai: a click moves on through deckfold, wheel and swipes do nothing, back reaches the first slide', async ({ page }) => {
+    await startScreen(page, 'claude.html');
+    await page.uncheck('[data-df-fs]');
+    await page.click('[data-df-start]');
+    await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+    await page.waitForTimeout(500);
+    // right half and left half: both move on
+    await page.mouse.click(1000, 400);
+    const s1 = await expected(page, ['next']);
+    await expect.poll(() => audState(page)).toEqual(s1);
+    await expect.poll(() => visibleSlide(page)).toBe(s1.slide);
+    await page.waitForTimeout(400);
+    await page.mouse.click(200, 400);
+    const s2 = await expected(page, ['next'], s1);
+    await expect.poll(() => audState(page)).toEqual(s2);
+    await expect.poll(() => visibleSlide(page)).toBe(s2.slide);
+    // wheel: nothing moves
+    await page.mouse.move(640, 400);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(400);
+    await page.mouse.wheel(0, -300);
+    await page.waitForTimeout(800);
+    expect(await audState(page)).toEqual(s2);
+    expect(await visibleSlide(page)).toBe(s2.slide);
+    expect(await page.evaluate(() => [scrollX, scrollY])).toEqual([0, 0]);
+    // swipe to the left and to the right: nothing moves
+    const cdp = await page.context().newCDPSession(page);
+    const swipe = async (from, to) => {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from, y: 400 }] });
+      for (const x of [from + (to - from) / 3, from + (to - from) * 2 / 3, to]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 400 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await page.waitForTimeout(800);
+    };
+    await swipe(900, 300);
+    await swipe(300, 900);
+    expect(await audState(page)).toEqual(s2);
+    expect(await visibleSlide(page)).toBe(s2.slide);
+    // back reaches the first slide, in deckfold and in the player
+    for (let i = 0; i < 20 && (await audState(page)).slide > 0; i++) { await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(300); }
+    expect((await audState(page)).slide).toBe(0);
+    await expect.poll(() => visibleSlide(page)).toBe(0);
+  });
+});
+
+// Player and deckfold kept together (decision E15): a player that went elsewhere is brought back.
+test('claude.ai: a player moved past deckfold is brought back to deckfold\'s slide', async ({ page }) => {
+  await startScreen(page, 'claude.html');
+  await page.uncheck('[data-df-fs]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await page.waitForTimeout(1500);
+  const s = await audState(page);
+  // the address moves the player, not deckfold
+  await page.evaluate(() => { location.hash = '#3'; });
+  await expect.poll(() => visibleSlide(page)).toBe(2);
+  await expect.poll(() => visibleSlide(page), { timeout: 3000 }).toBe(s.slide);
+  expect(await audState(page)).toEqual(s);
+});
+
+test('claude.ai: in a window higher than wide (all slides in a scroll view) nothing is jumped at', async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 900 });
+  await startScreen(page, 'claude.html');
+  await page.uncheck('[data-df-fs]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await page.evaluate(() => { window.__hashes = 0; window.addEventListener('hashchange', () => window.__hashes++); });
+  await page.waitForTimeout(3500);
+  expect(await page.evaluate(() => window.__hashes)).toBe(0);
 });

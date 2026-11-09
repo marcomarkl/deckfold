@@ -26,13 +26,15 @@ function bootPreview() {
   if (DF.format() !== "pptx") document.documentElement.classList.add("df-still");
   var cur = { slide: 0, step: 0 }, queue = Promise.resolve(), ready;
   DF.previewReady = new Promise(function (res) { ready = res; });
+  // setPreviewState returns a promise that settles once the state is shown
   DF.setPreviewState = function (s) {
     queue = queue.then(function () {
       if (DF.model.same(cur, s)) return;
       var from = cur;
       cur = { slide: s.slide, step: s.step };
       return DF.drive(from, cur).then(function () { finishAll(); return DF.wait(30); }).then(finishAll);
-    });
+    }).then(null, function (err) { console.error("deckfold:", err); });
+    return queue;
   };
   DF.activate({ runScripts: true }).then(function () {
     document.documentElement.classList.remove("df-loading");

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -322,6 +323,38 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 	}
 	if c.Presenter.Layout != config.Default().Presenter.Layout {
 		t.Errorf("layout %+v, want the default", c.Presenter.Layout)
+	}
+	if err := c.Validate(); err != nil {
+		t.Error(err)
+	}
+	// a file with the default keys of v0.3 (Enter moved on) gets the current default; a list the
+	// file chose itself stays
+	old = config.Default()
+	old.Keys["next"] = []string{"ArrowRight", "ArrowDown", "PageDown", " ", "Enter"}
+	old.Keys["prev"] = []string{"ArrowLeft", "Enter"}
+	c = mergeKnown(config.Default(), old)
+	if !reflect.DeepEqual(c.Keys["next"], config.Default().Keys["next"]) {
+		t.Errorf("next %q, want the current default %q", c.Keys["next"], config.Default().Keys["next"])
+	}
+	if !reflect.DeepEqual(c.Keys["prev"], []string{"ArrowLeft", "Enter"}) {
+		t.Errorf("prev %q, want the file's own list", c.Keys["prev"])
+	}
+	// the element list of v0.3 gets the audience pane; a list the file chose itself stays. The
+	// layout of v0.3 (main and side only) keeps its shares and gets the default for the audience.
+	old = config.Default()
+	old.Presenter.Elements = []string{"current", "next", "notes", "time", "overview"}
+	old.Presenter.Layout = config.Layout{Main: 0.7, Side: 0.3}
+	c = mergeKnown(config.Default(), old)
+	if !reflect.DeepEqual(c.Presenter.Elements, config.Default().Presenter.Elements) {
+		t.Errorf("elements %q, want the current default", c.Presenter.Elements)
+	}
+	if want := (config.Layout{Main: 0.7, Side: 0.3, Audience: config.Default().Presenter.Layout.Audience}); c.Presenter.Layout != want {
+		t.Errorf("layout %+v, want %+v", c.Presenter.Layout, want)
+	}
+	old.Presenter.Elements = []string{"current", "notes"}
+	c = mergeKnown(config.Default(), old)
+	if !reflect.DeepEqual(c.Presenter.Elements, []string{"current", "notes"}) {
+		t.Errorf("elements %q, want the file's own list", c.Presenter.Elements)
 	}
 	if err := c.Validate(); err != nil {
 		t.Error(err)

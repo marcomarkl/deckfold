@@ -11,6 +11,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   var W = 1280, H = Math.round(W * (meta.height || 1080) / (meta.width || 1920));
   var f = DF.el("iframe", { "data-df-preview": "", tabindex: "-1", inert: true, title: "preview", "aria-hidden": "true" });
   f.style.width = W + "px"; f.style.height = H + "px";
+  // until it has reached the first state asked of it, the iframe shows the first slide of a
+  // freshly loaded player, which is not what it is meant to show
+  f.style.visibility = "hidden";
   f.srcdoc = snapshotHTML;
   host.appendChild(f);
   host.appendChild(DF.el("div", { class: "df-shield" }));
@@ -27,7 +30,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   rec.show = function (s) { rec.want = s; push(); };
   function push() {
     if (!rec.ready || !rec.want) return;
-    try { f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    var done = null;
+    try { done = f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    if (f.style.visibility === "hidden") Promise.resolve(done).then(function () { f.style.visibility = ""; });
   }
   f.addEventListener("load", function () {
     var w = f.contentWindow;
@@ -106,9 +111,26 @@ DF.slideStrip = function (opts) {
   };
 };
 
-// keyChips: a compact row of key caps with a short word each.
-DF.keyChips = function (list) {
-  return DF.el("div", { class: "df-keychips", "data-df-keychips": "" }, list.map(function (it) {
-    return DF.el("span", { class: "df-chip" }, it[0].map(function (k) { return DF.el("kbd", { text: k }); }).concat([DF.el("span", { text: it[1] })]));
+// keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
+// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
+// Each row carries data-df-action and data-df-keys (the configured keys), so tests read it
+// without depending on the language.
+var KEYNAMES = { ArrowRight: "→", ArrowLeft: "←", ArrowUp: "↑", ArrowDown: "↓", " ": "keySpace", PageDown: "keyPgDn", PageUp: "keyPgUp",
+  Home: "keyHome", End: "keyEnd", Backspace: "keyBackspace", Escape: "Esc" };
+function keyCap(k) {
+  var n = KEYNAMES[k];
+  if (n) return n.length > 1 && n.indexOf("key") === 0 ? DF.t(n) : n;
+  return k.length === 1 ? k.toUpperCase() : k;
+}
+DF.keyCap = keyCap;
+DF.keyHelp = function (groups) {
+  return DF.el("div", { class: "df-keyhelp", "data-df-keyhelp": "" }, groups.map(function (g) {
+    return DF.el("div", { class: "df-keygroup", "data-df-keygroup": g.name }, [DF.el("h4", { text: g.title })].concat(g.rows.map(function (r) {
+      var caps = r.caps || [];
+      if (!r.caps) (r.keys || []).forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+      return DF.el("div", { class: "df-keyrow", "data-df-action": r.action, "data-df-keys": JSON.stringify(r.keys || []) }, [
+        DF.el("span", { class: "df-keylabel", text: r.label }),
+        DF.el("span", { class: "df-caps" }, caps.map(function (c) { return DF.el("kbd", { text: c }); }))]);
+    })));
   }));
 };
