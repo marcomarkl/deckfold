@@ -132,7 +132,7 @@ DF.startAudience = function (opts) {
   // QUIET: the slowest player took 223 ms from a jump to showing the slide (Keynote, measured).
   var QUIET = 1000, retry = { key: "", n: 0 };
   function check() {
-    if (generic || moving || Date.now() < quietUntil || !adapter.shown) return;
+    if (generic || !started || moving || Date.now() < quietUntil || !adapter.shown) return;
     var at = adapter.shown();
     if (at == null || at === st.slide) return;
     var key = st.slide + ":" + st.step;
@@ -213,16 +213,24 @@ DF.startAudience = function (opts) {
   function stopAuto(rep) { auto.on = false; clearTimeout(auto.timer); auto.due = 0; auto.waiting = false; if (rep) report(); }
 
   // ---------- keys ----------
+  // take: keys, clicks and commands of the presenter view. Until the player is ready and on the
+  // start slide they are kept and then carried out in order: a step counted from the state before
+  // the start slide would be lost.
+  var started = false, held = [];
+  function take(a, arg) {
+    if (!started) { held.push([a, arg]); return; }
+    return act(a, arg);
+  }
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
-    act(a, e && e.slide);
+    take(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { act("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
+  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
 
   DF.audience = {
-    act: act,
+    act: take,
     state: function () { return st; },
     info: info,
     settings: function (s) { cfg = DF.merge(cfg, s || {}); if (auto.on) scheduleAuto(); }
@@ -234,6 +242,9 @@ DF.startAudience = function (opts) {
       go(opts.start || DF.model.first(), { jump: true });
       if (cfg.auto.enabled) startAuto();
     }
+    started = true;
+    var q = held; held = [];
+    q.forEach(function (c) { act(c[0], c[1]); });
     return driving;
   });
 };

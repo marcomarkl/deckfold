@@ -14,7 +14,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Drag the presenter view to the other screen | Nothing changes in either window | |
 | Presenter view before the start | It shows the chosen start slide, the slide after it and the notes; the arrow keys there change the start slide on the start screen too | |
 | Previews on a slide with builds, in a narrow presenter view | "Current" shows only this slide, "Next" only the next one, each with all builds shown and nothing playing; no step appears on the way | |
-| Audience pane on a slide with builds: step 0, last step, B, W, end slide | Step 0 with the builds hidden; empty at the last step; black, white, "End of presentation" | |
+| Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | The audience pane shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
 | Make the presenter view narrow (about 300 px) and wide again | Narrow: the panes one below the other, the bar one line that scrolls sideways; every control can be reached | |
 | Mouse over a slide tile and over a button of the presenter view, on the second screen, then keep the mouse still | The highlight stays while the mouse rests | |
 | Note where the presenter view is, then click "Start" (with and without "Full screen") | The presenter view keeps its place and size | |

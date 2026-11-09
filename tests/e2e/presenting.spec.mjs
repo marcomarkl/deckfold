@@ -581,10 +581,16 @@ test('previews paint no step between two states and nothing before their first s
 });
 
 // The audience pane (below "Current"): what the audience sees when it is not the whole slide.
-test('presenter view: the audience pane shows the step, black, white and the end, and is empty at the last step', async ({ page, context }) => {
-  const pres = await present(page, context, 'pptx-animations.html');
+test('presenter view: the audience pane shows the step, black, white and the end, and is never empty during the show', async ({ page, context }) => {
+  await startScreen(page, 'pptx-animations.html');
+  const pres = await openPresenter(page, context);
   const aud = pres.locator('.df-audience');
   const view = () => aud.getAttribute('data-df-audience');
+  // before the start the audience sees nothing of the deck: the pane is empty
+  await expect.poll(view).toBe('empty');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
   const audFrame = () => pres.evaluate(() => { const f = document.querySelector('.df-audience iframe'); return f.contentWindow.__dfPptx ? f.contentWindow.__dfPptx.state() : null; });
   const steps = await page.evaluate(() => window.__deckfold.slides()[0].steps);
   expect(steps).toBeGreaterThan(1);
@@ -596,14 +602,16 @@ test('presenter view: the audience pane shows the step, black, white and the end
   // back within the slide
   await pres.keyboard.press('ArrowLeft');
   await expect.poll(audFrame).toEqual({ slide: 0, step: 0 });
-  // the last step: the audience sees what "Current" shows, the pane is empty
+  // the last step: the audience sees what "Current" shows, and the pane shows it too
   for (let i = 1; i < steps; i++) await pres.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 0, step: steps - 1 });
-  await expect.poll(view).toBe('empty');
+  await expect.poll(view).toBe('slide');
+  await expect.poll(audFrame).toEqual({ slide: 0, step: steps - 1 });
+  await expect(aud.locator('iframe')).toBeVisible();
   await pres.keyboard.press('b');
   await expect.poll(view).toBe('black');
   await pres.keyboard.press('b');
-  await expect.poll(view).toBe('empty');
+  await expect.poll(view).toBe('slide');
   await pres.keyboard.press('w');
   await expect.poll(view).toBe('white');
   await pres.keyboard.press('w');
@@ -681,4 +689,63 @@ test('presenter view: closes with the window of the presentation, stays when tha
   await page.close();
   await closed;
   expect(pres.isClosed()).toBe(true);
+});
+
+test('presenter view: started on a slide without steps, the audience pane shows that slide at once', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  expect(await page.evaluate(() => window.__deckfold.slides()[0].steps)).toBe(1);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect.poll(() => pres.getAttribute('.df-audience', 'data-df-audience')).toBe('slide');
+  await expect(pres.locator('.df-audience iframe')).toBeVisible();
+  await expect.poll(() => pres.evaluate(() => { const w = document.querySelector('.df-audience iframe').contentWindow; return w.__dfPptx ? w.__dfPptx.state() : null; }), { timeout: 10000 }).toEqual({ slide: 0, step: 0 });
+});
+
+// Commands right after "Start": the presenter view already reports the show while the window of
+// the presentation still loads its first slide; nothing sent or pressed then may get lost.
+test('commands right after Start are carried out, from the presenter view and by key', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  await pres.click('.df-overview .df-tile[data-i="2"]');
+  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  // by key in the presentation window, at once after the click on Start
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.click('.df-strip .df-tile[data-i="0"]');
+  await page.click('[data-df-start]');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
+});
+
+// A control clicked with the mouse gives the focus back, so that the keys that move through the
+// slides never show a focus ring on it; a tile reached with Tab keeps the focus on the marked tile.
+test('focus: after a click and a key, one ring only, on the marked tile', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const rings = (p, root) => p.evaluate((root) => [...document.querySelectorAll(root + ' .df-tile')].map((t) =>
+    [+t.getAttribute('data-i'), t.classList.contains('df-cur'), t.matches(':focus-visible')]), root);
+  const stray = (r) => r.filter(([, cur, fv]) => fv && !cur);
+  await page.click('.df-start .df-strip .df-tile[data-i="1"]');
+  await page.keyboard.press('ArrowRight');
+  expect(stray(await rings(page, '.df-start'))).toEqual([]);
+  // with Tab on a tile, the focus moves with the marked tile
+  await page.focus('.df-start .df-strip .df-tile[data-i="2"]');
+  await page.keyboard.press('ArrowLeft');
+  const r = await rings(page, '.df-start');
+  expect(stray(r)).toEqual([]);
+  expect(r.find(([, cur]) => cur)[0]).toBe(1);
+  // presenter view: a clicked tile and a clicked switch keep no focus ring after keys
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  await pres.click('.df-overview .df-tile[data-i="1"]');
+  await pres.click('.df-status [data-df-el="time"]');
+  await pres.click('.df-status [data-df-el="time"]');
+  await pres.keyboard.press('ArrowRight');
+  await pres.waitForTimeout(300);
+  expect(stray(await rings(pres, '.df-overview'))).toEqual([]);
+  expect(await pres.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.matches(':focus-visible') && !b.classList.contains('df-cur')).map((b) => b.getAttribute('data-df-el') || b.textContent))).toEqual([]);
 });

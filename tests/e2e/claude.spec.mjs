@@ -209,3 +209,20 @@ test('claude.ai: in a window higher than wide (all slides in a scroll view) noth
   await page.waitForTimeout(3500);
   expect(await page.evaluate(() => window.__hashes)).toBe(0);
 });
+
+// The claude.ai player shows its own slide counter (.deck-pager) for a moment after each change;
+// deckfold hides it in the presentation and in the previews (the presenter view shows the position).
+test('claude.ai: the slide counter of the player is not shown, in the presentation and in the previews', async ({ page, context }) => {
+  const pres = await present(page, context, 'claude.html');
+  const hidden = (doc) => doc.evaluate(() => { const p = document.querySelector('.deck-pager'); return p ? getComputedStyle(p).display : 'none'; });
+  expect(await page.evaluate(() => !!document.querySelector('.deck-pager'))).toBe(true);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => document.querySelector('.deck-pager').hasAttribute('data-on'))).toBe(true);
+  expect(await hidden(page)).toBe('none');
+  await pres.waitForTimeout(1500);
+  const inPreviews = await pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => {
+    const p = f.contentDocument.querySelector('.deck-pager'); return p ? f.contentWindow.getComputedStyle(p).display : 'none';
+  }));
+  expect(inPreviews.every((d) => d === 'none')).toBe(true);
+});

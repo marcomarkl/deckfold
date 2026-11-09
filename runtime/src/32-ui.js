@@ -104,12 +104,29 @@ DF.slideStrip = function (opts) {
       [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-cur", +t.getAttribute("data-i") === i); });
       var cur = band.querySelector('.df-tile[data-i="' + i + '"]');
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+      // a tile with the keyboard focus (reached with Tab) hands it to the marked tile, so that the
+      // focus ring and the mark are on the same tile
+      var a = document.activeElement;
+      if (cur && a && a !== cur && a.classList && a.classList.contains("df-tile") && band.contains(a)) {
+        try { cur.focus({ preventScroll: true }); } catch (e) { cur.focus(); }
+      }
     },
     nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
     // scroll: move the band by most of its width without choosing a slide
     scroll: function (dir) { band.scrollBy({ left: dir * band.clientWidth * 0.8, behavior: "smooth" }); }
   };
 };
+
+// A control clicked with the mouse gives the focus back: the keys move through the slides, and a
+// focused button would show its focus ring after the next key (next to the marked slide tile) or
+// be pressed by Space. Text and number fields keep the focus for typing; a control reached with
+// the keyboard keeps it too (a click from Enter or Space has detail 0).
+document.addEventListener("click", function (e) {
+  if (!e.detail) return;
+  var c = e.target && e.target.closest && e.target.closest("[data-df-ui] button, [data-df-ui] input[type=checkbox]");
+  if (!c) return;
+  setTimeout(function () { if (document.activeElement === c && c.blur) c.blur(); }, 0);
+}, true);
 
 // keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
 // keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].

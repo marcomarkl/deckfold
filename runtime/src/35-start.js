@@ -157,9 +157,18 @@ DF.startShow = function (snapshotHTML) {
     if (d.type === "hello") { send(status("init")); return; }
     if (d.type === "hb") return;
     if (d.type === "cmd") {
-      if (phase === "show" && DF.audience) return DF.audience.act(d.cmd, d.arg);
-      if (phase === "start") selectBy(d.cmd, d.arg);
+      if (phase === "start") return selectBy(d.cmd, d.arg);
+      // from "Start" on: to the presentation; while it is still loading, kept for it
+      if (DF.audience) return DF.audience.act(d.cmd, d.arg);
+      early.push([d.cmd, d.arg]);
     }
+  }
+  // early: commands and keys between "Start" and the presentation being able to take them (the
+  // presenter view already shows the show then); carried out in order once it can
+  var early = [];
+  function runEarly() {
+    var q = early; early = [];
+    q.forEach(function (c) { DF.audience.act(c[0], c[1]); });
   }
   function selectBy(cmd, arg) {
     switch (cmd) {
@@ -184,6 +193,11 @@ DF.startShow = function (snapshotHTML) {
 
   // ---------- keys on the start screen ----------
   DF.installKeys(function (a, e) {
+    if (phase === "loading") {
+      // keys pressed while the presentation loads (until it takes them over)
+      if (a !== "digits" && a !== "start") early.push([a, a === "goto" ? e.slide : undefined]);
+      return true;
+    }
     if (phase !== "start") return true;
     // Enter starts here even where a configuration binds it to an action
     if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
@@ -220,6 +234,7 @@ DF.startShow = function (snapshotHTML) {
     }).then(function () {
       phase = "show";
       root.parentNode.removeChild(root);
+      runEarly();
       beat();
     }, function (err) { console.error("deckfold:", err); });
   }

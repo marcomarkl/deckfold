@@ -67,8 +67,8 @@ DF.startPresenter = function (snapshotHTML) {
     endBtn
   ]);
   var cur = pane("current", DF.t("current"));
-  // audience: what the audience sees right now, when it is not the whole slide shown above (a step
-  // before the last one, black, white, the end slide); empty otherwise
+  // audience: what the audience sees right now: the slide at its step, black, white, the end slide;
+  // empty only before the start
   var aud = pane("audience", DF.t("audience"));
   aud.querySelector(".df-stage").appendChild(DF.el("div", { class: "df-audcover" }, [DF.el("span", { text: DF.t("endOfShow") })]));
   var nxt = pane("next", DF.t("next"));
@@ -192,14 +192,14 @@ DF.startPresenter = function (snapshotHTML) {
     strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
     banners();
   }
-  // what the audience pane shows: empty (before the start, or the audience sees the whole slide
-  // shown in "Current"), the end slide, black, white, or the slide at the step the audience sees
+  // what the audience pane shows: empty before the start, then the end slide, black, white, or the
+  // slide at the step the audience sees (also when that is the whole slide shown in "Current": an
+  // empty pane during the show looked like a fault)
   function audienceView() {
     if (phase !== "show") return "empty";
     if (remote.ended) return "end";
     if (remote.blank === "black" || remote.blank === "white") return remote.blank;
-    var sl = slides[st.slide];
-    return !sl || st.step >= (sl.steps || 1) - 1 ? "empty" : "slide";
+    return slides[st.slide] ? "slide" : "empty";
   }
   function tickClock() {
     var d = new Date();

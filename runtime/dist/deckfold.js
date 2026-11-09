@@ -1022,12 +1022,29 @@ DF.slideStrip = function (opts) {
       [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-cur", +t.getAttribute("data-i") === i); });
       var cur = band.querySelector('.df-tile[data-i="' + i + '"]');
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+      // a tile with the keyboard focus (reached with Tab) hands it to the marked tile, so that the
+      // focus ring and the mark are on the same tile
+      var a = document.activeElement;
+      if (cur && a && a !== cur && a.classList && a.classList.contains("df-tile") && band.contains(a)) {
+        try { cur.focus({ preventScroll: true }); } catch (e) { cur.focus(); }
+      }
     },
     nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
     // scroll: move the band by most of its width without choosing a slide
     scroll: function (dir) { band.scrollBy({ left: dir * band.clientWidth * 0.8, behavior: "smooth" }); }
   };
 };
+
+// A control clicked with the mouse gives the focus back: the keys move through the slides, and a
+// focused button would show its focus ring after the next key (next to the marked slide tile) or
+// be pressed by Space. Text and number fields keep the focus for typing; a control reached with
+// the keyboard keeps it too (a click from Enter or Space has detail 0).
+document.addEventListener("click", function (e) {
+  if (!e.detail) return;
+  var c = e.target && e.target.closest && e.target.closest("[data-df-ui] button, [data-df-ui] input[type=checkbox]");
+  if (!c) return;
+  setTimeout(function () { if (document.activeElement === c && c.blur) c.blur(); }, 0);
+}, true);
 
 // keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
 // keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
@@ -1213,9 +1230,18 @@ DF.startShow = function (snapshotHTML) {
     if (d.type === "hello") { send(status("init")); return; }
     if (d.type === "hb") return;
     if (d.type === "cmd") {
-      if (phase === "show" && DF.audience) return DF.audience.act(d.cmd, d.arg);
-      if (phase === "start") selectBy(d.cmd, d.arg);
+      if (phase === "start") return selectBy(d.cmd, d.arg);
+      // from "Start" on: to the presentation; while it is still loading, kept for it
+      if (DF.audience) return DF.audience.act(d.cmd, d.arg);
+      early.push([d.cmd, d.arg]);
     }
+  }
+  // early: commands and keys between "Start" and the presentation being able to take them (the
+  // presenter view already shows the show then); carried out in order once it can
+  var early = [];
+  function runEarly() {
+    var q = early; early = [];
+    q.forEach(function (c) { DF.audience.act(c[0], c[1]); });
   }
   function selectBy(cmd, arg) {
     switch (cmd) {
@@ -1240,6 +1266,11 @@ DF.startShow = function (snapshotHTML) {
 
   // ---------- keys on the start screen ----------
   DF.installKeys(function (a, e) {
+    if (phase === "loading") {
+      // keys pressed while the presentation loads (until it takes them over)
+      if (a !== "digits" && a !== "start") early.push([a, a === "goto" ? e.slide : undefined]);
+      return true;
+    }
     if (phase !== "start") return true;
     // Enter starts here even where a configuration binds it to an action
     if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
@@ -1276,6 +1307,7 @@ DF.startShow = function (snapshotHTML) {
     }).then(function () {
       phase = "show";
       root.parentNode.removeChild(root);
+      runEarly();
       beat();
     }, function (err) { console.error("deckfold:", err); });
   }
@@ -1424,7 +1456,7 @@ DF.startAudience = function (opts) {
   // QUIET: the slowest player took 223 ms from a jump to showing the slide (Keynote, measured).
   var QUIET = 1000, retry = { key: "", n: 0 };
   function check() {
-    if (generic || moving || Date.now() < quietUntil || !adapter.shown) return;
+    if (generic || !started || moving || Date.now() < quietUntil || !adapter.shown) return;
     var at = adapter.shown();
     if (at == null || at === st.slide) return;
     var key = st.slide + ":" + st.step;
@@ -1505,16 +1537,24 @@ DF.startAudience = function (opts) {
   function stopAuto(rep) { auto.on = false; clearTimeout(auto.timer); auto.due = 0; auto.waiting = false; if (rep) report(); }
 
   // ---------- keys ----------
+  // take: keys, clicks and commands of the presenter view. Until the player is ready and on the
+  // start slide they are kept and then carried out in order: a step counted from the state before
+  // the start slide would be lost.
+  var started = false, held = [];
+  function take(a, arg) {
+    if (!started) { held.push([a, arg]); return; }
+    return act(a, arg);
+  }
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
-    act(a, e && e.slide);
+    take(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { act("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
+  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
 
   DF.audience = {
-    act: act,
+    act: take,
     state: function () { return st; },
     info: info,
     settings: function (s) { cfg = DF.merge(cfg, s || {}); if (auto.on) scheduleAuto(); }
@@ -1526,6 +1566,9 @@ DF.startAudience = function (opts) {
       go(opts.start || DF.model.first(), { jump: true });
       if (cfg.auto.enabled) startAuto();
     }
+    started = true;
+    var q = held; held = [];
+    q.forEach(function (c) { act(c[0], c[1]); });
     return driving;
   });
 };
@@ -1600,8 +1643,8 @@ DF.startPresenter = function (snapshotHTML) {
     endBtn
   ]);
   var cur = pane("current", DF.t("current"));
-  // audience: what the audience sees right now, when it is not the whole slide shown above (a step
-  // before the last one, black, white, the end slide); empty otherwise
+  // audience: what the audience sees right now: the slide at its step, black, white, the end slide;
+  // empty only before the start
   var aud = pane("audience", DF.t("audience"));
   aud.querySelector(".df-stage").appendChild(DF.el("div", { class: "df-audcover" }, [DF.el("span", { text: DF.t("endOfShow") })]));
   var nxt = pane("next", DF.t("next"));
@@ -1725,14 +1768,14 @@ DF.startPresenter = function (snapshotHTML) {
     strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
     banners();
   }
-  // what the audience pane shows: empty (before the start, or the audience sees the whole slide
-  // shown in "Current"), the end slide, black, white, or the slide at the step the audience sees
+  // what the audience pane shows: empty before the start, then the end slide, black, white, or the
+  // slide at the step the audience sees (also when that is the whole slide shown in "Current": an
+  // empty pane during the show looked like a fault)
   function audienceView() {
     if (phase !== "show") return "empty";
     if (remote.ended) return "end";
     if (remote.blank === "black" || remote.blank === "white") return remote.blank;
-    var sl = slides[st.slide];
-    return !sl || st.step >= (sl.steps || 1) - 1 ? "empty" : "slide";
+    return slides[st.slide] ? "slide" : "empty";
   }
   function tickClock() {
     var d = new Date();

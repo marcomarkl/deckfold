@@ -38,7 +38,9 @@ async function animationsAfterKey(page, key) {
   await page.evaluate(() => {
     window.__anim = null;
     const grab = () => {
-      window.__anim = document.getAnimations().map((a) => {
+      // the player's slide counter (.deck-pager) fades in after each change in the source; deckfold
+      // hides it on purpose, so its transition is left out on both sides
+      window.__anim = document.getAnimations().filter((a) => !(a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest('.deck-pager'))).map((a) => {
         const e = a.effect, t = e && e.target;
         const tgt = t ? (t.tagName + '.' + (typeof t.className === 'string' ? t.className.split(' ').filter((c) => !c.startsWith('df-')).sort().join('.') : '') + '[' + (t.getAttribute('data-frame-id') || '') + ']') : '';
         const tm = e ? e.getTiming() : {};
