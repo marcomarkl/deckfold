@@ -15,10 +15,25 @@ function chain(s) {
   return { slide: s.slide, step: step };
 }
 
+function rawPrev(s) {
+  var sl = slidesOf();
+  if (s.step > 0) {
+    var st = s.step - 1, cur = sl[s.slide];
+    // go back over auto steps to the last manual step
+    while (st > 0 && cur.auto && cur.auto[st]) st--;
+    return { slide: s.slide, step: st };
+  }
+  if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
+  return null;
+}
+function hasAuto(i) { var sl = slidesOf()[i]; return !!(sl && sl.auto && sl.auto.some(Boolean)); }
+
 DF.model = {
   first: function () { return chain({ slide: 0, step: 0 }); },
   last: function () { var n = slidesOf().length; return chain({ slide: Math.max(0, n - 1), step: 0 }); },
   goto: function (slide) { var n = slidesOf().length; return chain({ slide: Math.max(0, Math.min(n - 1, slide)), step: 0 }); },
+  // end: slide i as it looks after all its steps (what the previews show)
+  end: function (i) { var sl = slidesOf()[i] || {}; return { slide: i, step: Math.max(0, (sl.steps || 1) - 1) }; },
   // next returns null at the end of the presentation.
   next: function (s) {
     var sl = slidesOf(), cur = sl[s.slide];
@@ -27,16 +42,13 @@ DF.model = {
     if (s.slide + 1 < sl.length) return chain({ slide: s.slide + 1, step: 0 });
     return null;
   },
+  // prev returns a state the source player rests in, like next: a state followed by an auto step
+  // would not stay (the player runs on by itself), so back skips over whole auto runs. On a slide
+  // whose steps after the first are all auto, back goes to the slide before.
   prev: function (s) {
-    var sl = slidesOf();
-    if (s.step > 0) {
-      var st = s.step - 1, cur = sl[s.slide];
-      // go back over auto steps to the last manual step
-      while (st > 0 && cur.auto && cur.auto[st]) st--;
-      return { slide: s.slide, step: st };
-    }
-    if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
-    return null;
+    var c = rawPrev(s);
+    while (c && DF.model.same(chain(c), s)) c = rawPrev(c);
+    return c ? chain(c) : null;
   },
   same: function (a, b) { return a && b && a.slide === b.slide && a.step === b.step; }
 };
@@ -67,11 +79,17 @@ DF.adapters = {
     ready: function () { return Promise.resolve(); },
     forward: function () { synthKey("ArrowRight", 39); },
     back: function () { synthKey("ArrowLeft", 37); },
-    // jump: slide via hash (the player goes to step 0), then manual steps up to the target.
+    // jump: slide via hash (the player goes to step 0), then single steps up to the target.
+    // The player runs auto steps by itself, each after a timer of at least 140 ms, and a key
+    // press during such a run moves it on by one step only. So when the target is the end of the
+    // auto run that starts the slide, the audience sees the run play; otherwise (and always in a
+    // preview, which shows the end state at once) every step is pressed, 60 ms apart, which is
+    // faster than the player's own timer.
     jump: function (target, current) {
       var self = this;
       var cur = current;
       var p = Promise.resolve();
+      var playRun = DF.role !== "preview" && DF.model.same(chain({ slide: target.slide, step: 0 }), target);
       if (!cur || cur.slide !== target.slide || cur.step > target.step) {
         p = p.then(function () {
           if (location.hash === "#" + (target.slide + 1)) {
@@ -79,14 +97,14 @@ DF.adapters = {
             location.hash = "#" + (target.slide === 0 ? 2 : target.slide);
           }
           location.hash = "#" + (target.slide + 1);
-          cur = chain({ slide: target.slide, step: 0 });
+          cur = playRun ? target : { slide: target.slide, step: 0 };
           return wait(80);
         });
       }
       return p.then(function loop() {
         if (!cur || cur.step >= target.step) return;
         self.forward();
-        cur = chain({ slide: target.slide, step: cur.step + 1 });
+        cur = { slide: target.slide, step: cur.step + 1 };
         return wait(60).then(loop);
       });
     },
@@ -154,9 +172,15 @@ DF.adapters = {
 DF.adapter = function () { return DF.adapters[DF.format()] || DF.adapters.generic; };
 
 // Bring the player to a target state: single steps as a key press (animated), otherwise jump.
+// On a claude.ai slide with auto steps the player may still be in its auto run, where a key
+// press moves it by one step only, so a move away from such a slide is a jump. A preview also
+// jumps onto such a slide, which presses every step instead of waiting for the player's timers.
 DF.drive = function (from, to) {
   var a = DF.adapter();
   if (!to) return Promise.resolve();
+  var claude = DF.format() === "claude";
+  if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
+  if (claude && DF.role === "preview" && hasAuto(to.slide)) return a.jump(to, null);
   if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
   if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
   return a.jump(to, from);

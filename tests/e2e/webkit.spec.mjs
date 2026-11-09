@@ -1,6 +1,6 @@
 // Fallback browser (E3): WebKit is close to Safari and has no Window Management API.
 import { test, expect } from '@playwright/test';
-import { solo, present, audState, counter, slideCount, expected, need } from './helpers.mjs';
+import { solo, startScreen, openPresenter, audState, counter, slideCount, expected, need } from './helpers.mjs';
 
 test('WebKit: solo navigation in a claude.ai deck', async ({ page }) => {
   need('claude');
@@ -9,14 +9,20 @@ test('WebKit: solo navigation in a claude.ai deck', async ({ page }) => {
   await expect.poll(() => audState(page)).toEqual(await expected(page, ['next', 'next']));
 });
 
-test('WebKit: presenter view with the hint to drag the window', async ({ page, context }) => {
+test('WebKit: presenter view without screen detection: no hint, full screen allowed, keys work', async ({ page, context }) => {
   need('claude');
-  const aud = await present(page, context, 'claude.html');
-  await expect(page.locator('.df-banner.df-on')).toBeVisible();
-  await page.keyboard.press('ArrowRight');
-  const s1 = await expected(page, ['next']);
-  await expect.poll(() => audState(aud)).toEqual(s1);
-  await expect.poll(() => counter(page)).toContain(`${s1.slide + 1} / ${await slideCount(page)}`);
+  await startScreen(page, 'claude.html');
+  const pres = await openPresenter(page, context);
+  // WebKit has no Window Management API: deckfold does not check where the windows are
+  await page.waitForTimeout(1500);
+  await expect(page.locator('[data-df-fs]')).toBeEnabled();
+  await expect(page.locator('[data-df-hint].df-on')).toHaveCount(0);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.keyboard.press('ArrowRight');
+  const s1 = await expected(pres, ['next']);
+  await expect.poll(() => audState(page)).toEqual(s1);
+  await expect.poll(() => counter(pres)).toContain(`${s1.slide + 1} / ${await slideCount(pres)}`);
 });
 
 test('WebKit: Keynote deck runs', async ({ page }) => {
@@ -52,9 +58,9 @@ test('WebKit: PowerPoint animations reach every step', async ({ page }) => {
     await expect.poll(() => page.evaluate(() => window.__dfPptx.state())).toEqual({ slide: 0, step: k });
   }
   // the entrance effects ended with their objects visible
-  const hidden = await page.evaluate(() => [...document.querySelectorAll('.df-pptx-slide.df-on g[data-sid]')]
+  const hidden = () => page.evaluate(() => [...document.querySelectorAll('.df-pptx-slide.df-on g[data-sid]')]
     .filter((g) => getComputedStyle(g).visibility === 'hidden').length);
-  expect(hidden).toBe(0);
+  await expect.poll(hidden, { timeout: 5000 }).toBe(0);
 });
 
 test('WebKit: PowerPoint transitions (2D, 3D, tiles) end on the next slide', async ({ page }) => {

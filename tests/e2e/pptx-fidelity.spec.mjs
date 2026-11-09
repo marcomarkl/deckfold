@@ -70,7 +70,7 @@ for (const name of decks) {
     const first = PNG.sync.read(fs.readFileSync(path.join(ref, images[0])));
     await page.setViewportSize({ width: first.width, height: first.height });
     await page.goto(fileURL(path.basename(out)));
-    await page.click('.df-start-buttons button:nth-child(2)');
+    await page.click('[data-df-start]');
     await page.waitForFunction(() => window.__dfPptx);
     await page.evaluate(() => document.fonts.ready);
     const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);

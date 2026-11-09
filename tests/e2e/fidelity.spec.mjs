@@ -61,7 +61,7 @@ test('claude.ai: slides are pixel-identical and animations match', async ({ brow
   await orig.evaluate(() => document.fonts.ready);
   const out = await ctx.newPage();
   await out.goto(fileURL('claude.html'));
-  await out.click('.df-start-buttons button:nth-child(2)');
+  await out.click('[data-df-start]');
   await out.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   await out.evaluate(() => document.fonts.ready);
   await out.waitForTimeout(2000); await orig.waitForTimeout(2000);
@@ -90,7 +90,7 @@ test('Keynote: slides are pixel-identical with the original export', async ({ br
   await orig.goto(toURL(path.join(corpus.keynote, 'index.html')));
   const out = await ctx.newPage();
   await out.goto(fileURL('keynote.html'));
-  await out.click('.df-start-buttons button:nth-child(2)');
+  await out.click('[data-df-start]');
   await out.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   await orig.waitForTimeout(3000); await out.waitForTimeout(3000);
   const n = Math.min(8, await out.evaluate(() => window.__deckfold.slides().length));

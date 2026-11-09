@@ -29,13 +29,32 @@ var keyRouters = { keydown: null, keyup: null, keypress: null };
   window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
 });
 
+// Keyboard Lock (Chrome, Edge): in full screen, Escape reaches the key handler above instead of only
+// leaving full screen, so that one Escape ends the presentation; holding Escape still leaves full
+// screen. Browsers without Keyboard Lock leave full screen on the first Escape as before.
+document.addEventListener("fullscreenchange", function () {
+  var kb = navigator.keyboard;
+  if (!kb || !kb.lock) return;
+  try {
+    if (document.fullscreenElement) kb.lock(["Escape"]).catch(function () { });
+    else kb.unlock();
+  } catch (e) { }
+});
+
+// typing: keys go to a text or number field (not to a checkbox, whose focus must not stop the
+// clicker after it was clicked).
+function typing(t) {
+  var tag = t && t.tagName;
+  if (tag === "SELECT" || tag === "TEXTAREA") return true;
+  return tag === "INPUT" && !/^(checkbox|radio|button|submit|range)$/i.test(t.type || "");
+}
+
 DF.installKeys = function (handler, opts) {
   var digits = "", timer = 0;
   keyRouters.keydown = function (e) {
     if (e.__deckfold) return; // eigene synthetische Taste
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var tag = e.target && e.target.tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (typing(e.target)) return;
     if (opts && opts.passthrough) {
       // generic: only intercept deckfold's own keys
       var act0 = actionFor(e);
@@ -72,8 +91,7 @@ DF.installKeys = function (handler, opts) {
   // keep keyup/keypress of bound keys away from the source player as well
   var guard = function (e) {
     if (e.__deckfold || (opts && opts.passthrough)) return;
-    var tag = e.target && e.target.tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (typing(e.target)) return;
     if (opts && opts.swallowAll) { e.stopImmediatePropagation(); return; }
     if (actionFor(e) || /^[0-9]$/.test(e.key) || e.key === "Enter") e.stopImmediatePropagation();
   };

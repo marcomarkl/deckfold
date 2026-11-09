@@ -28,8 +28,15 @@ import (
 	dfruntime "deckfold/runtime"
 )
 
-// Version is set with -ldflags for releases.
-var Version = "0.1.0-dev"
+// Version is set with -ldflags for releases (scripts/release.sh); otherwise it comes from the Git
+// information Go embeds when it builds (see buildVersion).
+var Version = ""
+
+func init() {
+	if Version == "" {
+		Version = buildVersion()
+	}
+}
 
 type multi []string
 
@@ -165,7 +172,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		cfg.Presenter.NotesFontSize = *notesSize
 	}
 	if set["target-minutes"] {
-		cfg.Presenter.TargetMinutes = *target
+		cfg.Presenter.TargetSeconds = *target * 60
 	}
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintln(stderr, "error:", err)
@@ -275,8 +282,21 @@ func mergeKnown(def, old config.Config) config.Config {
 	if len(c.Presenter.Elements) == 0 && c.Presenter.NotesFontSize == 0 {
 		return def
 	}
-	if c.Keys == nil {
-		c.Keys = def.Keys
+	c.Presenter.Upgrade()
+	// actions and fields added after the file was made get their defaults; the file's own
+	// values stay
+	keys := make(map[string][]string, len(def.Keys))
+	for k, v := range def.Keys {
+		keys[k] = v
+	}
+	for k, v := range old.Keys {
+		if config.KnownAction(k) { // actions retired since then are dropped
+			keys[k] = v
+		}
+	}
+	c.Keys = keys
+	if c.Presenter.Layout == (config.Layout{}) {
+		c.Presenter.Layout = def.Presenter.Layout
 	}
 	if c.WarnSize == "" {
 		c.WarnSize = def.WarnSize

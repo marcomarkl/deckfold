@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"deckfold/internal/config"
 	"encoding/base64"
 	"encoding/json"
 	"os"
@@ -295,5 +296,34 @@ func TestGoldenClaude(t *testing.T) {
 			b, _ := os.ReadFile(out)
 			checkGolden(t, src, b)
 		})
+	}
+}
+
+// A file made by an older version keeps its own values on --refresh, while fields added since then
+// get their defaults (the layout of the presenter view), targetMinutes becomes targetSeconds, and
+// actions retired since then are dropped (the diagnostics key of the v0.4 drafts), so that the
+// result passes validation.
+func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
+	old := config.Default()
+	old.Presenter.NotesFontSize = 30
+	old.Presenter.Layout = config.Layout{}
+	old.Keys["diagnostics"] = []string{"D"}
+	old.Keys["next"] = []string{"n"}
+	old.Presenter.TargetMinutes = 20
+	c := mergeKnown(config.Default(), old)
+	if c.Presenter.TargetSeconds != 1200 || c.Presenter.TargetMinutes != 0 {
+		t.Errorf("target: %d s, %d min; want 1200 s", c.Presenter.TargetSeconds, c.Presenter.TargetMinutes)
+	}
+	if c.Presenter.NotesFontSize != 30 || c.Keys["next"][0] != "n" {
+		t.Errorf("old values lost: notes %d, next %v", c.Presenter.NotesFontSize, c.Keys["next"])
+	}
+	if _, ok := c.Keys["diagnostics"]; ok {
+		t.Error("the retired diagnostics key is still there after --refresh")
+	}
+	if c.Presenter.Layout != config.Default().Presenter.Layout {
+		t.Errorf("layout %+v, want the default", c.Presenter.Layout)
+	}
+	if err := c.Validate(); err != nil {
+		t.Error(err)
 	}
 }

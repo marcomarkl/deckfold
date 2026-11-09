@@ -82,13 +82,19 @@ Large media files are embedded unchanged. Chrome opens a 300 MB file in a little
 
 ## Presenting
 
-Open the file in a browser. The start screen offers "Present", "Audience view only" and "Settings".
+Open the file in a browser. The window it opens in is the presentation. It shows a start screen first: the title, a large preview of the chosen slide as it looks after all its steps, a strip of all slides (a click or the arrows beside it choose the slide to start from), the settings, and the "Start" button next to them:
 
-"Present" opens the audience window. The window you started from becomes the presenter view with the current slide, a preview of the next step, notes, a clock, the elapsed time, an optional remaining time, and a slide overview for jumping.
+- **Presenter view:** opens a second window with previews of the current and the next slide (each as it looks after all its steps), notes, a clock, the elapsed and the remaining time and a strip of all slides. Drag it to the screen where you want to see it.
+- **Full screen** for the presentation, or a window.
+- **Auto mode** with its interval and whether it loops.
 
-In Chrome and Edge, deckfold asks for access to your screens the first time. You then assign the audience window and the presenter view to a screen each; the choice is remembered. Safari and Firefox cannot place windows themselves: drag the audience window to the projector and click "Full screen" there. Firefox is not covered by the automated tests yet.
+"Start" or Enter begins the presentation in this window; it starts only there, because full screen needs a click in the window that goes full screen. The arrow keys choose the start slide, also from the presenter view, so a clicker works before the start.
 
-If the browser cannot switch the audience window to full screen without a click, the window shows "Click for full screen". If the window is blocked or closed, or if the presenter view is reloaded, the presenter view offers to reopen it at the same slide.
+deckfold does not place windows itself and does not check where they are. Put each window where it belongs, for example the presentation on the projector and the presenter view on the laptop; full screen can always be chosen. The presenter view goes into full screen with F or its "Full screen" button, which then reads "Window" and takes it back.
+
+The presenter view has a status bar at the bottom: hints on the left (for example that the presentation window cannot be reached), and on the right the switches for its panes (current slide, next slide, notes, time, slide strip). Above the status bar runs the strip of all slides: during the show a click on a slide jumps there, and its arrows only scroll the strip, so that a click never moves the audience on by accident; before the start they choose the start slide. A− and A+ change the size of the notes, the target duration sits next to the time (minutes:seconds; "20" becomes 20:00, "1:75" becomes 02:15), and the panes are resized by dragging the dividers between them. The settings are stored in the browser for each presentation.
+
+At the end, with Escape (in either window) or one step after the last slide, the presentation returns to the start screen with the last slide chosen. Reloading the window keeps the slide chosen or shown last. The presenter view stays open. If the browser cannot switch to full screen, the presentation shows "Click for full screen".
 
 | Key | Action |
 |---|---|
@@ -101,11 +107,13 @@ If the browser cannot switch the audience window to full screen without a click,
 | W | white screen |
 | A | auto mode on/off |
 | T | reset the timer |
-| Esc | outside full screen: end the presentation |
+| Esc | end the presentation |
+
+In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation.
 
 Common presentation clickers send these keys. You can change the bindings under `keys` in the configuration file.
 
-Auto mode uses timings from the source (automatic timings in PowerPoint, Keynote in self-playing mode, automatic steps in claude.ai decks) and the configured interval otherwise. On slides with a playing video or audio clip it waits until the clip ends. The timer runs in the audience window, so it keeps going when the presenter view is covered or closed. The audience window keeps the screen awake and hides the mouse cursor after two seconds.
+Auto mode uses timings from the source (automatic timings in PowerPoint, Keynote in self-playing mode, automatic steps in claude.ai decks) and the configured interval otherwise. On slides with a playing video or audio clip it waits until the clip ends. The timer runs in the presentation window, so it keeps going when the presenter view is covered or closed. The presentation window keeps the screen awake and hides the mouse cursor after two seconds.
 
 ## Download and first start
 

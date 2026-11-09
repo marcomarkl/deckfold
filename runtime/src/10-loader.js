@@ -56,10 +56,16 @@ function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { re
 DF.fill = fillPlaceholders;
 
 // Snapshot for the srcdoc previews: the document before activation, without asset blocks.
+// The asset blocks are taken out of the document while it is cloned and put back right away, so
+// that a large file is not copied in memory once more.
 function snapshot() {
-  var root = document.documentElement.cloneNode(true);
-  var drop = root.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]');
-  for (var i = 0; i < drop.length; i++) drop[i].parentNode.removeChild(drop[i]);
+  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]'));
+  var spots = blocks.map(function (b) { var at = { parent: b.parentNode, next: b.nextSibling }; b.parentNode.removeChild(b); return at; });
+  var root;
+  try { root = document.documentElement.cloneNode(true); }
+  finally {
+    for (var j = blocks.length - 1; j >= 0; j--) spots[j].parent.insertBefore(blocks[j], spots[j].next);
+  }
   var ui = root.querySelectorAll("[data-df-ui]");
   for (var k = 0; k < ui.length; k++) ui[k].parentNode.removeChild(ui[k]);
   root.classList.remove("df-loading", "df-presenter-mode");
@@ -87,8 +93,9 @@ function activateCSS() {
 }
 
 var ATTRS = ["src", "srcset", "href", "xlink:href", "poster", "data", "style", "background"];
-function restoreAttrs(quiet) {
-  var all = document.querySelectorAll("*");
+function restoreAttrs(quiet, root) {
+  var all = [].slice.call((root || document).querySelectorAll("*"));
+  if (root) all.unshift(root);
   for (var i = 0; i < all.length; i++) {
     var e = all[i];
     if (e.tagName === "SCRIPT" && e.type === "text/df-deferred") continue;
@@ -289,17 +296,33 @@ function runDeferred() {
 }
 
 // activate: styles, attributes, fonts; with runScripts also the shim and the source scripts.
+// With cssOnly only styles and fonts: the show window before "Start", whose document stays inert
+// until DF.activateScripts (so no medium plays and no source script runs on the start screen).
 DF.activate = function (opts) {
   DF.meta = readJSON("df-meta") || { deck: { slides: [] }, shim: {} };
   return activateCSS().then(function () {
+    if (opts.cssOnly) return; // the start screen does not wait for the fonts of the deck
     restoreAttrs(!opts.runScripts);
-    var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
-    return Promise.race([fonts, new Promise(function (r) { setTimeout(r, 3000); })]);
+    return fontsReady();
   }).then(function () {
     if (!opts.runScripts) return;
     installShim();
     return runDeferred();
   });
 };
+function fontsReady() {
+  var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  return Promise.race([fonts, new Promise(function (r) { setTimeout(r, 3000); })]);
+}
+// activateScripts: the rest of a cssOnly activation (attributes, fonts, shim, source scripts).
+DF.activateScripts = function () {
+  restoreAttrs(false);
+  return fontsReady().then(function () {
+    installShim();
+    return runDeferred();
+  });
+};
+// restoreIn: attributes of a copied subtree (slide tiles), with media kept quiet.
+DF.restoreIn = function (node) { restoreAttrs(true, node); };
 DF.snapshot = snapshot;
 DF.quietMedia = quietMedia;

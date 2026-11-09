@@ -34,18 +34,19 @@ test('Keynote solo: the player runs standalone, navigation', async ({ page, cont
 
 test('Keynote presenter view: previews render, no notes', async ({ page, context }) => {
   const w = watch(context);
-  const aud = await present(page, context, 'keynote.html');
-  await expect(page.locator('.df-notes')).toBeHidden();
-  const canvases = () => page.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => f.contentDocument.querySelectorAll('#stage canvas').length));
+  const pres = await present(page, context, 'keynote.html');
+  await expect(pres.locator('.df-notes')).toBeHidden();
+  const canvases = () => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => f.contentDocument.querySelectorAll('#stage canvas').length));
   await expect.poll(async () => (await canvases()).every((c) => c > 0), { timeout: 20000 }).toBe(true);
-  await page.waitForTimeout(1000);
-  const n = await slideCount(page);
-  for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(700); }
-  const s3 = await expected(page, ['next', 'next', 'next']);
-  await expect.poll(() => audState(aud)).toEqual(s3);
-  await expect.poll(() => counter(page)).toContain(`${s3.slide + 1} / ${n}`);
-  await page.click('.df-bar button[data-k="overview"]');
-  await expect(page.locator('.df-tile img')).toHaveCount(n);
+  await pres.waitForTimeout(1000);
+  const n = await slideCount(pres);
+  for (let i = 0; i < 3; i++) { await pres.keyboard.press('ArrowRight'); await pres.waitForTimeout(700); }
+  const s3 = await expected(pres, ['next', 'next', 'next']);
+  await expect.poll(() => audState(page)).toEqual(s3);
+  await expect.poll(() => counter(pres)).toContain(`${s3.slide + 1} / ${n}`);
+  // overview band: one tile per slide; the thumbnails of the source load as the tiles become visible
+  await expect(pres.locator('.df-overview .df-tile')).toHaveCount(n);
+  await expect.poll(() => pres.locator('.df-overview .df-tile img').count()).toBeGreaterThan(0);
   expect(w.net).toEqual([]);
   expect(realErrors(w)).toEqual([]);
 });

@@ -1,5 +1,5 @@
-// Package config holds the defaults for presenter view, auto mode, key bindings and
-// screen choice, and loads and validates the JSON configuration.
+// Package config holds the defaults for presenter view, auto mode and key bindings, and loads and
+// validates the JSON configuration.
 package config
 
 import (
@@ -15,7 +15,18 @@ import (
 type Presenter struct {
 	Elements      []string `json:"elements"`
 	NotesFontSize int      `json:"notesFontSize"`
-	TargetMinutes int      `json:"targetMinutes"`
+	// TargetSeconds is the target duration of the talk (0 = none), entered as minutes:seconds.
+	TargetSeconds int `json:"targetSeconds"`
+	// TargetMinutes is the setting of older versions; Upgrade turns it into TargetSeconds.
+	TargetMinutes int    `json:"targetMinutes,omitempty"`
+	Layout        Layout `json:"layout"`
+}
+
+// Layout is the size of the presenter view panes, changed by dragging the dividers: Main is the
+// share of the current slide in the width, Side the share of the next step in the side column.
+type Layout struct {
+	Main float64 `json:"main"`
+	Side float64 `json:"side"`
 }
 
 // Auto describes auto mode (E7).
@@ -25,17 +36,11 @@ type Auto struct {
 	Loop            bool    `json:"loop"`
 }
 
-// Screens describes the screen choice.
-type Screens struct {
-	RememberChoice bool `json:"rememberChoice"`
-}
-
 // Config is the full configuration.
 type Config struct {
 	Presenter Presenter           `json:"presenter"`
 	Auto      Auto                `json:"auto"`
 	Keys      map[string][]string `json:"keys"`
-	Screens   Screens             `json:"screens"`
 	WarnSize  string              `json:"warnSize"`
 }
 
@@ -45,10 +50,26 @@ var Elements = []string{"current", "next", "notes", "time", "overview"}
 // Actions are the actions keys can be bound to.
 var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end"}
 
+// retiredActions were bound to keys by older versions; Merge accepts and drops them, so that
+// older configuration files still load (diagnostics showed the screen detection of v0.4 drafts).
+var retiredActions = []string{"diagnostics"}
+
+// MaxTargetSeconds is the longest target duration: 600 minutes.
+const MaxTargetSeconds = 600 * 60
+
+// Upgrade turns settings of older versions into their current form: targetMinutes becomes
+// targetSeconds.
+func (p *Presenter) Upgrade() {
+	if p.TargetMinutes != 0 && p.TargetSeconds == 0 {
+		p.TargetSeconds = p.TargetMinutes * 60
+	}
+	p.TargetMinutes = 0
+}
+
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, TargetMinutes: 0},
+		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45}},
 		Auto:      Auto{Enabled: false, IntervalSeconds: 8, Loop: false},
 		Keys: map[string][]string{
 			"next":       {"ArrowRight", "ArrowDown", "PageDown", " ", "Enter"},
@@ -62,7 +83,6 @@ func Default() Config {
 			"timerReset": {"t", "T"},
 			"end":        {"Escape"},
 		},
-		Screens:  Screens{RememberChoice: true},
 		WarnSize: "250MB",
 	}
 }
@@ -88,13 +108,20 @@ func Merge(data []byte, base Config) (Config, error) {
 			Elements      *[]string `json:"elements"`
 			NotesFontSize *int      `json:"notesFontSize"`
 			TargetMinutes *int      `json:"targetMinutes"`
+			TargetSeconds *int      `json:"targetSeconds"`
+			Layout        *struct {
+				Main *float64 `json:"main"`
+				Side *float64 `json:"side"`
+			} `json:"layout"`
 		} `json:"presenter"`
 		Auto *struct {
 			Enabled         *bool    `json:"enabled"`
 			IntervalSeconds *float64 `json:"intervalSeconds"`
 			Loop            *bool    `json:"loop"`
 		} `json:"auto"`
-		Keys    map[string][]string `json:"keys"`
+		Keys map[string][]string `json:"keys"`
+		// screens.rememberChoice belonged to the screen choice of v0.3 and earlier; it is accepted
+		// and ignored, so that older configuration files still load.
 		Screens *struct {
 			RememberChoice *bool `json:"rememberChoice"`
 		} `json:"screens"`
@@ -111,8 +138,19 @@ func Merge(data []byte, base Config) (Config, error) {
 		if p.NotesFontSize != nil {
 			c.Presenter.NotesFontSize = *p.NotesFontSize
 		}
-		if p.TargetMinutes != nil {
-			c.Presenter.TargetMinutes = *p.TargetMinutes
+		if p.TargetMinutes != nil && p.TargetSeconds == nil {
+			c.Presenter.TargetSeconds = *p.TargetMinutes * 60
+		}
+		if p.TargetSeconds != nil {
+			c.Presenter.TargetSeconds = *p.TargetSeconds
+		}
+		if l := p.Layout; l != nil {
+			if l.Main != nil {
+				c.Presenter.Layout.Main = *l.Main
+			}
+			if l.Side != nil {
+				c.Presenter.Layout.Side = *l.Side
+			}
 		}
 	}
 	if a := in.Auto; a != nil {
@@ -127,10 +165,10 @@ func Merge(data []byte, base Config) (Config, error) {
 		}
 	}
 	for k, v := range in.Keys {
+		if contains(retiredActions, k) {
+			continue
+		}
 		c.Keys[k] = v
-	}
-	if s := in.Screens; s != nil && s.RememberChoice != nil {
-		c.Screens.RememberChoice = *s.RememberChoice
 	}
 	if in.WarnSize != nil {
 		c.WarnSize = *in.WarnSize
@@ -156,8 +194,13 @@ func (c Config) Validate() error {
 	if c.Presenter.NotesFontSize < 8 || c.Presenter.NotesFontSize > 96 {
 		return fmt.Errorf("presenter.notesFontSize: %d is not between 8 and 96", c.Presenter.NotesFontSize)
 	}
-	if c.Presenter.TargetMinutes < 0 || c.Presenter.TargetMinutes > 600 {
-		return fmt.Errorf("presenter.targetMinutes: %d is not between 0 and 600", c.Presenter.TargetMinutes)
+	if c.Presenter.TargetSeconds < 0 || c.Presenter.TargetSeconds > MaxTargetSeconds {
+		return fmt.Errorf("presenter.targetSeconds: %d is not between 0 and %d", c.Presenter.TargetSeconds, MaxTargetSeconds)
+	}
+	for _, v := range []float64{c.Presenter.Layout.Main, c.Presenter.Layout.Side} {
+		if v < 0.2 || v > 0.8 {
+			return fmt.Errorf("presenter.layout: %g is not between 0.2 and 0.8", v)
+		}
 	}
 	if c.Auto.IntervalSeconds < 1 || c.Auto.IntervalSeconds > 3600 {
 		return fmt.Errorf("auto.intervalSeconds: %g is not between 1 and 3600", c.Auto.IntervalSeconds)
@@ -172,6 +215,9 @@ func (c Config) Validate() error {
 	}
 	return nil
 }
+
+// KnownAction reports whether keys can be bound to the action.
+func KnownAction(a string) bool { return in(Actions, a) }
 
 func in(list []string, s string) bool {
 	for _, x := range list {
@@ -208,3 +254,5 @@ func Example() string {
 	b, _ := json.MarshalIndent(Default(), "", "  ")
 	return string(b) + "\n"
 }
+
+func contains(list []string, s string) bool { return in(list, s) }

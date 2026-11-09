@@ -1,13 +1,14 @@
-// Audience window: owns the state and drives the source player; auto mode, black/white screen,
-// full-screen fallback, wake lock, mouse cursor and the heartbeat to the presenter view.
+// The show window during the presentation (after "Start"): owns the state and drives the source
+// player; auto mode, black/white screen, full-screen fallback, wake lock and mouse cursor.
+//
+// opts: start (state to begin with), fullscreen (the start screen asked for full screen),
+// send(msg) (to the presenter view), onEnd(lastState). Returns a promise that resolves once the first slide is shown.
 
-DF.startAudience = function () {
-  var opener = null;
-  try { opener = DF.solo ? null : window.opener; } catch (e) { opener = null; }
-  var send = DF.channel(function () { return opener; }, function () { return DF.token; }, onMsg);
+DF.startAudience = function (opts) {
+  var send = opts.send;
   var generic = DF.format() === "generic";
   var adapter = DF.adapter();
-  var st = { slide: 0, step: 0 };
+  var st = { slide: 0, step: 0 }, lastShown = null;
   var driving = Promise.resolve();
   var blank = null;
   var auto = { on: false, due: 0, timer: 0, waiting: false };
@@ -16,7 +17,7 @@ DF.startAudience = function () {
 
   // ---------- Overlays ----------
   var blankEl = DF.el("div", { "data-df-ui": "", class: "df-blank" });
-  var fsEl = DF.el("div", { "data-df-ui": "", class: "df-fs-overlay" }, [DF.el("button", { type: "button", text: DF.t("clickFs") })]);
+  var fsEl = DF.el("div", { "data-df-ui": "", class: "df-fs-overlay" }, [DF.el("button", { type: "button", "data-df-fs-overlay": "", text: DF.t("clickFs") })]);
   var endEl = DF.el("div", { "data-df-ui": "", class: "df-endslide" }, [DF.el("span", { text: DF.t("endOfShow") })]);
   document.body.appendChild(blankEl);
   document.body.appendChild(endEl);
@@ -28,15 +29,18 @@ DF.startAudience = function () {
   }
 
   // ---------- full screen ----------
+  // The start screen requested full screen in the click on "Start". If that failed, one click on
+  // the overlay is enough. While the presenter view is on the same screen, no full screen.
+  var fsWanted = !!opts.fullscreen;
   function needFs() {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
-  function updateFsOverlay() { fsEl.classList.toggle("df-on", needFs() && fsWanted); }
-  var fsWanted = true;
+  function updateFsOverlay() { fsEl.classList.toggle("df-on", fsWanted && needFs()); }
   fsEl.addEventListener("click", function () { DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
   document.addEventListener("fullscreenchange", updateFsOverlay);
   window.addEventListener("resize", updateFsOverlay);
-  DF.requestFs().then(updateFsOverlay, function () { setTimeout(updateFsOverlay, 300); });
+  setInterval(updateFsOverlay, 1000);
+  setTimeout(updateFsOverlay, 300);
 
   // ---------- live embeds without network (E9): neutral placeholder ----------
   function liveFrames() {
@@ -68,10 +72,9 @@ DF.startAudience = function () {
   setTimeout(markOffline, 500);
 
   // ---------- wake lock and mouse cursor ----------
-  var lock = null;
   function wake() {
     if (!navigator.wakeLock || document.visibilityState !== "visible") return;
-    navigator.wakeLock.request("screen").then(function (l) { lock = l; }, function () { });
+    navigator.wakeLock.request("screen").then(function () { }, function () { });
   }
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") wake(); });
   wake();
@@ -85,11 +88,14 @@ DF.startAudience = function () {
   showCursor();
 
   // ---------- state ----------
+  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }; }
   function report() {
-    send({ type: "state", state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended });
-    DF.ss.set("df-audience-state", { state: st, auto: auto.on });
+    var m = info();
+    m.type = "state"; m.phase = "show";
+    send(m);
+    if (lastShown) DF.ss.set("df-last", lastShown);
   }
-  function go(target, opts) {
+  function go(target, o) {
     if (generic) return;
     if (!target) {
       // end reached
@@ -103,14 +109,21 @@ DF.startAudience = function () {
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
     st = { slide: target.slide, step: target.step };
-    driving = driving.then(function () { return (opts && opts.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
+    lastShown = st;
+    driving = driving.then(function () { return (o && o.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
     report();
     scheduleAuto();
   }
+  function finish() {
+    stopAuto();
+    opts.onEnd(lastShown || st);
+  }
   function act(a, arg) {
     switch (a) {
-      case "next": return go(st.ended ? null : DF.model.next(st));
-      case "prev": return go(st.ended ? st : DF.model.prev(st));
+      // after the end slide, one more step returns to the start screen (as in PowerPoint)
+      case "next": return st.ended ? finish() : go(DF.model.next(st));
+      // on the first slide there is nothing before it: no end slide
+      case "prev": if (st.ended) return go(st); var pv = DF.model.prev(st); return pv ? go(pv) : undefined;
       case "first": return go(DF.model.first());
       case "last": return go(DF.model.last());
       case "goto": return go(DF.model.goto(arg));
@@ -118,13 +131,11 @@ DF.startAudience = function () {
       case "black": return setBlank("black");
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
-      case "fullscreen": fsWanted = true; return DF.toggleFs();
-      case "end":
-        if (document.fullscreenElement) return;
-        send({ type: "ended" });
-        if (DF.solo) { DF.setSolo(null); DF.ss.del("df-audience-state"); location.reload(); } else window.close();
-        return;
-      case "timerReset": return send({ type: "action", action: "timerReset" });
+      case "fullscreen":
+        if (document.fullscreenElement) return DF.toggleFs();
+        fsWanted = true;
+        return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
+      case "end": return finish();
     }
   }
 
@@ -169,44 +180,25 @@ DF.startAudience = function () {
   function stopAuto(rep) { auto.on = false; clearTimeout(auto.timer); auto.due = 0; auto.waiting = false; if (rep) report(); }
 
   // ---------- keys ----------
-  var forwardKey = function (e) { /* generic: the source gets the key unchanged */ };
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     act(a, e && e.slide);
-    return true; // Escape in full screen too: the browser leaves full screen itself, the player never gets the key
-  }, generic ? { passthrough: true, forward: forwardKey } : { swallowAll: true });
+    return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
+  }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
 
-  // ---------- messages from the presenter view ----------
-  function onMsg(d) {
-    if (d.type === "init") { if (!DF.audienceInit(d.state)) act("state", d.state); if (d.settings) cfg = DF.merge(cfg, d.settings); return; }
-    if (d.type === "cmd") act(d.cmd, d.arg);
-    else if (d.type === "settings") { cfg = DF.merge(cfg, d.settings || {}); if (auto.on) scheduleAuto(); }
-    else if (d.type === "key" && generic) {
-      DF.synthKey(d.key, d.keyCode, { code: d.code, shift: d.shift });
-    } else if (d.type === "end") { window.close(); }
-  }
-  setInterval(function () { send({ type: "hb", state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }); }, 1000);
-  window.addEventListener("pagehide", function () { send({ type: "ended", reload: true }); });
+  DF.audience = {
+    act: act,
+    state: function () { return st; },
+    info: info,
+    settings: function (s) { cfg = DF.merge(cfg, s || {}); if (auto.on) scheduleAuto(); }
+  };
 
   // ---------- start ----------
-  // With a presenter view: send "hello" first, then take over its state (it owns the session).
-  // Without an answer within 1.5 s (or in solo mode) the stored state or the initial state applies.
-  var prev = DF.ss.get("df-audience-state");
-  var started = false, presenterState = null;
-  function begin() {
-    if (started) return;
-    started = true;
-    if (generic) return;
-    var init = presenterState || (prev && prev.state) || DF.model.first();
-    st = { slide: 0, step: 0 };
-    go(init, { jump: true });
-    if ((prev && prev.auto) || (!prev && cfg.auto.enabled)) startAuto();
-  }
-  DF.audienceInit = function (state) { if (!started) { presenterState = state; begin(); return true; } return false; };
-  adapter.ready().then(function () {
-    if (!opener) return begin();
-    send({ type: "hello" });
-    setTimeout(begin, 1500);
+  return adapter.ready().then(function () {
+    if (!generic) {
+      go(opts.start || DF.model.first(), { jump: true });
+      if (cfg.auto.enabled) startAuto();
+    }
+    return driving;
   });
-  DF.audience = { act: act, state: function () { return st; } };
 };
