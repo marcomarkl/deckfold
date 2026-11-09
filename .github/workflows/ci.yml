@@ -102,6 +102,15 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps ${{ matrix.browser }}
+      # The Linux runners have no sound device: Firefox stops an audio clip with a media error
+      # (OnMediaSinkAudioError) after about two seconds. A null sink gives it an output.
+      - name: Audio output for the browser (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=dfnull
+          pactl set-default-sink dfnull
       - name: Browser tests (public decks; tests of the private corpus are skipped)
         working-directory: tests
         run: npx playwright test --project=${{ matrix.project }}
