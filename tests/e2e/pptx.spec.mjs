@@ -80,9 +80,35 @@ test('PowerPoint --refresh replaces the player', async ({ page }) => {
 });
 
 test('PowerPoint media: audio starts with its slide, stops on the next', async ({ page }) => {
+  // record what play() returned and which media errors occurred, so that a failure names its cause
+  await page.addInitScript(() => {
+    window.__media = [];
+    const top = window === window.top;
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      const p = play.apply(this, arguments);
+      const rec = { top, tag: this.tagName, at: Math.round(performance.now()) };
+      window.__media.push(rec);
+      if (p && p.then) p.then(() => { rec.result = 'ok'; }, (e) => { rec.result = e.name + ': ' + e.message; });
+      return p;
+    };
+    document.addEventListener('error', (e) => {
+      const m = e.target;
+      if (m instanceof HTMLMediaElement) window.__media.push({ top, error: m.error ? m.error.code + ' ' + m.error.message : '?' });
+    }, true);
+  });
   await solo(page, 'pptx-media.html');
-  const audio = () => page.evaluate(() => { const a = document.querySelector('.df-pptx-slide audio'); return { paused: a.paused, t: a.currentTime }; });
-  await expect.poll(async () => (await audio()).paused === false && (await audio()).t > 0, { timeout: 5000 }).toBe(true);
+  const audio = () => page.evaluate(() => {
+    const a = document.querySelector('.df-pptx-slide audio');
+    return { paused: a.paused, t: a.currentTime, readyState: a.readyState, networkState: a.networkState,
+      error: a.error ? a.error.code + ' ' + a.error.message : null, src: (a.currentSrc || a.getAttribute('src') || '').slice(0, 5), plays: window.__media };
+  });
+  let st;
+  for (const end = Date.now() + 5000; Date.now() < end; await page.waitForTimeout(100)) {
+    st = await audio();
+    if (!st.paused && st.t > 0) break;
+  }
+  expect(!st.paused && st.t > 0, JSON.stringify(st)).toBe(true);
   await page.keyboard.press('ArrowRight');
   await expect.poll(async () => (await audio()).paused).toBe(true);
 });
