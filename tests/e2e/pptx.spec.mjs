@@ -378,18 +378,28 @@ test('PowerPoint transitions: every 2D, 3D and tile transition plays and ends on
   await solo(page, 'pptx-transitions3d.html');
   const types = await page.evaluate(() => window.__dfPptx.deck.slides.map((s) => (s.anim.transition || {}).type));
   expect(types.slice(1).every((t) => t && t !== 'fade')).toBe(true);
+  const starts = [];
   for (let i = 1; i < types.length; i++) {
     await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i - 1, step: 0 }), i);
-    await page.evaluate(() => window.__deckfold.audience.act('next'));
-    // something moves while the transition runs (1.5 s)
-    await expect.poll(() => page.evaluate(() => {
-      if (document.querySelector('#df-pptx-stage > canvas')) return true;
-      return [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
-    }), { timeout: 6000, intervals: [20], message: types[i] }).toBe(true);
+    // something moves while the transition runs (1.5 s); the time until it starts is measured in
+    // the page, so that a failure tells a late start from none (tile transitions first draw both
+    // slides into pictures). The steps go through deckfold, which keeps the player on its state.
+    const ms = await page.evaluate(async () => {
+      const moving = () => !!document.querySelector('#df-pptx-stage > canvas') ||
+        [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
+      await new Promise((r) => setTimeout(r, 0));
+      const t0 = performance.now();
+      window.__deckfold.audience.act('next');
+      while (!moving() && performance.now() - t0 < 20000) await new Promise((r) => setTimeout(r, 10));
+      return moving() ? Math.round(performance.now() - t0) : -1;
+    });
+    starts.push(`${types[i]} ${ms} ms`);
+    expect(ms >= 0 && ms < 6000, `${types[i]}: moving after ${ms} ms (-1: not within 20 s); all: ${starts.join(', ')}`).toBe(true);
     await expect.poll(() => shown(page), { timeout: 10000, message: types[i] }).toBe(i);
     await expect.poll(() => page.evaluate(() => !document.querySelector('#df-pptx-stage > canvas') &&
       [...document.querySelectorAll('.df-pptx-slide')].every((s) => !s.style.transform && !s.style.clipPath && !s.style.opacity)), { timeout: 10000, message: types[i] }).toBe(true);
   }
+  console.log('transitions start moving after:', starts.join(', '));
   expect(realErrors(w)).toEqual([]);
 });
 
