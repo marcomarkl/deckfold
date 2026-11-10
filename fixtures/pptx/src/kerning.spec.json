@@ -1,0 +1,1855 @@
+{
+  "rows": [
+    {
+      "id": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        20,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern1200",
+      "twin": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        70,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "twin": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        120,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "none",
+      "twin": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "none",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        170,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "inherited",
+      "twin": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "inherited",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        220,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "runs",
+      "twin": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon A",
+        "VATAR T",
+        "ext mind T",
+        "oy Y",
+        "ear P",
+        "AVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        270,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        320,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold",
+      "twin": "bold-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        370,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "0",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        420,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing",
+      "twin": "spacing-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "1200",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        470,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 12,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        520,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "twin": "kern0-12pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 12,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        550,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 10,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        580,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "twin": "kern0-10pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 10,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        610,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 18,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        640,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "twin": "kern0-18pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "sizePt": 18,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        670,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        20,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern1200",
+      "twin": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        70,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "twin": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        120,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "none",
+      "twin": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "none",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        170,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "inherited",
+      "twin": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "inherited",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        220,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "runs",
+      "twin": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon A",
+        "VATAR T",
+        "ext mind T",
+        "oy Y",
+        "ear P",
+        "AVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        270,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        320,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold",
+      "twin": "bold-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        370,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "0",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        420,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing",
+      "twin": "spacing-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "1200",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        470,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 12,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        520,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "twin": "kern0-12pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 12,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        550,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 10,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        580,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "twin": "kern0-10pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 10,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        610,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 18,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        640,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "twin": "kern0-18pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "sizePt": 18,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        670,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        20,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern1200",
+      "twin": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        70,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "twin": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        120,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "none",
+      "twin": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "none",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        170,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "inherited",
+      "twin": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "inherited",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        220,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "runs",
+      "twin": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon A",
+        "VATAR T",
+        "ext mind T",
+        "oy Y",
+        "ear P",
+        "AVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        270,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        320,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "bold",
+      "twin": "bold-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "bold": true,
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        370,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "0",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        420,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "spacing",
+      "twin": "spacing-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "1200",
+      "spcPt": 3,
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        470,
+        1160,
+        44
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 12,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        520,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "twin": "kern0-12pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 12,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        550,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 10,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        580,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "twin": "kern0-10pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 10,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        610,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 18,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        640,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "twin": "kern0-18pt",
+      "slide": 3,
+      "font": "Carlito",
+      "sizePt": 18,
+      "kern": "2000",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        670,
+        1160,
+        24
+      ]
+    },
+    {
+      "id": "wrap",
+      "twin": "wrap-kern0",
+      "slide": 4,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        30,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "wrap",
+      "twin": "wrap-kern0",
+      "slide": 4,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        255,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "wrap",
+      "twin": "wrap-kern0",
+      "slide": 4,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        480,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        30,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        255,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "Tomato Table AVATAR Text Toy Water Wave Voyage Year Yoyo Vault Today Taxes Tower Vote PAVE WAVY Tea Typeface Tornado Yacht Valve Yawn Teapot"
+      ],
+      "wrap": true,
+      "kerned": [
+        "Tomato",
+        "Table",
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Water",
+        "Wave",
+        "Voyage",
+        "Year",
+        "Yoyo",
+        "Vault",
+        "Today",
+        "Taxes",
+        "Tower",
+        "Vote",
+        "PAVE",
+        "WAVY",
+        "Tea",
+        "Typeface",
+        "Tornado",
+        "Yacht",
+        "Valve",
+        "Yawn",
+        "Teapot"
+      ],
+      "control": null,
+      "box": [
+        60,
+        480,
+        1000,
+        200
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        40,
+        1100,
+        60
+      ]
+    },
+    {
+      "id": "fontscale",
+      "twin": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Sans",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        140,
+        1100,
+        60
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        240,
+        1100,
+        60
+      ]
+    },
+    {
+      "id": "fontscale",
+      "twin": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Serif",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        340,
+        1100,
+        60
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "0",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        440,
+        1100,
+        60
+      ]
+    },
+    {
+      "id": "fontscale",
+      "twin": "fontscale-kern0",
+      "slide": 6,
+      "font": "Carlito",
+      "sizePt": 28,
+      "kern": "1200",
+      "runs": [
+        "noon AVATAR Text mind Toy Year PAVE dune"
+      ],
+      "wrap": true,
+      "fontScale": 40,
+      "kerned": [
+        "AVATAR",
+        "Text",
+        "Toy",
+        "Year",
+        "PAVE"
+      ],
+      "control": [
+        "noon",
+        "mind",
+        "dune"
+      ],
+      "box": [
+        60,
+        540,
+        1100,
+        60
+      ]
+    }
+  ]
+}

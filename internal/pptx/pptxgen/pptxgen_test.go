@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"deckfold/internal/pptx/kernprobe"
 )
 
 // Every XML part of every fixture must be well-formed, every relationship target inside the
@@ -111,6 +113,72 @@ func TestNoDuplicateProps(t *testing.T) {
 				if strings.Contains(sh, "</a:pPr><a:pPr") || strings.Contains(sh, "</a:rPr><a:rPr") {
 					t.Errorf("%s slide %d: duplicated a:pPr or a:rPr", name, i+1)
 				}
+			}
+		}
+	}
+}
+
+// TestKerningWords checks the words of the kerning deck against the bundled fonts, so that the
+// deck keeps measuring something: every kerned word has pairs worth more than 1 % of its width
+// in every face (kern table for Liberation, GPOS for Carlito), and no control word has a pair
+// in any table.
+func TestKerningWords(t *testing.T) {
+	var faces []*kernprobe.Font
+	for _, name := range []string{"LiberationSans", "LiberationSerif", "Carlito"} {
+		for _, bold := range []bool{false, true} {
+			f, err := kernprobe.Bundled(name, bold)
+			if err != nil {
+				t.Fatal(err)
+			}
+			faces = append(faces, f)
+		}
+	}
+	// what the comment on the deck says about the fonts
+	for _, f := range faces {
+		liberation := strings.HasPrefix(f.Family, "Liberation")
+		if got := f.KernVersion >= 0; got != liberation {
+			t.Errorf("%s %s: kern table %v, want %v", f.Family, f.Style, got, liberation)
+		}
+		if !f.GPOSKern {
+			t.Errorf("%s %s: GPOS has no kern feature", f.Family, f.Style)
+		}
+	}
+	all := map[string]bool{}
+	for _, w := range KerningWords {
+		all[w] = true
+	}
+	if len(KerningKerned)+len(KerningControl) != len(KerningWords) {
+		t.Errorf("kerned and control words do not add up to the line")
+	}
+	for _, w := range KerningKerned {
+		if !all[w] {
+			t.Errorf("kerned word %q is not in the line", w)
+		}
+		for _, f := range faces {
+			if s := f.Share(w); s > -0.01 {
+				t.Errorf("%q in %s %s: kerning is %.2f %% of the width, want more than 1 %%", w, f.Family, f.Style, -100*s)
+			}
+		}
+	}
+	for _, w := range KerningControl {
+		if !all[w] {
+			t.Errorf("control word %q is not in the line", w)
+		}
+		for _, f := range faces {
+			if k, g := f.Kern(w), f.GPOS(w); k != 0 || g != 0 {
+				t.Errorf("control word %q in %s %s: kern table %+.4f em, GPOS %+.4f em", w, f.Family, f.Style, k, g)
+			}
+		}
+	}
+	// Liberation has the same values in both tables, so its rows cannot tell which one
+	// PowerPoint read; the rows in Carlito can. If a later font version differs, say so.
+	if c := kernprobe.Choose(faces, KerningWords, 0.01); len(c.Differ) != 0 {
+		t.Logf("kern table and GPOS disagree for %v: the deck could now tell the tables apart", c.Differ)
+	}
+	for _, w := range kerningWrapWords {
+		for _, f := range faces {
+			if !f.Has(w) || f.Share(w) > -0.01 {
+				t.Errorf("wrap word %q in %s %s: kerning is %.2f %% of the width", w, f.Family, f.Style, -100*f.Share(w))
 			}
 		}
 	}

@@ -1,11 +1,9 @@
 package fonts
 
 import (
-	"bytes"
 	"unicode"
 
 	"github.com/go-text/typesetting/di"
-	gtfont "github.com/go-text/typesetting/font"
 	"github.com/go-text/typesetting/language"
 	"github.com/go-text/typesetting/shaping"
 	"golang.org/x/image/math/fixed"
@@ -52,15 +50,7 @@ func RTL(text string) bool {
 func (f *Face) ShapedWidth(text string) (float64, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.shapeFace == nil && !f.shapeFailed {
-		gf, err := gtfont.ParseTTF(bytes.NewReader(f.data))
-		if err != nil {
-			f.shapeFailed = true
-		} else {
-			f.shapeFace = gf
-		}
-	}
-	if f.shapeFace == nil {
+	if f.shaper() == nil {
 		return 0, false
 	}
 	f.noSubset = true

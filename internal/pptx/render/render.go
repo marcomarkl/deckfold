@@ -236,7 +236,10 @@ func (r *slideRenderer) render() (Slide, error) {
 	}
 	r.tree(&body, r.slide.Root.Path("cSld/spTree"), ownerSlide, r.slide.Part, identity())
 	var svg strings.Builder
-	fmt.Fprintf(&svg, `<svg class="df-pptx-svg" xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s">`, f(W), f(H), f(W), f(H))
+	// font-kerning: deckfold places every character itself (kernedText) and measures text that
+	// PowerPoint does not kern without kerning, so the browser must not kern on its own. A font
+	// that is embedded whole would otherwise be kerned with its GPOS.
+	fmt.Fprintf(&svg, `<svg class="df-pptx-svg" xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" style="font-kerning:none">`, f(W), f(H), f(W), f(H))
 	if r.defs.Len() > 0 {
 		svg.WriteString("<defs>" + r.defs.String() + "</defs>")
 	}
@@ -656,7 +659,11 @@ func splitSegs(segs []textSeg, mode string) []textSeg {
 			}
 			piece := s
 			piece.text = string(rs[start:end])
-			piece.x = s.x + measure(s.face, string(rs[:start]), s.size) + float64(start)*s.spacing
+			// where the piece starts: the width of what stands before it in the segment, and the
+			// pair between the two when the text is kerned
+			before := s
+			before.text = string(rs[:start])
+			piece.x = s.x + width(s.face, before.text, s.size, s.kern) + float64(start)*s.spacing + pairPx(&before, piece.text, s.face, s.size, s.kern)
 			piece.unit = unit
 			out = append(out, piece)
 			start = end
@@ -676,6 +683,27 @@ func splitSegs(segs []textSeg, mode string) []textSeg {
 		flush(len(rs))
 	}
 	return out
+}
+
+// kernedText returns the escaped text of a segment. In kerned text every character that forms a
+// pair with the one before it sits in a tspan whose dx moves it, and the text after it, by the
+// kerning. The positions are deckfold's own in every browser that way: the embedded subsets
+// carry no kerning tables, and a browser would take GPOS where PowerPoint takes the kern table.
+func kernedText(s textSeg) string {
+	if !s.kern {
+		return esc(s.text)
+	}
+	var b strings.Builder
+	rs := []rune(s.text)
+	start := 0
+	for i := 1; i < len(rs); i++ {
+		if dx := f(s.face.Kern(rs[i-1], rs[i]) * s.size); dx != "0" {
+			b.WriteString(esc(string(rs[start:i])) + `<tspan dx="` + dx + `">` + esc(string(rs[i])) + `</tspan>`)
+			start = i + 1
+		}
+	}
+	b.WriteString(esc(string(rs[start:])))
+	return b.String()
 }
 
 // writeText draws text segments, one group per paragraph (data-p), so that paragraph builds can
@@ -735,6 +763,11 @@ func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 		if s.wordSpace != 0 {
 			style += "word-spacing:" + f(s.wordSpace) + "px;"
 		}
+		if s.rtl || fonts.RTL(s.text) || fonts.Complex(s.text) {
+			// shaped text is measured with the kerning of the shaper, so the browser kerns it
+			// too; everywhere else the slide switches the browser's own kerning off
+			style += "font-kerning:auto;"
+		}
 		op := ""
 		if s.color.A < 1 {
 			op = ` fill-opacity="` + f(s.color.A) + `"`
@@ -748,7 +781,7 @@ func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 			dir = ` direction="rtl" text-anchor="end"`
 		}
 		txt := fmt.Sprintf(`<text x="%s" y="%s" font-family="%s" font-size="%s" fill="%s"%s%s%s xml:space="preserve">%s</text>`,
-			f(s.x), f(s.y), alias, f(s.size), s.color.Hex(), op, style, dir, esc(s.text))
+			f(s.x), f(s.y), alias, f(s.size), s.color.Hex(), op, style, dir, kernedText(s))
 		if j, ok := strings.CutPrefix(s.href, jumpScheme); ok {
 			// a link to another slide: the control layer follows it (data-df-jump), no address
 			txt = `<a data-df-jump="` + esc(j) + `">` + txt + `</a>`

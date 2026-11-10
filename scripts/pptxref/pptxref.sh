@@ -20,13 +20,42 @@
 # in every exported PDF: a deck drawn with a replaced font gets no reference (on 2026-11-10 a
 # run wrote reference images in Calibri without any sign of it).
 #
+# With --pdf it takes the paths of decks in tests/.out instead of names, and only saves a copy
+# and exports the PDF, both into tests/.out/pptxref: no reference images, and nothing is written
+# to fixtures/. That is for decks that measure something and must not go into the repository,
+# such as the kerning deck with fonts that are not bundled (go run ./scripts/pptxgen -kernlocal).
+#
 # Usage: scripts/pptxref/pptxref.sh [name ...]
+#        scripts/pptxref/pptxref.sh --pdf tests/.out/<folder>/<deck>.pptx ...
 set -eu
 
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 src="$repo/fixtures/pptx/src"
 work="$repo/tests/.out/pptxref"
 mkdir -p "$work"
+
+pdf_only=""
+if [ "${1:-}" = "--pdf" ]; then
+	pdf_only=1
+	shift
+	if [ "$#" -eq 0 ]; then
+		echo "pptxref: --pdf needs the path of a deck in tests/.out" >&2
+		exit 3
+	fi
+	for deck in "$@"; do
+		case "$(cd "$(dirname "$deck")" 2>/dev/null && pwd)/" in
+		"$repo/tests/.out/"*) ;;
+		*)
+			echo "pptxref: --pdf only takes decks inside tests/.out: $deck" >&2
+			exit 3
+			;;
+		esac
+		if [ ! -f "$deck" ]; then
+			echo "pptxref: no such deck: $deck" >&2
+			exit 3
+		fi
+	done
+fi
 
 pp_running() { pgrep -qf "Microsoft PowerPoint.app/Contents/MacOS/Microsoft PowerPoint"; }
 pp_quit() {
@@ -101,15 +130,24 @@ fi
 failed=""
 for name in "$@"; do
 	# fixed file names per deck, so that PowerPoint sees the same paths on every run
+	deck="$src/$name.pptx"
+	if [ -n "$pdf_only" ]; then
+		deck=$name
+		name=$(basename "$deck" .pptx)
+	fi
 	in="$work/$name-in.pptx" out="$work/$name-out.pptx" pdf="$work/$name.pdf" png="$work/$name-png"
 	rm -rf "$png"
 	mkdir -p "$png"
-	cp "$src/$name.pptx" "$in"
+	cp "$deck" "$in"
 	rm -f "$out" "$pdf"
 	# a deck PowerPoint reports as damaged (repair prompt) is not saved; go on with the next one
 	if ! osascript "$repo/scripts/pptxref/export.applescript" "$in" "$out" "$pdf" || [ ! -s "$out" ] || [ ! -s "$pdf" ]; then
 		echo "pptxref: PowerPoint did not save $name (was it reported as damaged?); no reference written" >&2
 		failed="$failed $name"
+		continue
+	fi
+	if [ -n "$pdf_only" ]; then
+		echo "PDF written: tests/.out/pptxref/$name.pdf (PowerPoint's copy: $name-out.pptx); no reference"
 		continue
 	fi
 	other=$(drawn_with_other_fonts "$in" "$pdf")

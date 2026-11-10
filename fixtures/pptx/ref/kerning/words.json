@@ -1,0 +1,3882 @@
+{
+  "source": "a65a03f7a229e72573d633962f77646589f708d08c255c99ec358f5118808b7e",
+  "note": "Word positions in the PDF PowerPoint exported from the kerning deck, written by scripts/kernmeasure. Regenerate after scripts/pptxref/pptxref.sh kerning.",
+  "rows": [
+    {
+      "id": "kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 115.246,
+          "width": 111.843
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 234.874,
+          "width": 54.533
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 297.123,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 365.746,
+          "width": 46.749
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 420.245,
+          "width": 59.198
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 487.243,
+          "width": 74.553
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 569.496,
+          "width": 62.44
+        }
+      ]
+    },
+    {
+      "id": "kern1200",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 113.701,
+          "width": 103.522
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 224.502,
+          "width": 51.428
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 283.647,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 351.765,
+          "width": 43.644
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 402.655,
+          "width": 56.627
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 467.083,
+          "width": 70.392
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 545.175,
+          "width": 62.44
+        }
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 113.701,
+          "width": 103.522
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 224.502,
+          "width": 51.428
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 283.647,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 351.765,
+          "width": 43.644
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 402.655,
+          "width": 56.627
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 467.083,
+          "width": 70.392
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 545.175,
+          "width": 62.44
+        }
+      ]
+    },
+    {
+      "id": "none",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 115.246,
+          "width": 111.843
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 234.874,
+          "width": 54.533
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 297.123,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 365.746,
+          "width": 46.749
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 420.245,
+          "width": 59.198
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 487.243,
+          "width": 74.553
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 569.496,
+          "width": 62.44
+        }
+      ]
+    },
+    {
+      "id": "inherited",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 113.701,
+          "width": 103.522
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 224.502,
+          "width": 51.428
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 283.647,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 351.765,
+          "width": 43.644
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 402.655,
+          "width": 56.627
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 467.083,
+          "width": 70.392
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 545.175,
+          "width": 62.44
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 62.44
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 113.712,
+          "width": 103.495
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 224.481,
+          "width": 51.452
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 283.65,
+          "width": 60.816
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 351.768,
+          "width": 43.646
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 402.66,
+          "width": 56.627
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 467.099,
+          "width": 70.374
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 545.168,
+          "width": 62.432
+        }
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 68.482
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 121.244,
+          "width": 116.76
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 245.794,
+          "width": 57.674
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 311.258,
+          "width": 66.858
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 385.878,
+          "width": 49.818
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 443.485,
+          "width": 60.754
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 511.973,
+          "width": 76.21
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 595.889,
+          "width": 66.942
+        }
+      ]
+    },
+    {
+      "id": "bold",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 68.482
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 120.208,
+          "width": 108.388
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 236.386,
+          "width": 55.602
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 299.778,
+          "width": 66.858
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 374.398,
+          "width": 47.746
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 429.429,
+          "width": 59.186
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 496.349,
+          "width": 72.01
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 576.065,
+          "width": 66.942
+        }
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 71.445
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 130.26,
+          "width": 126.84
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 270.887,
+          "width": 63.521
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 348.139,
+          "width": 69.821
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 431.775,
+          "width": 52.735
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 498.27,
+          "width": 68.197
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 580.282,
+          "width": 83.541
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 677.526,
+          "width": 71.445
+        }
+      ]
+    },
+    {
+      "id": "spacing",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 71.445
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 128.692,
+          "width": 118.524
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 260.499,
+          "width": 60.441
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 334.671,
+          "width": 69.821
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 417.803,
+          "width": 49.655
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 480.714,
+          "width": 65.621
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 560.15,
+          "width": 79.397
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 653.25,
+          "width": 71.445
+        }
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 26.548
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 74.876,
+          "width": 48.041
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 126.253,
+          "width": 23.336
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 153.005,
+          "width": 25.921
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 182.255,
+          "width": 20
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 205.631,
+          "width": 25.247
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 234.257,
+          "width": 32.005
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 269.634,
+          "width": 26.548
+        }
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 26.548
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 74.216,
+          "width": 44.479
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 121.816,
+          "width": 22.007
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 147.238,
+          "width": 25.921
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 176.272,
+          "width": 18.671
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 198.102,
+          "width": 24.146
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 225.628,
+          "width": 30.224
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 259.224,
+          "width": 26.548
+        }
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 22.06
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 69.75,
+          "width": 39.845
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 112.375,
+          "width": 19.405
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 134.5,
+          "width": 21.685
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 158.875,
+          "width": 16.625
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 178.25,
+          "width": 20.955
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 202,
+          "width": 26.545
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 231.25,
+          "width": 22.06
+        }
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 22.06
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 69.75,
+          "width": 39.845
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 112.375,
+          "width": 19.405
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 134.5,
+          "width": 21.685
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 158.875,
+          "width": 16.625
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 178.25,
+          "width": 20.955
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 202,
+          "width": 26.545
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 231.25,
+          "width": 22.06
+        }
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 40.01
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 90.004,
+          "width": 71.998
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 167.006,
+          "width": 35.005
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 207.007,
+          "width": 39.008
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 251.008,
+          "width": 30.001
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 286.009,
+          "width": 37.996
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 329.011,
+          "width": 48.008
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 382.014,
+          "width": 40.01
+        }
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "slide": 1,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 40.01
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 90.004,
+          "width": 71.998
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 167.006,
+          "width": 35.005
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 207.007,
+          "width": 39.008
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 251.008,
+          "width": 30.001
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 286.009,
+          "width": 37.996
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 329.011,
+          "width": 48.008
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 382.014,
+          "width": 40.01
+        }
+      ]
+    },
+    {
+      "id": "kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 108,
+          "width": 116.799
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 231.749,
+          "width": 51.285
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 290,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 354.501,
+          "width": 45.125
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 406.626,
+          "width": 54.326
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 468.002,
+          "width": 73.231
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 548.25,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "kern1200",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 106.454,
+          "width": 104.236
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 217.136,
+          "width": 49.33
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 273.432,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.429,
+          "width": 43.17
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.561,
+          "width": 51.52
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.131,
+          "width": 67.054
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 519.203,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 106.454,
+          "width": 104.236
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 217.136,
+          "width": 49.33
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 273.432,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.429,
+          "width": 43.17
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.561,
+          "width": 51.52
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.131,
+          "width": 67.054
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 519.203,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "none",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 108,
+          "width": 116.799
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 231.749,
+          "width": 51.285
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 290,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 354.501,
+          "width": 45.125
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 406.626,
+          "width": 54.326
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 468.002,
+          "width": 73.231
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 548.25,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "inherited",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 106.454,
+          "width": 104.236
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 217.136,
+          "width": 49.33
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 273.432,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.429,
+          "width": 43.17
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.561,
+          "width": 51.52
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.131,
+          "width": 67.054
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 519.203,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 56
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 106.454,
+          "width": 104.23
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 217.141,
+          "width": 49.324
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 273.431,
+          "width": 57.501
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.428,
+          "width": 43.167
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.556,
+          "width": 51.52
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.126,
+          "width": 67.052
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 519.195,
+          "width": 54.432
+        }
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 59.192
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 111.248,
+          "width": 119.84
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 238.122,
+          "width": 54.326
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 299.498,
+          "width": 62.317
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 368.87,
+          "width": 46.626
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 422.496,
+          "width": 59.058
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 488.498,
+          "width": 76.3
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 571.747,
+          "width": 59.304
+        }
+      ]
+    },
+    {
+      "id": "bold",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 59.192
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 109.702,
+          "width": 108.461
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 224.693,
+          "width": 51.755
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 283.498,
+          "width": 62.317
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 352.367,
+          "width": 44.055
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 402.384,
+          "width": 55.952
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 464.773,
+          "width": 70.61
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 542.333,
+          "width": 59.304
+        }
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 64.996
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 122.994,
+          "width": 131.782
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 267.718,
+          "width": 60.292
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 340.98,
+          "width": 66.508
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 420.486,
+          "width": 51.134
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 484.617,
+          "width": 63.316
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 560.987,
+          "width": 82.216
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 656.229,
+          "width": 63.428
+        }
+      ]
+    },
+    {
+      "id": "spacing",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 64.996
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 121.454,
+          "width": 119.21
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 253.102,
+          "width": 58.332
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 324.404,
+          "width": 66.508
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 403.406,
+          "width": 49.174
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 464.541,
+          "width": 60.516
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 538.111,
+          "width": 76.028
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 627.165,
+          "width": 63.428
+        }
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 24
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 72,
+          "width": 49.878
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 124.874,
+          "width": 22.086
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 150,
+          "width": 24.751
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 177.751,
+          "width": 19.375
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 200.126,
+          "width": 23.37
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 226.5,
+          "width": 31.206
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 260.749,
+          "width": 23.328
+        }
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 24
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 71.34,
+          "width": 44.498
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 118.62,
+          "width": 21.246
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 142.906,
+          "width": 24.751
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 170.442,
+          "width": 18.535
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 191.532,
+          "width": 22.171
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 216.707,
+          "width": 28.561
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 248.311,
+          "width": 23.328
+        }
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 20
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 67.5,
+          "width": 41.795
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 111.75,
+          "width": 18.405
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 132.625,
+          "width": 20.5
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 155.625,
+          "width": 16.125
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 174.25,
+          "width": 19.58
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 196.375,
+          "width": 26.11
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 225,
+          "width": 19.44
+        }
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 20
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 67.5,
+          "width": 41.795
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 111.75,
+          "width": 18.405
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 132.625,
+          "width": 20.5
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 155.625,
+          "width": 16.125
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 174.25,
+          "width": 19.58
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 196.375,
+          "width": 26.11
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 225,
+          "width": 19.44
+        }
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 36
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 85.5,
+          "width": 75.004
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 164.999,
+          "width": 33.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 202.498,
+          "width": 37.001
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 243.999,
+          "width": 29
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 277.499,
+          "width": 34.992
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 316.996,
+          "width": 46.998
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 368.496,
+          "width": 34.992
+        }
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "slide": 2,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 36
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 85.5,
+          "width": 75.004
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 164.999,
+          "width": 33.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 202.498,
+          "width": 37.001
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 243.999,
+          "width": 29
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 277.499,
+          "width": 34.992
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 316.996,
+          "width": 46.998
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 368.496,
+          "width": 34.992
+        }
+      ]
+    },
+    {
+      "id": "kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.377,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.256,
+          "width": 49.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.629,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.256,
+          "width": 41.059
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.632,
+          "width": 50.646
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.631,
+          "width": 60.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.26,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "kern1200",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.377,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.256,
+          "width": 49.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.629,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.256,
+          "width": 41.059
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.632,
+          "width": 50.646
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.631,
+          "width": 60.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.26,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "kern2000-28pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.377,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.256,
+          "width": 49.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.629,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.256,
+          "width": 41.059
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.632,
+          "width": 50.646
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.631,
+          "width": 60.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.26,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "none",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.377,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.256,
+          "width": 49.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.629,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.256,
+          "width": 41.059
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.632,
+          "width": 50.646
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.631,
+          "width": 60.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.26,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "inherited",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.377,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.256,
+          "width": 49.003
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.629,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.256,
+          "width": 41.059
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.632,
+          "width": 50.646
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.631,
+          "width": 60.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.26,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "runs",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 58.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 110.38,
+          "width": 93.452
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 210.253,
+          "width": 49
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 265.623,
+          "width": 58.201
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 330.25,
+          "width": 41.06
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 377.626,
+          "width": 50.64
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 434.622,
+          "width": 60.294
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 501.253,
+          "width": 58.195
+        }
+      ]
+    },
+    {
+      "id": "bold-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 60.035
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 111.374,
+          "width": 97.118
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 214.859,
+          "width": 50.599
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 271.881,
+          "width": 59.671
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.891,
+          "width": 42.151
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.41,
+          "width": 52.447
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.28,
+          "width": 62.051
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 513.67,
+          "width": 59.083
+        }
+      ]
+    },
+    {
+      "id": "bold",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 60.035
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 111.374,
+          "width": 97.118
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 214.859,
+          "width": 50.599
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 271.881,
+          "width": 59.671
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 337.891,
+          "width": 42.151
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 386.41,
+          "width": 52.447
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 445.28,
+          "width": 62.051
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 513.67,
+          "width": 59.083
+        }
+      ]
+    },
+    {
+      "id": "spacing-kern0",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 67.948
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 125.374,
+          "width": 108.486
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 246.286,
+          "width": 58.008
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 316.664,
+          "width": 67.192
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 396.283,
+          "width": 47.062
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 455.659,
+          "width": 59.66
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 527.661,
+          "width": 69.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 609.295,
+          "width": 67.192
+        }
+      ]
+    },
+    {
+      "id": "spacing",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 67.948
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 125.374,
+          "width": 108.486
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 246.286,
+          "width": 58.008
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 316.664,
+          "width": 67.192
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 396.283,
+          "width": 47.062
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 455.659,
+          "width": 59.66
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 527.661,
+          "width": 69.292
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 609.295,
+          "width": 67.192
+        }
+      ]
+    },
+    {
+      "id": "kern0-12pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 25.301
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 72.996,
+          "width": 40.164
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 115.891,
+          "width": 21.149
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 139.771,
+          "width": 24.917
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 167.383,
+          "width": 17.695
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 187.762,
+          "width": 21.809
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 212.254,
+          "width": 25.865
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 240.886,
+          "width": 24.725
+        }
+      ]
+    },
+    {
+      "id": "kern1200-12pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 25.301
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 72.996,
+          "width": 40.164
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 115.891,
+          "width": 21.149
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 139.771,
+          "width": 24.917
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 167.383,
+          "width": 17.695
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 187.762,
+          "width": 21.809
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 212.254,
+          "width": 25.865
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 240.886,
+          "width": 24.725
+        }
+      ]
+    },
+    {
+      "id": "kern0-10pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 21
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 68.25,
+          "width": 33.18
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 103.625,
+          "width": 17.6
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 123.5,
+          "width": 20.75
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 146.5,
+          "width": 14.655
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 163.375,
+          "width": 18.115
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 183.75,
+          "width": 21.38
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 207.375,
+          "width": 20.73
+        }
+      ]
+    },
+    {
+      "id": "kern1200-10pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 21
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 68.25,
+          "width": 33.18
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 103.625,
+          "width": 17.6
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 123.5,
+          "width": 20.75
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 146.5,
+          "width": 14.655
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 163.375,
+          "width": 18.115
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 183.75,
+          "width": 21.38
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 207.375,
+          "width": 20.73
+        }
+      ]
+    },
+    {
+      "id": "kern0-18pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 37.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 87.12,
+          "width": 59.922
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 151.139,
+          "width": 31.525
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 186.743,
+          "width": 37.447
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 228.359,
+          "width": 26.399
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 258.854,
+          "width": 32.641
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 295.574,
+          "width": 38.671
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 338.324,
+          "width": 37.465
+        }
+      ]
+    },
+    {
+      "id": "kern2000-18pt",
+      "slide": 3,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 37.951
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 87.12,
+          "width": 59.922
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 151.139,
+          "width": 31.525
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 186.743,
+          "width": 37.447
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 228.359,
+          "width": 26.399
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 258.854,
+          "width": 32.641
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 295.574,
+          "width": 38.671
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 338.324,
+          "width": 37.465
+        }
+      ]
+    },
+    {
+      "id": "wrap",
+      "slide": 4,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 91.96
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 144.263,
+          "width": 67.085
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 217.609,
+          "width": 103.522
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 328.41,
+          "width": 51.428
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 387.051,
+          "width": 43.644
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 438.445,
+          "width": 73.657
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 519.903,
+          "width": 70.526
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 598.235,
+          "width": 93.52
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 699.058,
+          "width": 56.627
+        },
+        {
+          "text": "Yoyo",
+          "line": 1,
+          "x": 45,
+          "width": 61.247
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 114.054,
+          "width": 61.827
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 183.093,
+          "width": 74.892
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 265.231,
+          "width": 73.268
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 345.745,
+          "width": 74.841
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 428.387,
+          "width": 56.022
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 492.216,
+          "width": 70.392
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 570.308,
+          "width": 79.181
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 656.179,
+          "width": 45.212
+        },
+        {
+          "text": "Typeface",
+          "line": 2,
+          "x": 45,
+          "width": 113.77
+        },
+        {
+          "text": "Tornado",
+          "line": 2,
+          "x": 166.072,
+          "width": 101.458
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 274.832,
+          "width": 69.577
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 352.126,
+          "width": 67.987
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 427.416,
+          "width": 67.987
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 502.705,
+          "width": 84.3
+        }
+      ]
+    },
+    {
+      "id": "wrap",
+      "slide": 4,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 85.047
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 136.543,
+          "width": 61.729
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 203.67,
+          "width": 104.236
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 314.352,
+          "width": 49.33
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 370.144,
+          "width": 43.17
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 419.811,
+          "width": 65.962
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 492.32,
+          "width": 62.944
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 561.704,
+          "width": 83.448
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 651.057,
+          "width": 51.52
+        },
+        {
+          "text": "Yoyo",
+          "line": 0,
+          "x": 708.589,
+          "width": 59.444
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 45,
+          "width": 59.055
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 110.517,
+          "width": 69.546
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 186.56,
+          "width": 64.814
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 257.853,
+          "width": 71.12
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 335.52,
+          "width": 50.823
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 393.287,
+          "width": 67.054
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 466.854,
+          "width": 80.377
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 552.721,
+          "width": 39.978
+        },
+        {
+          "text": "Typeface",
+          "line": 1,
+          "x": 599.14,
+          "width": 102.105
+        },
+        {
+          "text": "Tornado",
+          "line": 2,
+          "x": 45,
+          "width": 92.921
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 143.882,
+          "width": 63.98
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 214.324,
+          "width": 63.703
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 283.932,
+          "width": 64.07
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 354.498,
+          "width": 75.706
+        }
+      ]
+    },
+    {
+      "id": "wrap",
+      "slide": 4,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 88.256
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 139.626,
+          "width": 62.07
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 208.002,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 307.881,
+          "width": 49.003
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 363.254,
+          "width": 41.059
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 410.63,
+          "width": 71.271
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 488.254,
+          "width": 64.82
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 559.38,
+          "width": 83.698
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 649.383,
+          "width": 50.646
+        },
+        {
+          "text": "Yoyo",
+          "line": 0,
+          "x": 706.383,
+          "width": 55.756
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 45,
+          "width": 59.758
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 111.128,
+          "width": 69.185
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 186.63,
+          "width": 63.946
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 257.005,
+          "width": 72.022
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 335.38,
+          "width": 53.945
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 395.63,
+          "width": 60.292
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 462.259,
+          "width": 70.638
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 539.262,
+          "width": 40.911
+        },
+        {
+          "text": "Typeface",
+          "line": 1,
+          "x": 586.512,
+          "width": 102.57
+        },
+        {
+          "text": "Tornado",
+          "line": 1,
+          "x": 695.387,
+          "width": 95.757
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 45,
+          "width": 63.006
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 114.376,
+          "width": 62.196
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 182.878,
+          "width": 61.701
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 251.004,
+          "width": 79.755
+        }
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 95.066
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 147.872,
+          "width": 70.19
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 225.869,
+          "width": 111.843
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 345.496,
+          "width": 54.533
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 407.746,
+          "width": 46.749
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 462.245,
+          "width": 74.698
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 544.744,
+          "width": 71.568
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 624.119,
+          "width": 95.066
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 726.991,
+          "width": 59.198
+        },
+        {
+          "text": "Yoyo",
+          "line": 1,
+          "x": 45,
+          "width": 63.818
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 116.624,
+          "width": 63.907
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 188.248,
+          "width": 77.997
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 273.995,
+          "width": 76.373
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 358.118,
+          "width": 77.946
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 443.866,
+          "width": 57.568
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 509.24,
+          "width": 74.553
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 591.493,
+          "width": 82.303
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 681.496,
+          "width": 48.317
+        },
+        {
+          "text": "Typeface",
+          "line": 2,
+          "x": 45,
+          "width": 115.315
+        },
+        {
+          "text": "Tornado",
+          "line": 2,
+          "x": 168.122,
+          "width": 104.563
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 280.491,
+          "width": 71.658
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 359.866,
+          "width": 70.067
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 437.739,
+          "width": 70.067
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 515.613,
+          "width": 87.405
+        }
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 87.002
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 139.002,
+          "width": 63.683
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 209.629,
+          "width": 116.799
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 333.378,
+          "width": 51.285
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 391.629,
+          "width": 45.125
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 443.754,
+          "width": 68.202
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 519.007,
+          "width": 65.184
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 591.135,
+          "width": 87.058
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 685.136,
+          "width": 54.326
+        },
+        {
+          "text": "Yoyo",
+          "line": 1,
+          "x": 45,
+          "width": 62.25
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 114.25,
+          "width": 62.16
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 183.376,
+          "width": 71.501
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 261.877,
+          "width": 66.769
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 335.629,
+          "width": 73.074
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 415.754,
+          "width": 54.432
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 477.13,
+          "width": 73.231
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 557.378,
+          "width": 87.091
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 651.503,
+          "width": 41.933
+        },
+        {
+          "text": "Typeface",
+          "line": 2,
+          "x": 45,
+          "width": 104.059
+        },
+        {
+          "text": "Tornado",
+          "line": 2,
+          "x": 156.003,
+          "width": 94.875
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 257.878,
+          "width": 66.786
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 331.63,
+          "width": 66.808
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 405.383,
+          "width": 66.875
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 479.258,
+          "width": 77.661
+        }
+      ]
+    },
+    {
+      "id": "wrap-kern0",
+      "slide": 5,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "Tomato",
+          "line": 0,
+          "x": 45,
+          "width": 88.256
+        },
+        {
+          "text": "Table",
+          "line": 0,
+          "x": 139.626,
+          "width": 62.07
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 208.002,
+          "width": 93.458
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 307.881,
+          "width": 49.003
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 363.254,
+          "width": 41.059
+        },
+        {
+          "text": "Water",
+          "line": 0,
+          "x": 410.63,
+          "width": 71.271
+        },
+        {
+          "text": "Wave",
+          "line": 0,
+          "x": 488.254,
+          "width": 64.82
+        },
+        {
+          "text": "Voyage",
+          "line": 0,
+          "x": 559.38,
+          "width": 83.698
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 649.383,
+          "width": 50.646
+        },
+        {
+          "text": "Yoyo",
+          "line": 0,
+          "x": 706.383,
+          "width": 55.756
+        },
+        {
+          "text": "Vault",
+          "line": 1,
+          "x": 45,
+          "width": 59.758
+        },
+        {
+          "text": "Today",
+          "line": 1,
+          "x": 111.128,
+          "width": 69.185
+        },
+        {
+          "text": "Taxes",
+          "line": 1,
+          "x": 186.63,
+          "width": 63.946
+        },
+        {
+          "text": "Tower",
+          "line": 1,
+          "x": 257.005,
+          "width": 72.022
+        },
+        {
+          "text": "Vote",
+          "line": 1,
+          "x": 335.38,
+          "width": 53.945
+        },
+        {
+          "text": "PAVE",
+          "line": 1,
+          "x": 395.63,
+          "width": 60.292
+        },
+        {
+          "text": "WAVY",
+          "line": 1,
+          "x": 462.259,
+          "width": 70.638
+        },
+        {
+          "text": "Tea",
+          "line": 1,
+          "x": 539.262,
+          "width": 40.911
+        },
+        {
+          "text": "Typeface",
+          "line": 1,
+          "x": 586.512,
+          "width": 102.57
+        },
+        {
+          "text": "Tornado",
+          "line": 1,
+          "x": 695.387,
+          "width": 95.757
+        },
+        {
+          "text": "Yacht",
+          "line": 2,
+          "x": 45,
+          "width": 63.006
+        },
+        {
+          "text": "Valve",
+          "line": 2,
+          "x": 114.376,
+          "width": 62.196
+        },
+        {
+          "text": "Yawn",
+          "line": 2,
+          "x": 182.878,
+          "width": 61.701
+        },
+        {
+          "text": "Teapot",
+          "line": 2,
+          "x": 251.004,
+          "width": 79.755
+        }
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 24.49
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 72.499,
+          "width": 44.194
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 119.75,
+          "width": 21.432
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 144.124,
+          "width": 23.866
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 170.998,
+          "width": 18.374
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 192.372,
+          "width": 23.288
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 218.622,
+          "width": 29.463
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 251.123,
+          "width": 24.49
+        }
+      ]
+    },
+    {
+      "id": "fontscale",
+      "slide": 6,
+      "font": "Liberation Sans",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 24.49
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 72.499,
+          "width": 44.194
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 119.75,
+          "width": 21.432
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 144.124,
+          "width": 23.866
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 170.998,
+          "width": 18.374
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 192.372,
+          "width": 23.288
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 218.622,
+          "width": 29.463
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 251.123,
+          "width": 24.49
+        }
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 22
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 69.75,
+          "width": 46.088
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 118.626,
+          "width": 20.183
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 141.501,
+          "width": 22.499
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 166.75,
+          "width": 17.75
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 187.25,
+          "width": 21.414
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 211.375,
+          "width": 28.846
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 243,
+          "width": 21.384
+        }
+      ]
+    },
+    {
+      "id": "fontscale",
+      "slide": 6,
+      "font": "Liberation Serif",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 22
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 69.75,
+          "width": 46.088
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 118.626,
+          "width": 20.183
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 141.501,
+          "width": 22.499
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 166.75,
+          "width": 17.75
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 187.25,
+          "width": 21.414
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 211.375,
+          "width": 28.846
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 243,
+          "width": 21.384
+        }
+      ]
+    },
+    {
+      "id": "fontscale-kern0",
+      "slide": 6,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 23.024
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 70.503,
+          "width": 36.734
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 109.772,
+          "width": 19.306
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 131.525,
+          "width": 22.782
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 156.786,
+          "width": 16.108
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 175.418,
+          "width": 19.966
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 197.93,
+          "width": 23.629
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 224.071,
+          "width": 22.727
+        }
+      ]
+    },
+    {
+      "id": "fontscale",
+      "slide": 6,
+      "font": "Carlito",
+      "words": [
+        {
+          "text": "noon",
+          "line": 0,
+          "x": 45,
+          "width": 23.024
+        },
+        {
+          "text": "AVATAR",
+          "line": 0,
+          "x": 70.503,
+          "width": 36.734
+        },
+        {
+          "text": "Text",
+          "line": 0,
+          "x": 109.772,
+          "width": 19.306
+        },
+        {
+          "text": "mind",
+          "line": 0,
+          "x": 131.525,
+          "width": 22.782
+        },
+        {
+          "text": "Toy",
+          "line": 0,
+          "x": 156.786,
+          "width": 16.108
+        },
+        {
+          "text": "Year",
+          "line": 0,
+          "x": 175.418,
+          "width": 19.966
+        },
+        {
+          "text": "PAVE",
+          "line": 0,
+          "x": 197.93,
+          "width": 23.629
+        },
+        {
+          "text": "dune",
+          "line": 0,
+          "x": 224.071,
+          "width": 22.727
+        }
+      ]
+    }
+  ]
+}
