@@ -11,6 +11,20 @@ import { ROOT, OUT, fileURL } from './helpers.mjs';
 
 // Starting value from the plan; spike S4 calibrates it.
 const THRESHOLD = 0.95;
+// Decks with a threshold of their own, with the reason.
+const DECK_THRESHOLD = {
+  // Every slide of the kerning deck is full of text, down to 10 pt, and SSIM follows how a
+  // browser draws letters more closely there than anywhere else. Chrome on the Linux and Windows
+  // runners is up to 0.017 below Chrome on the Mac for these slides, with and without kerning
+  // (slide 5 has no kerned line and loses as much as slide 4), while the other 90 slides differ
+  // by 0.0006 on average. Measured on 2026-11-10: 0.946 to 0.985 on the Mac, 0.935 to 0.977 on
+  // the runners. Where the words and the baselines stand is checked against PowerPoint's own
+  // numbers (the kerning test in pptx.spec.mjs, internal/pptx/kerning_test.go and
+  // baseline_test.go); this comparison still catches the deck drawn another way: with the
+  // kerning switched off, slides 1, 2 and 4 are at 0.828, 0.853 and 0.828, and with the
+  // baselines of before slide 1 was at 0.828 as well.
+  kerning: 0.92,
+};
 // Slides allowed below the threshold, with the reason: { 'deck/3': 'reason' }.
 const EXCEPTIONS = {
   // Values, axis scale, legend and colors match PowerPoint, but PowerPoint lays out the plot area
@@ -23,15 +37,6 @@ const EXCEPTIONS = {
   // embedded font 1 pt higher than the metrics of the font give, which it does not do for an
   // installed Liberation Serif with the same metrics (measured 0.924 on 2026-11-10).
   'fontembed/1': 'baseline of the embedded font',
-  // The kerning deck: its words and its baselines stand where PowerPoint put them (the kerning
-  // test in pptx.spec.mjs, and internal/pptx/kerning_test.go and baseline_test.go against
-  // PowerPoint's numbers). What is left is the last pixel on slides full of text: PowerPoint's
-  // word widths lie up to 0.4 % from the font's, which moves the end of a line by a pixel, and
-  // its baselines sit on whole points, thirds of a pixel here (measured 0.958, 0.946 and 0.951
-  // on 2026-11-10; 0.749 on slide 1 before deckfold kerned and placed baselines this way).
-  'kerning/1': 'slide full of text: the last pixel',
-  'kerning/4': 'slide full of text: the last pixel',
-  'kerning/5': 'slide full of text: the last pixel',
 };
 // The charts of charts2 (scatter, bubble, radar, stock, pie and bar of pie, surface, and the 3D
 // charts) show the right data, axes and colors, but PowerPoint sets chart text without c:txPr in
@@ -84,6 +89,7 @@ for (const name of decks) {
     await page.evaluate(() => document.fonts.ready);
     const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
     expect(n, 'one reference image per visible slide').toBe(images.length);
+    const threshold = DECK_THRESHOLD[name] ?? THRESHOLD;
     // every slide is measured before the test fails, so that a run in CI shows the value of
     // each slide of a deck and not only of the first one below the threshold
     const low = [];
@@ -100,11 +106,11 @@ for (const name of decks) {
       const score = ssim(shot.data, refImg.data, shot.width, shot.height);
       const key = `${name}/${i + 1}`;
       console.log(`${key}: SSIM ${score.toFixed(3)}`);
-      if (score < THRESHOLD && !EXCEPTIONS[key]) {
+      if (score < threshold && !EXCEPTIONS[key]) {
         fs.writeFileSync(path.join(OUT, `pptx-diff-${name}-${i + 1}.png`), PNG.sync.write(shot));
       }
-      if (!EXCEPTIONS[key] && score < THRESHOLD) low.push(`${key}: SSIM ${score.toFixed(3)} (rendering saved as tests/.out/pptx-diff-${name}-${i + 1}.png)`);
+      if (!EXCEPTIONS[key] && score < threshold) low.push(`${key}: SSIM ${score.toFixed(3)} (rendering saved as tests/.out/pptx-diff-${name}-${i + 1}.png)`);
     }
-    expect(low, `slides below ${THRESHOLD}`).toEqual([]);
+    expect(low, `slides below ${threshold}`).toEqual([]);
   });
 }
