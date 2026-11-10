@@ -160,6 +160,9 @@ func (r *slideRenderer) cellText(tc *xmltree.Node, cell rect, cx colorCtx, part 
 	ts.addList(body.Child("lstStyle"))
 	ts.bodyPr = []*xmltree.Node{{Name: "bodyPr", Attrs: attrs("lIns", "0", "tIns", "0", "rIns", "0", "bIns", "0")}}
 	sp := &xmltree.Node{Name: "sp", Kids: []*xmltree.Node{body}}
+	if r.frame != "" {
+		r.collectText(body, ts, r.frame, "", false, true, relLookup{part, r.Renderer}, "")
+	}
 	inner := rect{cell.x + l, cell.y + t, cell.w - l - rr, 100000}
 	segs := r.layoutText(sp, ts, inner, cx, relLookup{part, r.Renderer})
 	maxY := cell.y + t

@@ -23,7 +23,7 @@ deckfold reads the slides, layouts, masters and themes of the file and draws eve
 
 Charts are drawn from the data stored with them: column, bar, line, area, pie, doughnut, scatter, bubble, radar, stock, pie of pie, bar of pie and surface charts. 3D shapes (bevels, extrusions, cameras) and 3D charts are drawn with WebGL (three.js, embedded only in decks that need it); without WebGL, and in the previews of the presenter view, an SVG approximation takes their place.
 
-Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, word and letter, effects that start with or after the previous one, and triggers (a click on a shape plays its effects; a click on a video or an audio icon plays or pauses it). Animated GIFs start again when their slide is shown. Morph moves, scales and turns the objects it pairs. The transitions of PowerPoint 2010 and later are drawn too: the 3D ones (cube, flip, gallery, doors and others) with CSS, the ones that break the slide into pieces (glitter, honeycomb, vortex, shred and others) with WebGL, and as a fade where WebGL is missing. Slides with automatic timings advance by themselves in auto mode. Hidden slides are left out.
+Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, word and letter, effects that start with or after the previous one, and triggers (a click on a shape plays its effects; a click on a video or an audio icon plays or pauses it). Animated GIFs start again when their slide is shown. Morph moves, scales and turns the objects it pairs. The transitions of PowerPoint 2010 and later are drawn too: the 3D ones (cube, flip, gallery, doors and others) with CSS, the ones that break the slide into pieces (glitter, honeycomb, vortex, shred and others) with WebGL, and as a fade where WebGL is missing. Slides with automatic timings advance by themselves in auto mode. Hidden slides are left out. A link to another slide works on text and on a shape: to a slide, to the next, previous, first or last slide, to the slide viewed before, or to the end of the show.
 
 What deckfold does not show as PowerPoint does:
 
@@ -64,11 +64,18 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `--generic` | embed an unknown format anyway |
 | `--allow-outside folder` | allow files outside the input folder (repeatable); for PowerPoint files, the folder of linked pictures and videos |
 | `--proxy url` | proxy for downloads |
-| `--refresh file.html` | update only the controls of an existing deckfold file |
+| `--refresh file.html` | update the controls of an existing deckfold file; the slides stay unchanged |
+| `--content file.json` | write the slide text of an existing deckfold file as JSON, or as Markdown with `file.md` |
 
 Defaults are applied in this order: command line, then configuration file, then built-in defaults. Changes made later under "Settings" in the presentation are stored by the browser per deck and take precedence over the defaults.
 
 Exit codes: 0 success, 1 conversion failed (for example unresolved assets), 2 format not recognized, 3 usage or configuration error.
+
+### The slide text
+
+deckfold reads what is written on the slides and stores it in the file: the text of every slide in the order of the source, the title where the source marks one, list entries with their level, the description of pictures, and the step in which each text shows (not for Keynote exports, which do not say). The search and the outline of the presentation use it. For other programs, `deckfold deck.html --content deck.json` writes it with the titles and notes of the slides, and `--content deck.md` writes Markdown. `docs/content-model.md` describes the fields.
+
+A file from before can get the slide text with `--refresh` when the deck came from claude.ai or Keynote. A PowerPoint presentation has to be converted again.
 
 ### What happens during conversion
 
@@ -88,9 +95,11 @@ Open the file in a browser. The window it opens in is the presentation. It shows
 - **Full screen** for the presentation, or a window.
 - **Auto mode** with its interval and whether it loops.
 
+"Search" (or `/`, Ctrl+F, Cmd+F) opens the outline: every slide with its title, or with its number and the start of its text when the source marks no title. Typing searches the slide text and shows the slides that hold it; Enter or a click chooses the slide to start from. The presenter view has the same search. There it searches the notes too, and choosing a slide goes there at once, like a click in the strip of slides. The presentation window itself has no search, because the audience would see it.
+
 "Start" or Enter begins the presentation in this window; it starts only there, because full screen needs a click in the window that goes full screen. The arrow keys choose the start slide, also from the presenter view, so a clicker works before the start. Below the settings, the start screen lists every key as it is set.
 
-In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. The mouse wheel and swipes on a trackpad or touch screen do nothing, so that a gesture cannot move the slides by accident. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
+In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. A link to another slide in a PowerPoint deck or a Keynote export goes there in both windows. The mouse wheel and swipes on a trackpad or touch screen do nothing, so that a gesture cannot move the slides by accident. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
 
 deckfold does not place windows itself and does not check where they are. Put each window where it belongs, for example the presentation on the projector and the presenter view on the laptop; full screen can always be chosen. The presenter view goes into full screen with F or its "Full screen" button, which then reads "Window" and takes it back.
 
@@ -113,6 +122,7 @@ One step after the last slide shows a black end slide, which stays until the pre
 | W | white screen |
 | A | auto mode on/off |
 | T | reset the timer |
+| / or Ctrl+F, Cmd+F | search and outline (start screen, presenter view) |
 | Esc | end the presentation |
 
 In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation.

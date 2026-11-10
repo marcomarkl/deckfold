@@ -59,3 +59,14 @@ func Choose(in *adapter.Input, useGeneric bool) (adapter.Adapter, error) {
 	}
 	return nil, ErrUnknown
 }
+
+// ByName returns the adapter of a format name as the deck metadata stores it ("claude",
+// "keynote", "pptx"), nil for "generic" and for names this version does not know.
+func ByName(name string) adapter.Adapter {
+	for _, a := range []adapter.Adapter{keynote.Adapter{}, claude.Adapter{}, pptx.Adapter{}} {
+		if a.Name() == name {
+			return a
+		}
+	}
+	return nil
+}

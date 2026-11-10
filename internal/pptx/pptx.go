@@ -9,9 +9,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"deckfold/internal/adapter"
 	"deckfold/internal/assets"
+	"deckfold/internal/pptx/anim"
 	"deckfold/internal/pptx/deck"
 	"deckfold/internal/pptx/fonts"
 	"deckfold/internal/pptx/model"
@@ -148,13 +151,14 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 		res.Fonts = appendUnique(res.Fonts, line)
 	}
 
-	data := deck.Data{Version: 1, Title: pres.Title, Width: out.Width, Height: out.Height, Loop: pres.Loop, UseTimings: pres.UseTimings}
+	data := deck.Data{Version: deck.BlocksVersion, Title: pres.Title, Width: out.Width, Height: out.Height, Loop: pres.Loop, UseTimings: pres.UseTimings}
 	for _, s := range out.Slides {
 		a := s.Anim
 		sd := deck.SlideData{Number: s.Number, Label: s.Label, Notes: s.Notes, Steps: len(a.Steps), Shapes: s.Shapes, Anim: &a, Advance: a.Advance}
 		if sd.Steps < 1 {
 			sd.Steps = 1
 		}
+		sd.Blocks = slideBlocks(s.Blocks, a)
 		data.Slides = append(data.Slides, sd)
 	}
 	ar := out.AnimReport
@@ -245,4 +249,37 @@ func linker(src string, opt Options) (func(string) ([]byte, string, error), erro
 		}
 		return data, strings.TrimPrefix(strings.ToLower(filepath.Ext(r.Path)), "."), nil
 	}, nil
+}
+
+// slideBlocks turns the text the renderer collected into the blocks of the content model: each
+// with the first step in which it shows. A block inside something that appears later shows with
+// it, so the latest of its paragraph, its shape and the groups around it counts; when one of
+// them shows in no step of the click order, the block does not either (-1).
+func slideBlocks(blocks []render.Block, a anim.Slide) []adapter.Block {
+	var out []adapter.Block
+	for _, b := range blocks {
+		targets := append([]string{b.Shape}, b.Groups...)
+		if b.Para >= 0 {
+			targets = append(targets, fmt.Sprintf("%s:p%d", b.Shape, b.Para))
+		}
+		step := 0
+		for _, t := range targets {
+			n := a.FirstStep(t)
+			if n < 0 {
+				step = -1
+				break
+			}
+			if n > step {
+				step = n
+			}
+		}
+		nb := adapter.Block{Role: b.Role, Text: b.Text, Step: step, Level: b.Level}
+		if n, err := strconv.Atoi(b.Jump); err == nil {
+			nb.Jump = &adapter.Jump{Slide: &n}
+		} else if b.Jump != "" {
+			nb.Jump = &adapter.Jump{To: b.Jump}
+		}
+		out = append(out, nb)
+	}
+	return out
 }

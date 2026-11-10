@@ -25,8 +25,15 @@ function actionFor(e) {
 // The capture listeners are registered when the runtime loads (in <head>, before any source
 // script), so no source player with its own capture listener gets a key before deckfold does.
 var keyRouters = { keydown: null, keyup: null, keypress: null };
+// DF.modalKeys(type, event): while an overlay of deckfold is open (the search), it takes every
+// key. None reaches the handlers below or the source player: Escape closes the overlay instead
+// of ending the presentation, and the arrow keys move in its list instead of moving the slides.
+DF.modalKeys = null;
 ["keydown", "keyup", "keypress"].forEach(function (type) {
-  window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
+  window.addEventListener(type, function (e) {
+    if (DF.modalKeys && !e.__deckfold) { DF.modalKeys(type, e); return; }
+    if (keyRouters[type]) keyRouters[type](e);
+  }, true);
 });
 
 // Pointer input in the presentation (decision E15). A source player may move by itself on a click,
@@ -44,7 +51,9 @@ var pointerRouter = null;
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
-// itself; guardClicks keeps such clicks away from the player's document listener.
+// itself; guardClicks keeps such clicks away from the player's document listener; link(target,
+// event) returns the target of a link to another slide under the click, which follow(target)
+// then goes to (through deckfold's state, like every other move).
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -61,7 +70,9 @@ DF.installPointer = function (opts) {
       if (e.button !== 0) return;
       if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
       e.preventDefault(); e.stopImmediatePropagation();
-      opts.next();
+      var to = opts.link ? opts.link(e.target, e) : null;
+      if (to != null && opts.follow) opts.follow(to);
+      else opts.next();
       return;
     }
     // wheel and touch moves: never to the player (a tap still ends in a click, see above)
@@ -93,6 +104,11 @@ DF.installKeys = function (handler, opts) {
   var digits = "", timer = 0;
   keyRouters.keydown = function (e) {
     if (e.__deckfold) return; // eigene synthetische Taste
+    // Ctrl+F and Cmd+F open the search (fixed, next to the keys bound to "find")
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "f" || e.key === "F") && !(opts && opts.passthrough)) {
+      if (handler("find", e)) { e.preventDefault(); e.stopImmediatePropagation(); }
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (typing(e.target)) return;
     if (opts && opts.passthrough) {

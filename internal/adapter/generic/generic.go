@@ -23,3 +23,8 @@ func (Adapter) SkipStaticRef(string) bool { return false }
 func (Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 	return adapter.Meta{Format: "generic", Title: adapter.Title(in.Doc)}, nil, nil
 }
+
+// Content: no slide model, so no content model.
+func (Adapter) Content(adapter.ContentSource, adapter.Meta) (*adapter.Content, []string, error) {
+	return nil, nil, nil
+}

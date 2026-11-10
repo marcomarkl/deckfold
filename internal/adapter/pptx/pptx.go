@@ -65,3 +65,27 @@ func (Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 	}
 	return m, nil, nil
 }
+
+// Content passes on the text blocks the converter stored in the deck data. Deck data from
+// before the blocks existed has none; the presentation has to be converted again then.
+func (Adapter) Content(src adapter.ContentSource, meta adapter.Meta) (*adapter.Content, []string, error) {
+	t := adapter.FindByID(src.Doc, deck.DataID)
+	if t == nil {
+		return nil, nil, fmt.Errorf("the deck data of the generated PowerPoint deck is missing")
+	}
+	var d deck.Data
+	if err := json.Unmarshal(src.Doc.Content(t), &d); err != nil {
+		return nil, nil, fmt.Errorf("deck data of the generated PowerPoint deck: %w", err)
+	}
+	if d.Version < deck.BlocksVersion {
+		return nil, nil, adapter.ErrConvertAgain
+	}
+	if len(d.Slides) != len(meta.Slides) {
+		return nil, nil, fmt.Errorf("deck data of the generated PowerPoint deck: %d slides, %d in the deck metadata", len(d.Slides), len(meta.Slides))
+	}
+	c := &adapter.Content{Slides: make([]adapter.SlideContent, len(d.Slides))}
+	for i, s := range d.Slides {
+		c.Slides[i].Blocks = s.Blocks
+	}
+	return c, nil, nil
+}

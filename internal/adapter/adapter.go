@@ -4,6 +4,10 @@
 package adapter
 
 import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -64,6 +68,139 @@ type Adapter interface {
 	Meta(in *Input) (Meta, []string, error) // []string: warnings
 	// SkipStaticRef reports whether a static reference should be left as is.
 	SkipStaticRef(ref string) bool
+	// Content returns what is written on the slides (docs/content-model.md), or nil when the
+	// format has no slide model. src is the input of a conversion or a finished deckfold file.
+	Content(src ContentSource, meta Meta) (*Content, []string, error) // []string: warnings
+}
+
+// ContentVersion is the version of the content model in the output (#df-content).
+const ContentVersion = 1
+
+// Block roles. A role comes from the structure of the source, never from a guess.
+const (
+	RoleTitle    = "title"
+	RoleSubtitle = "subtitle"
+	RoleText     = "text"
+	RoleItem     = "item"
+	RoleAlt      = "alt"
+)
+
+// Content is the content model of a deck: for every slide of Meta.Slides, in the same order,
+// its text blocks.
+type Content struct {
+	Version int            `json:"version"`
+	Slides  []SlideContent `json:"slides"`
+}
+
+// SlideContent is the content of one slide.
+type SlideContent struct {
+	Title  string  `json:"title,omitempty"` // only when the source marks a title
+	Blocks []Block `json:"blocks"`
+}
+
+// StepUnknown is the Step of a block whose source does not tell in which step it shows. The
+// Keynote export is such a source: what it lists for screen readers is not what is visible in a
+// step. In the JSON the field is left out then.
+const StepUnknown = -2
+
+// Block is one piece of text on a slide.
+type Block struct {
+	Role string
+	Text string
+	// Step is the first step of the slide in which the block shows (0: from the start); -1 when
+	// it shows in no step of the click order (only on a trigger, or never); StepUnknown when
+	// the source does not tell.
+	Step  int
+	Level int // list level of an item, 0 for the first
+	Jump  *Jump
+}
+
+// blockJSON is the form of a Block in the content model.
+type blockJSON struct {
+	Role  string `json:"role"`
+	Text  string `json:"text"`
+	Step  *int   `json:"step,omitempty"`
+	Level int    `json:"level,omitempty"`
+	Jump  *Jump  `json:"jump,omitempty"`
+}
+
+// MarshalJSON leaves "step" out when the step is unknown.
+func (b Block) MarshalJSON() ([]byte, error) {
+	j := blockJSON{Role: b.Role, Text: b.Text, Level: b.Level, Jump: b.Jump}
+	if b.Step != StepUnknown {
+		st := b.Step
+		j.Step = &st
+	}
+	return json.Marshal(j)
+}
+
+// UnmarshalJSON reads a missing "step" as unknown.
+func (b *Block) UnmarshalJSON(data []byte) error {
+	var j blockJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	*b = Block{Role: j.Role, Text: j.Text, Step: StepUnknown, Level: j.Level, Jump: j.Jump}
+	if j.Step != nil {
+		b.Step = *j.Step
+	}
+	return nil
+}
+
+// Jump is a link to another slide: either Slide (index into Content.Slides) or To ("next",
+// "prev", "first", "last", "back", "end").
+type Jump struct {
+	Slide *int   `json:"slide,omitempty"`
+	To    string `json:"to,omitempty"`
+}
+
+// ErrConvertAgain is what Content returns for a finished file that does not hold what the
+// content is read from: the source has to be converted again.
+var ErrConvertAgain = errors.New("convert the presentation again to get search and outline")
+
+// ContentSource is where an adapter reads the content from.
+type ContentSource struct {
+	// Doc is the HTML: the source document, or the finished deckfold file.
+	Doc *htmlscan.Doc
+	// Load returns a file the source player loads through a computed path (ref as in
+	// ExtraAsset.Ref). For a finished file it reads the embedded asset, never the file system.
+	Load func(ref string) ([]byte, error)
+}
+
+// SourceOf is the content source of a conversion: the input document and its folder.
+func SourceOf(in *Input) ContentSource {
+	return ContentSource{Doc: in.Doc, Load: func(ref string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(in.HTMLDir, filepath.FromSlash(ref)))
+	}}
+}
+
+// CleanText collapses white space (line breaks included) and trims the ends. The object
+// replacement character (U+FFFC), which stands for an embedded object such as a slide number
+// field in a Keynote export, is not text and goes.
+func CleanText(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\uFFFC", " ")), " ")
+}
+
+// Finish brings the content an adapter returned into its final form: one entry per slide of
+// meta, titles from the slide labels (the same source as the labels of the slide tiles), cleaned
+// text, no empty blocks. It returns nil for nil.
+func Finish(c *Content, meta Meta) *Content {
+	if c == nil {
+		return nil
+	}
+	out := &Content{Version: ContentVersion, Slides: make([]SlideContent, len(meta.Slides))}
+	for i := range out.Slides {
+		sc := SlideContent{Title: CleanText(meta.Slides[i].Label), Blocks: []Block{}}
+		if i < len(c.Slides) {
+			for _, b := range c.Slides[i].Blocks {
+				if b.Text = CleanText(b.Text); b.Text != "" {
+					sc.Blocks = append(sc.Blocks, b)
+				}
+			}
+		}
+		out.Slides[i] = sc
+	}
+	return out
 }
 
 // FindByID finds a tag by id.

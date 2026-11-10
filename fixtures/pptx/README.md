@@ -11,9 +11,13 @@ Public test decks for the PPTX converter. Unlike `testdata/`, everything here is
 
 The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint itself writes. When a deck has no saved copy yet, they fall back to `src/` and skip the image comparison. The image comparison also checks `source.sha256`: if the saved copy changed after the reference images were made, the test fails instead of comparing against outdated images.
 
+## The content deck
+
+`content.pptx` is the deck for the content model (`docs/content-model.md`): titles and a subtitle, a list with two levels, a picture with a description, a table, a group, builds, a shape only a trigger shows, a footer and a slide number, a hidden slide, and links to other slides on text and on a shape. The generator writes down next to it what a reader of the deck would list (`src/content.spec.json`); the tests compare that with what the converter reads and with what the player shows in every step. `src/content.md` is the Markdown `--content` writes for the deck; it was read by hand and is compared as a whole.
+
 ## Making the reference
 
-1. Nothing to install: the script copies the bundled fonts it needs into `~/Library/Fonts` for the run and removes them again at the end. It quits PowerPoint before, because PowerPoint reads fonts when it starts.
+1. Nothing to install: the script copies the bundled fonts it needs into `~/Library/Fonts` for the run and removes them again at the end. It quits PowerPoint before, because PowerPoint reads fonts when it starts, and waits until the system lists the fonts. After the export it checks the fonts in the PDF: PowerPoint replaces a font it cannot find without saying so (Carlito by Calibri), and a deck drawn that way gets no reference.
 2. Close all open presentations in PowerPoint and dismiss any start dialogs (sign-in, what's new).
    PowerPoint's sandbox shows a "Grant Access" dialog for files it has not opened before. Granting the work folder in that dialog did not stop it in a test, so expect to confirm the dialogs during a run.
 3. Run `scripts/pptxref/pptxref.sh` (it works in `tests/.out/pptxref`, which git ignores) with the names of the decks whose source in `fixtures/pptx/src` changed, for example `scripts/pptxref/pptxref.sh basic`; `git status fixtures/pptx/src` shows them. Without arguments the script runs over every deck, which costs a round of access dialogs per deck and rewrites the metadata of every saved copy; avoid it.

@@ -189,7 +189,7 @@ func checkGolden(t *testing.T, src, out []byte) {
 		}
 	}
 	for _, tg := range d.Tags {
-		if tg.Name == "script" && tg.Value("data-df-src") == "" && tg.Value("id") != "df-runtime" && tg.Value("id") != "df-config" && tg.Value("id") != "df-meta" &&
+		if tg.Name == "script" && tg.Value("data-df-src") == "" && tg.Value("id") != "df-runtime" && tg.Value("id") != "df-config" && tg.Value("id") != "df-meta" && tg.Value("id") != "df-content" &&
 			tg.Value("type") != "application/octet-stream" && tg.Value("type") != "text/df-css" {
 			outScripts = append(outScripts, string(d.Content(tg)))
 		}
@@ -310,6 +310,7 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 	old.Presenter.Layout = config.Layout{}
 	old.Keys["diagnostics"] = []string{"D"}
 	old.Keys["next"] = []string{"n"}
+	delete(old.Keys, "find") // a file from before the search existed
 	old.Presenter.TargetMinutes = 20
 	c := mergeKnown(config.Default(), old)
 	if c.Presenter.TargetSeconds != 1200 || c.Presenter.TargetMinutes != 0 {
@@ -317,6 +318,9 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 	}
 	if c.Presenter.NotesFontSize != 30 || c.Keys["next"][0] != "n" {
 		t.Errorf("old values lost: notes %d, next %v", c.Presenter.NotesFontSize, c.Keys["next"])
+	}
+	if !reflect.DeepEqual(c.Keys["find"], config.Default().Keys["find"]) || len(c.Keys["find"]) == 0 {
+		t.Errorf("find %q, want the default %q for a file that does not know the action", c.Keys["find"], config.Default().Keys["find"])
 	}
 	if _, ok := c.Keys["diagnostics"]; ok {
 		t.Error("the retired diagnostics key is still there after --refresh")

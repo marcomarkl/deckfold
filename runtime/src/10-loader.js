@@ -55,11 +55,12 @@ DF.assets = (function () {
 function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { return DF.assets.url(h); }); }
 DF.fill = fillPlaceholders;
 
-// Snapshot for the srcdoc previews: the document before activation, without asset blocks.
-// The asset blocks are taken out of the document while it is cloned and put back right away, so
+// Snapshot for the srcdoc previews: the document before activation, without asset blocks and
+// without the content model (a preview searches nothing).
+// The blocks are taken out of the document while it is cloned and put back right away, so
 // that a large file is not copied in memory once more.
 function snapshot() {
-  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]'));
+  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"], script#df-content'));
   var spots = blocks.map(function (b) { var at = { parent: b.parentNode, next: b.nextSibling }; b.parentNode.removeChild(b); return at; });
   var root;
   try { root = document.documentElement.cloneNode(true); }
@@ -300,6 +301,10 @@ function runDeferred() {
 // until DF.activateScripts (so no medium plays and no source script runs on the start screen).
 DF.activate = function (opts) {
   DF.meta = readJSON("df-meta") || { deck: { slides: [] }, shim: {} };
+  // the content model (docs/content-model.md): what is written on the slides. A version this
+  // runtime does not know counts as no model.
+  var content = readJSON("df-content");
+  DF.content = content && content.version === 1 && content.slides ? content : null;
   return activateCSS().then(function () {
     if (opts.cssOnly) return; // the start screen does not wait for the fonts of the deck
     restoreAttrs(!opts.runScripts);

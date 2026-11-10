@@ -151,3 +151,139 @@ DF.keyHelp = function (groups) {
     })));
   }));
 };
+
+// DF.finder: search and outline (docs/content-model.md). An overlay with a text field and a list:
+// without a search text every slide with its title (a slide without one shows the start of its
+// text), with a search text the slides that hold it, each with the first place found. Choosing
+// an entry closes the overlay and calls opts.pick(slide).
+// opts: notes (search the presenter notes too), pick(i), current() (the slide shown now).
+// Returns null when the deck has no content model; otherwise { button, open, close, isOpen,
+// remove }.
+DF.finder = function (opts) {
+  var model = DF.content, slides = DF.slides();
+  if (!model || !slides.length || model.slides.length !== slides.length) return null;
+  var input = DF.el("input", { type: "text", "data-df-find-input": "", placeholder: DF.t("search"), "aria-label": DF.t("search"),
+    autocomplete: "off", autocapitalize: "off", spellcheck: "false" });
+  var list = DF.el("div", { class: "df-find-list" });
+  var root = DF.el("div", { "data-df-ui": "", "data-df-finder": "", class: "df-finder" }, [DF.el("div", { class: "df-find-box" }, [input, list])]);
+  document.body.appendChild(root);
+  var isOpen = false, active = 0, items = [];
+
+  // fold: lower case without accents, one character for each character of s, so that a place
+  // found in the folded text is the same place in s
+  function fold(s) {
+    var out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i), f = c;
+      try { f = c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); } catch (e) { f = c.toLowerCase(); }
+      out += f.length === 1 ? f : (f.charAt(0) || c);
+    }
+    return out;
+  }
+  function cut(s, n) { return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") + " \u2026" : s; }
+
+  // entries: what the list shows for the search text q (folded)
+  function entries(q) {
+    var out = [];
+    slides.forEach(function (sl, i) {
+      var sc = model.slides[i], title = sc.title || "";
+      if (!q) {
+        out.push({ i: i, title: title, start: title || !sc.blocks.length ? "" : cut(sc.blocks[0].text, 90) });
+        return;
+      }
+      var hits = 0, first = null;
+      var look = function (text, notes) {
+        var at = fold(text).indexOf(q);
+        if (at < 0) return;
+        hits++;
+        if (!first) first = { text: text, at: at, notes: notes };
+      };
+      // the title counts once: as its block when the slide has one, otherwise by itself
+      var ft = fold(title);
+      if (title && !sc.blocks.some(function (b) { return fold(b.text) === ft; })) look(title, false);
+      sc.blocks.forEach(function (b) { look(b.text, false); });
+      if (opts.notes && sl.notes) look(sl.notes, true);
+      if (hits) out.push({ i: i, title: title, hits: hits, first: first });
+    });
+    return out;
+  }
+  // place: the text around a place found, with the found part marked. Everything is a text node.
+  function place(f, len) {
+    var from = Math.max(0, f.at - 36), to = Math.min(f.text.length, f.at + len + 60);
+    return DF.el("span", { class: "df-find-place" }, [
+      f.notes ? DF.el("span", { class: "df-find-kind", "data-df-find-notes": "", text: DF.t("notes") }) : null,
+      (from > 0 ? "\u2026" : "") + f.text.slice(from, f.at),
+      DF.el("mark", { text: f.text.slice(f.at, f.at + len) }),
+      f.text.slice(f.at + len, to) + (to < f.text.length ? "\u2026" : "")]);
+  }
+  function render() {
+    var q = fold(input.value.replace(/^\s+|\s+$/g, ""));
+    var cur = opts.current ? opts.current() : -1;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    items = entries(q).map(function (e) {
+      var b = DF.el("button", { type: "button", class: "df-find-item" + (e.i === cur ? " df-cur" : ""), "data-df-find-item": "", "data-i": String(e.i),
+        onclick: function () { choose(e.i); } }, [
+        DF.el("span", { class: "df-find-n", text: String(e.i + 1) }),
+        DF.el("span", { class: "df-find-main" }, [
+          DF.el("span", { class: "df-find-title", text: e.title || (DF.t("slide") + " " + (e.i + 1)) }),
+          e.first ? place(e.first, q.length) : (e.start ? DF.el("span", { class: "df-find-place", text: e.start }) : null)]),
+        e.hits > 1 ? DF.el("span", { class: "df-find-count", "data-df-find-count": String(e.hits), text: e.hits + "\u00d7" }) : null]);
+      list.appendChild(b);
+      return { i: e.i, el: b };
+    });
+    if (!items.length) list.appendChild(DF.el("p", { class: "df-find-none", "data-df-find-none": "", text: DF.t("noResults") }));
+    // the outline starts at the slide shown now, a search at its first entry
+    active = 0;
+    if (!q) items.forEach(function (it, k) { if (it.i === cur) active = k; });
+    mark();
+  }
+  function mark() {
+    items.forEach(function (it, k) { it.el.classList.toggle("df-active", k === active); });
+    var a = items[active];
+    if (a && a.el.scrollIntoView) a.el.scrollIntoView({ block: "nearest" });
+  }
+  function choose(i) { close(); opts.pick(i); }
+  function keys(type, e) {
+    e.stopImmediatePropagation();
+    if (type !== "keydown") return;
+    switch (e.key) {
+      case "Escape": e.preventDefault(); close(); return;
+      case "ArrowDown": case "ArrowUp":
+        e.preventDefault();
+        if (items.length) { active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; mark(); }
+        return;
+      case "Enter": e.preventDefault(); if (items[active]) choose(items[active].i); return;
+      case "Tab": e.preventDefault(); return;
+    }
+    // Ctrl+F and Cmd+F stay with the overlay instead of opening the browser's own search
+    if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) { e.preventDefault(); input.select(); return; }
+    // typing goes to the text field wherever the focus is
+    if (document.activeElement !== input) input.focus();
+  }
+  function open() {
+    if (isOpen || !root.parentNode) return;
+    isOpen = true;
+    input.value = "";
+    root.classList.add("df-on");
+    DF.modalKeys = keys;
+    render();
+    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  }
+  // close: the focus goes back to the document, so that the keys move the slides again and no
+  // button shows a focus ring
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    root.classList.remove("df-on");
+    if (DF.modalKeys === keys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && root.contains(a) && a.blur) a.blur();
+  }
+  input.addEventListener("input", render);
+  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
+  return {
+    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: open }),
+    open: open, close: close, isOpen: function () { return isOpen; },
+    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+  };
+};

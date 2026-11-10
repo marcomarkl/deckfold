@@ -108,11 +108,29 @@ DF.startAudience = function (opts) {
     }
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
+    if (target.slide !== st.slide) before = st.slide;
     var to = st = { slide: target.slide, step: target.step };
     lastShown = st;
     drive(function () { return (o && o.jump) ? adapter.jump(to, from) : DF.drive(from, to); });
     report();
     scheduleAuto();
+  }
+  // before: the slide shown before the current one, for a link to "the last slide viewed"
+  var before = null;
+  // follow: a link to another slide on the current one (the content model's "jump"). A link goes
+  // to the start of its slide; "next" and "prev" mean slides here, not steps.
+  function follow(to) {
+    if (st.ended) return;
+    var n = DF.slides().length;
+    switch (to) {
+      case "next": return st.slide + 1 < n ? go(DF.model.goto(st.slide + 1)) : go(null);
+      case "prev": return st.slide > 0 ? go(DF.model.goto(st.slide - 1)) : undefined;
+      case "first": return go(DF.model.goto(0));
+      case "last": return go(DF.model.goto(n - 1));
+      case "back": return before != null ? go(DF.model.goto(before)) : undefined;
+      case "end": return finish();
+    }
+    if (/^\d+$/.test(to) && +to < n) return go(DF.model.goto(+to));
   }
   // drive: one move of the player after the ones before it; a move that fails does not stop the
   // later ones
@@ -161,6 +179,7 @@ DF.startAudience = function (opts) {
       case "last": return go(DF.model.last());
       case "goto": return go(DF.model.goto(arg));
       case "state": return go(arg, { jump: true });
+      case "follow": return follow(String(arg));
       case "black": return setBlank("black");
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
@@ -227,7 +246,8 @@ DF.startAudience = function (opts) {
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
+  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
+    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null, follow: function (to) { take("follow", to); } });
 
   DF.audience = {
     act: take,

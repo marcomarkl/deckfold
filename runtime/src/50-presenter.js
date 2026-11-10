@@ -49,6 +49,9 @@ DF.startPresenter = function (snapshotHTML) {
   document.addEventListener("fullscreenchange", fsLabel);
   document.addEventListener("webkitfullscreenchange", fsLabel);
   fsLabel();
+  // search and outline, with the notes: only the presenter sees this window. An entry goes to its
+  // slide like a tile of the overview does.
+  var finder = DF.finder({ notes: true, pick: function (i) { command("goto", i); }, current: function () { return shown().slide; } });
   var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
   var autoInfo = DF.el("span", { class: "df-autoinfo" });
   var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
@@ -63,6 +66,7 @@ DF.startPresenter = function (snapshotHTML) {
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
     DF.el("button", { type: "button", "data-df-font": "-", text: "A−", title: DF.t("smaller"), onclick: function () { fontBy(-2); } }),
     DF.el("button", { type: "button", "data-df-font": "+", text: "A+", title: DF.t("larger"), onclick: function () { fontBy(2); } }),
+    finder ? finder.button : null,
     fsBtn,
     endBtn
   ]);
@@ -281,6 +285,7 @@ DF.startPresenter = function (snapshotHTML) {
   // ---------- keys ----------
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
+    if (a === "find") { if (finder) finder.open(); return true; }
     if (a === "fullscreen") { DF.toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
     // Enter cannot start from here (full screen needs a click in the presentation window); it is
