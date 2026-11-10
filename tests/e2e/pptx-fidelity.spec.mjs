@@ -76,6 +76,10 @@ for (const name of decks) {
     const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
     expect(n, 'one reference image per visible slide').toBe(images.length);
     for (let i = 0; i < n; i++) {
+      // the slide through deckfold first (it brings a player that went elsewhere back to its own
+      // slide), then every object of it shown
+      await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
+      await page.waitForFunction((i) => window.__dfPptx.state().slide === i, i);
       await page.evaluate((i) => window.__dfPptx.showAll(i), i);
       await page.waitForTimeout(100);
       const shot = PNG.sync.read(await page.screenshot());

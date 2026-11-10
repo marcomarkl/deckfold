@@ -29,6 +29,46 @@ var keyRouters = { keydown: null, keyup: null, keypress: null };
   window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
 });
 
+// Pointer input in the presentation (decision E15). A source player may move by itself on a click,
+// on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves on a
+// swipe), which would leave deckfold's state behind. These capture listeners are registered with
+// the key listeners, before any source script: a click on the slide becomes "next" through deckfold,
+// the wheel and touch moves never reach the player. A click on something that acts by itself (a
+// link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own controls) is left
+// to its target; where the player would take it as a step as well (adapter.guardClicks), it is
+// stopped on <html>, before the player's listener on the document.
+var pointerRouter = null;
+["click", "wheel", "touchstart", "touchmove", "touchend"].forEach(function (type) {
+  window.addEventListener(type, function (e) { if (pointerRouter) pointerRouter(e); }, { capture: true, passive: false });
+});
+document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
+
+// opts: next() moves on; interactive(target) tells whether the player handles a click on target
+// itself; guardClicks keeps such clicks away from the player's document listener.
+DF.installPointer = function (opts) {
+  function own(t) {
+    if (!t || !t.closest) return true;
+    if (t.closest(".df-blank.df-on, .df-endslide.df-on")) return false; // black, white, end: like "next"
+    if (t.closest("[data-df-ui]")) return true;
+    if (t.closest("a[href], video, audio, input, select, textarea, button, label, [contenteditable]")) return true;
+    if (opts.interactive && opts.interactive(t)) return true;
+    try { var sel = window.getSelection && window.getSelection(); if (sel && String(sel) !== "") return true; } catch (e) { }
+    return false;
+  }
+  pointerRouter = function (e) {
+    if (e.__deckfold) return;
+    if (e.type === "click") {
+      if (e.button !== 0) return;
+      if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
+      e.preventDefault(); e.stopImmediatePropagation();
+      opts.next();
+      return;
+    }
+    // wheel and touch moves: never to the player (a tap still ends in a click, see above)
+    e.stopImmediatePropagation();
+  };
+};
+
 // Keyboard Lock (Chrome, Edge): in full screen, Escape reaches the key handler above instead of only
 // leaving full screen, so that one Escape ends the presentation; holding Escape still leaves full
 // screen. Browsers without Keyboard Lock leave full screen on the first Escape as before.
@@ -80,6 +120,9 @@ DF.installKeys = function (handler, opts) {
       return;
     }
     var act = actionFor(e);
+    // Enter without digits starts the presentation from the start screen (fixed, like digits +
+    // Enter); unless the configuration binds it, it does nothing else
+    if (!act && e.key === "Enter") act = "start";
     if (!act) {
       // Unbound keys do not reach the source player (its state would drift apart),
       // except in input fields (excluded above).

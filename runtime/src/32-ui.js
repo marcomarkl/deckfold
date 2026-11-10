@@ -11,6 +11,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   var W = 1280, H = Math.round(W * (meta.height || 1080) / (meta.width || 1920));
   var f = DF.el("iframe", { "data-df-preview": "", tabindex: "-1", inert: true, title: "preview", "aria-hidden": "true" });
   f.style.width = W + "px"; f.style.height = H + "px";
+  // until it has reached the first state asked of it, the iframe shows the first slide of a
+  // freshly loaded player, which is not what it is meant to show
+  f.style.visibility = "hidden";
   f.srcdoc = snapshotHTML;
   host.appendChild(f);
   host.appendChild(DF.el("div", { class: "df-shield" }));
@@ -27,7 +30,9 @@ DF.previewFrame = function (host, snapshotHTML) {
   rec.show = function (s) { rec.want = s; push(); };
   function push() {
     if (!rec.ready || !rec.want) return;
-    try { f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    var done = null;
+    try { done = f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+    if (f.style.visibility === "hidden") Promise.resolve(done).then(function () { f.style.visibility = ""; });
   }
   f.addEventListener("load", function () {
     var w = f.contentWindow;
@@ -99,6 +104,12 @@ DF.slideStrip = function (opts) {
       [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-cur", +t.getAttribute("data-i") === i); });
       var cur = band.querySelector('.df-tile[data-i="' + i + '"]');
       if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+      // a tile with the keyboard focus (reached with Tab) hands it to the marked tile, so that the
+      // focus ring and the mark are on the same tile
+      var a = document.activeElement;
+      if (cur && a && a !== cur && a.classList && a.classList.contains("df-tile") && band.contains(a)) {
+        try { cur.focus({ preventScroll: true }); } catch (e) { cur.focus(); }
+      }
     },
     nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
     // scroll: move the band by most of its width without choosing a slide
@@ -106,9 +117,37 @@ DF.slideStrip = function (opts) {
   };
 };
 
-// keyChips: a compact row of key caps with a short word each.
-DF.keyChips = function (list) {
-  return DF.el("div", { class: "df-keychips", "data-df-keychips": "" }, list.map(function (it) {
-    return DF.el("span", { class: "df-chip" }, it[0].map(function (k) { return DF.el("kbd", { text: k }); }).concat([DF.el("span", { text: it[1] })]));
+// A control clicked with the mouse gives the focus back: the keys move through the slides, and a
+// focused button would show its focus ring after the next key (next to the marked slide tile) or
+// be pressed by Space. Text and number fields keep the focus for typing; a control reached with
+// the keyboard keeps it too (a click from Enter or Space has detail 0).
+document.addEventListener("click", function (e) {
+  if (!e.detail) return;
+  var c = e.target && e.target.closest && e.target.closest("[data-df-ui] button, [data-df-ui] input[type=checkbox]");
+  if (!c) return;
+  setTimeout(function () { if (document.activeElement === c && c.blur) c.blur(); }, 0);
+}, true);
+
+// keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
+// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
+// Each row carries data-df-action and data-df-keys (the configured keys), so tests read it
+// without depending on the language.
+var KEYNAMES = { ArrowRight: "→", ArrowLeft: "←", ArrowUp: "↑", ArrowDown: "↓", " ": "keySpace", PageDown: "keyPgDn", PageUp: "keyPgUp",
+  Home: "keyHome", End: "keyEnd", Backspace: "keyBackspace", Escape: "Esc" };
+function keyCap(k) {
+  var n = KEYNAMES[k];
+  if (n) return n.length > 1 && n.indexOf("key") === 0 ? DF.t(n) : n;
+  return k.length === 1 ? k.toUpperCase() : k;
+}
+DF.keyCap = keyCap;
+DF.keyHelp = function (groups) {
+  return DF.el("div", { class: "df-keyhelp", "data-df-keyhelp": "" }, groups.map(function (g) {
+    return DF.el("div", { class: "df-keygroup", "data-df-keygroup": g.name }, [DF.el("h4", { text: g.title })].concat(g.rows.map(function (r) {
+      var caps = r.caps || [];
+      if (!r.caps) (r.keys || []).forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+      return DF.el("div", { class: "df-keyrow", "data-df-action": r.action, "data-df-keys": JSON.stringify(r.keys || []) }, [
+        DF.el("span", { class: "df-keylabel", text: r.label }),
+        DF.el("span", { class: "df-caps" }, caps.map(function (c) { return DF.el("kbd", { text: c }); }))]);
+    })));
   }));
 };

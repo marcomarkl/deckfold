@@ -43,14 +43,14 @@ test('PowerPoint presenter view: previews, notes, overview', async ({ page, cont
   const w = watch(context);
   const pres = await present(page, context, 'pptx-basic.html');
   await expect(pres.locator('.df-presenter')).toBeVisible();
-  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2);
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(3); // current, audience, next
   const n = await slideCount(pres);
   await pres.keyboard.press('ArrowRight');
   const s1 = await expected(pres, ['next']);
   await expect.poll(() => audState(page)).toEqual(s1);
   await expect.poll(() => shown(page)).toBe(s1.slide);
   await expect.poll(() => counter(pres)).toContain(`${s1.slide + 1} / ${n}`);
-  const previews = () => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) =>
+  const previews = () => pres.evaluate(() => [...document.querySelectorAll('.df-current iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) =>
     [...f.contentDocument.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on'))));
   // the current slide and the slide after it
   await expect.poll(previews, { timeout: 10000 }).toEqual([s1.slide, s1.slide + 1]);
@@ -139,13 +139,13 @@ test('PowerPoint animations: every step by jump and by playing', async ({ page }
     const targets = Object.keys(sp.steps[0]);
     // jumps (previews, back, recovery): no animation, the state at once
     for (let k = 0; k < sp.steps.length; k++) {
-      await page.evaluate(([s, k]) => window.__dfPptx.goTo(s, k), [sp.slide, k]);
+      await page.evaluate(([s, k]) => window.__deckfold.audience.act('state', { slide: s, step: k }), [sp.slide, k]);
       expect(await states(page, sp.slide, targets), `slide ${sp.slide + 1}, jump to step ${k}`).toEqual(sp.steps[k]);
     }
     // playing: next from step 0, each step played to its end
-    await page.evaluate((s) => window.__dfPptx.goTo(s, 0), sp.slide);
+    await page.evaluate((s) => window.__deckfold.audience.act('state', { slide: s, step: 0 }), sp.slide);
     for (let k = 1; k < sp.steps.length; k++) {
-      await page.evaluate(() => window.__dfPptx.next());
+      await page.evaluate(() => window.__deckfold.audience.act('next'));
       await expect.poll(() => states(page, sp.slide, targets), { timeout: 4000 }).toEqual(sp.steps[k]);
     }
   }
@@ -153,9 +153,9 @@ test('PowerPoint animations: every step by jump and by playing', async ({ page }
 
 test('PowerPoint animations: a fade is in progress halfway through', async ({ page }) => {
   await solo(page, 'pptx-animations.html');
-  await page.evaluate(() => window.__dfPptx.goTo(0, 0));
+  await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 0, step: 0 }));
   const id = Object.keys(animSpec[0].steps[0])[0];
-  await page.evaluate(() => window.__dfPptx.next());
+  await page.evaluate(() => window.__deckfold.audience.act('next'));
   await page.waitForTimeout(200);
   const op = await page.evaluate((id) => parseFloat(getComputedStyle(document.querySelector(`.df-pptx-slide g[data-sid="${id}"]`)).opacity), id);
   expect(op).toBeGreaterThan(0.05);
@@ -166,7 +166,7 @@ test('PowerPoint presenter view: previews show the current and the next slide af
   const pres = await present(page, context, 'pptx-animations.html');
   const ends = animSpec.slice(0, 2).map((sp) => sp.steps.length - 1);
   const id = Object.keys(animSpec[0].steps[0])[0];
-  const prevState = () => pres.evaluate((id) => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => {
+  const prevState = () => pres.evaluate((id) => [...document.querySelectorAll('.df-current iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) => {
     const p = f.contentWindow.__dfPptx, el = f.contentDocument.querySelector(`.df-pptx-slide.df-on g[data-sid="${id}"]`);
     return [p ? p.state() : null, el ? getComputedStyle(el).visibility : 'none'];
   }), id);
@@ -252,6 +252,42 @@ test('PowerPoint media: a click on the icon of an audio clip plays and pauses it
   await expect.poll(paused).toBe(true);
 });
 
+// Mouse and wheel in the presentation (decision E15): a click on the slide moves on through
+// deckfold, the wheel does nothing; "Click for full screen" never moves on. Clicks on triggers and
+// media icons keep working (tests above).
+test('PowerPoint pointer input: a click moves on, the wheel does nothing, the full-screen overlay does not move on', async ({ page }) => {
+  await page.addInitScript(() => {
+    Element.prototype.requestFullscreen = function () { return Promise.reject(new TypeError('refused')); };
+    Object.defineProperty(window.screen, 'width', { get: () => 3000 });
+    Object.defineProperty(window.screen, 'height', { get: () => 2000 });
+  });
+  await solo(page, 'pptx-basic.html');
+  await expect(page.locator('.df-fs-overlay')).toBeVisible();
+  // the overlay button: full screen is asked for again, the slide stays
+  await page.click('[data-df-fs-overlay]');
+  await page.waitForTimeout(400);
+  expect(await audState(page)).toEqual({ slide: 0, step: 0 });
+  expect(await shown(page)).toBe(0);
+  // again without full screen, so that no overlay covers the slide
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.uncheck('[data-df-fs]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await page.waitForTimeout(300);
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
+  await page.mouse.click(200, 300);
+  const s1 = await expected(page, ['next']);
+  await expect.poll(() => audState(page)).toEqual(s1);
+  await expect.poll(() => shown(page)).toBe(s1.slide);
+  await page.mouse.move(400, 300);
+  await page.mouse.wheel(0, 400);
+  await page.waitForTimeout(600);
+  expect(await audState(page)).toEqual(s1);
+  expect(await shown(page)).toBe(s1.slide);
+  expect(await page.evaluate(() => [scrollX, scrollY])).toEqual([0, 0]);
+});
+
 test('PowerPoint 3D: shapes are drawn with WebGL, the front keeps its fill color', async ({ page, context }) => {
   const w = watch(context);
   await solo(page, 'pptx-shapes3d.html');
@@ -262,10 +298,10 @@ test('PowerPoint 3D: shapes are drawn with WebGL, the front keeps its fill color
     images: document.querySelectorAll('image[data-df-pptx-3d-image]').length,
   }));
   // the shapes of a slide are drawn when the slide is shown
-  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
   await expect.poll(counts).toEqual({ all: 11, done: 11, images: 11 });
   // a rectangle with a bevel, lit from the top: its middle has the fill color (70AD47)
-  await page.evaluate(() => window.__dfPptx.goTo(0, 0));
+  await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 0, step: 0 }));
   const shape = page.locator('.df-pptx-slide.df-on g[data-sid]', { has: page.locator('path[data-df-pptx-3d]') }).nth(2);
   const box = await shape.boundingBox();
   const { PNG } = await import('pngjs');
@@ -278,7 +314,7 @@ test('PowerPoint 3D: shapes are drawn with WebGL, the front keeps its fill color
 test('PowerPoint 3D: without WebGL and in previews the SVG approximation stays', async ({ page, context }) => {
   await context.addInitScript(() => Object.defineProperty(window, '__dfThree', { get() { return undefined; }, set() {}, configurable: false }));
   await solo(page, 'pptx-shapes3d.html');
-  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  for (let i = 0; i < 3; i++) await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
   expect(await page.locator('image[data-df-pptx-3d-image]').count()).toBe(0);
   const filtered = await page.evaluate(() => [...document.querySelectorAll('path[data-df-pptx-3d]')].filter((p) => p.getAttribute('filter')).length);
   expect(filtered).toBeGreaterThanOrEqual(8);
@@ -287,17 +323,17 @@ test('PowerPoint 3D: without WebGL and in previews the SVG approximation stays',
 test('PowerPoint 3D: previews in the presenter view keep the approximation', async ({ page, context }) => {
   const pres = await present(page, context, 'pptx-shapes3d.html');
   test.skip(!(await hasWebGL(page)), NO_WEBGL);
-  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2);
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(3); // current, audience, next
   await expect.poll(() => page.evaluate(() => document.querySelectorAll('image[data-df-pptx-3d-image]').length)).toBeGreaterThan(0);
   await pres.waitForTimeout(500);
   const inPreviews = await pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')]
     .map((f) => f.contentDocument.querySelectorAll('image[data-df-pptx-3d-image]').length));
-  expect(inPreviews).toEqual([0, 0]);
+  expect(inPreviews).toEqual([0, 0, 0]);
 });
 
 test('PowerPoint builds by word and by letter: the units appear one after the other', async ({ page }) => {
   await solo(page, 'pptx-text2.html');
-  await page.evaluate(() => window.__dfPptx.goTo(1, 0));
+  await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 1, step: 0 }));
   const vis = (sel) => page.evaluate((sel) => [...document.querySelectorAll(`.df-pptx-slide.df-on ${sel}`)]
     .map((g) => getComputedStyle(g).visibility !== 'hidden' && parseFloat(getComputedStyle(g).opacity || '1') > 0.5), sel);
   const words = await vis('g[data-w]'), letters = await vis('g[data-c]');
@@ -310,7 +346,7 @@ test('PowerPoint builds by word and by letter: the units appear one after the ot
   await expect.poll(async () => { const m = await vis('g[data-w]'); return m[0] && !m[5]; }, { timeout: 2000, intervals: [20] }).toBe(true);
   await expect.poll(() => vis('g[data-w]')).toEqual([true, true, true, true, true, true]);
   // a jump shows the end state of every unit
-  await page.evaluate(() => window.__dfPptx.goTo(1, 2));
+  await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 1, step: 2 }));
   expect((await vis('g[data-c]')).every((v) => v)).toBe(true);
 });
 
@@ -344,15 +380,16 @@ test('PowerPoint transitions: every 2D, 3D and tile transition plays and ends on
   expect(types.slice(1).every((t) => t && t !== 'fade')).toBe(true);
   const starts = [];
   for (let i = 1; i < types.length; i++) {
-    await page.evaluate((i) => window.__dfPptx.goTo(i - 1, 0), i);
+    await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i - 1, step: 0 }), i);
     // something moves while the transition runs (1.5 s); the time until it starts is measured in
     // the page, so that a failure tells a late start from none (tile transitions first draw both
-    // slides into pictures)
+    // slides into pictures). The steps go through deckfold, which keeps the player on its state.
     const ms = await page.evaluate(async () => {
       const moving = () => !!document.querySelector('#df-pptx-stage > canvas') ||
         [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
+      await new Promise((r) => setTimeout(r, 0));
       const t0 = performance.now();
-      window.__dfPptx.next();
+      window.__deckfold.audience.act('next');
       while (!moving() && performance.now() - t0 < 20000) await new Promise((r) => setTimeout(r, 10));
       return moving() ? Math.round(performance.now() - t0) : -1;
     });
@@ -371,11 +408,23 @@ test('PowerPoint 3D charts: the plots are drawn with WebGL', async ({ page, cont
   await solo(page, 'pptx-charts2.html');
   test.skip(!(await hasWebGL(page)), NO_WEBGL);
   const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
-  for (let i = 0; i < n; i++) await page.evaluate((i) => window.__dfPptx.goTo(i, 0), i);
+  for (let i = 0; i < n; i++) await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
   // five 3D charts in the generated deck; PowerPoint saves the surface chart as a 3D one too
   await expect.poll(() => page.evaluate(() => {
     const all = document.querySelectorAll('[data-df-pptx-chart3d]').length;
     return all >= 5 && document.querySelectorAll('[data-df-pptx-chart3d][data-df-pptx-3d-done=""]').length === all;
   })).toBe(true);
   expect(realErrors(w)).toEqual([]);
+});
+
+// Player and deckfold kept together (decision E15): a player that went elsewhere is brought back.
+test('PowerPoint: a player moved past deckfold is brought back to deckfold\'s state', async ({ page }) => {
+  await solo(page, 'pptx-basic.html');
+  await page.waitForTimeout(1500);
+  const s = await audState(page);
+  await page.evaluate(() => window.__dfPptx.goTo(2, 0));
+  expect(await shown(page)).toBe(2);
+  await expect.poll(() => shown(page), { timeout: 3000 }).toBe(s.slide);
+  expect(await page.evaluate(() => window.__dfPptx.state())).toEqual(s);
+  expect(await audState(page)).toEqual(s);
 });

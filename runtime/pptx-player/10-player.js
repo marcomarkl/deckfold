@@ -495,8 +495,25 @@ function showAll(slide) {
   animOf(cur.slide).reset();
 }
 
+// interactive tells whether a click on target is handled by the player itself, as above: a video,
+// the icon of an audio clip or a trigger shape on the current slide. The control layer does not
+// take such a click as "next".
+function interactive(target) {
+  if (!target || !target.closest) return false;
+  if (target.closest("video[data-df-pptx-media]")) return true;
+  var g0 = target.closest("g[data-sid]");
+  if (g0 && g0.querySelector("audio[data-df-pptx-media]")) return true;
+  var sec = sections[cur.slide];
+  if (!sec) return false;
+  var a = animOf(cur.slide);
+  for (var g = g0; g && sec.contains(g); g = g.parentNode && g.parentNode.closest ? g.parentNode.closest("g[data-sid]") : null) {
+    if (a.triggerIndex(g.getAttribute("data-sid")) >= 0) return true;
+  }
+  return false;
+}
+
 window.__dfPptx = {
-  goTo: goTo, next: next, prev: prev, showAll: showAll,
+  goTo: goTo, next: next, prev: prev, showAll: showAll, interactive: interactive,
   state: function () { return { slide: cur.slide, step: cur.step }; },
   deck: deck
 };

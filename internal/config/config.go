@@ -23,10 +23,12 @@ type Presenter struct {
 }
 
 // Layout is the size of the presenter view panes, changed by dragging the dividers: Main is the
-// share of the current slide in the width, Side the share of the next step in the side column.
+// share of the left column (current slide, audience) in the width, Side the share of the next
+// slide in the side column, Audience the share of the current slide above the audience pane.
 type Layout struct {
-	Main float64 `json:"main"`
-	Side float64 `json:"side"`
+	Main     float64 `json:"main"`
+	Side     float64 `json:"side"`
+	Audience float64 `json:"audience"`
 }
 
 // Auto describes auto mode (E7).
@@ -45,7 +47,21 @@ type Config struct {
 }
 
 // Elements are the allowed presenter view elements.
-var Elements = []string{"current", "next", "notes", "time", "overview"}
+var Elements = []string{"current", "audience", "next", "notes", "time", "overview"}
+
+// formerElements are default element lists of earlier versions; --refresh gives a file that still
+// has one of them the current default (the audience pane came with v0.4).
+var formerElements = [][]string{{"current", "next", "notes", "time", "overview"}}
+
+// FormerDefaultElements tells whether els is a default list of an earlier version.
+func FormerDefaultElements(els []string) bool {
+	for _, l := range formerElements {
+		if sameList(l, els) {
+			return true
+		}
+	}
+	return false
+}
 
 // Actions are the actions keys can be bound to.
 var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end"}
@@ -69,10 +85,10 @@ func (p *Presenter) Upgrade() {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45}},
+		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45, Audience: 0.6}},
 		Auto:      Auto{Enabled: false, IntervalSeconds: 8, Loop: false},
 		Keys: map[string][]string{
-			"next":       {"ArrowRight", "ArrowDown", "PageDown", " ", "Enter"},
+			"next":       {"ArrowRight", "ArrowDown", "PageDown", " "},
 			"prev":       {"ArrowLeft", "ArrowUp", "PageUp", "Backspace"},
 			"first":      {"Home"},
 			"last":       {"End"},
@@ -110,8 +126,9 @@ func Merge(data []byte, base Config) (Config, error) {
 			TargetMinutes *int      `json:"targetMinutes"`
 			TargetSeconds *int      `json:"targetSeconds"`
 			Layout        *struct {
-				Main *float64 `json:"main"`
-				Side *float64 `json:"side"`
+				Main     *float64 `json:"main"`
+				Side     *float64 `json:"side"`
+				Audience *float64 `json:"audience"`
 			} `json:"layout"`
 		} `json:"presenter"`
 		Auto *struct {
@@ -150,6 +167,9 @@ func Merge(data []byte, base Config) (Config, error) {
 			}
 			if l.Side != nil {
 				c.Presenter.Layout.Side = *l.Side
+			}
+			if l.Audience != nil {
+				c.Presenter.Layout.Audience = *l.Audience
 			}
 		}
 	}
@@ -197,7 +217,7 @@ func (c Config) Validate() error {
 	if c.Presenter.TargetSeconds < 0 || c.Presenter.TargetSeconds > MaxTargetSeconds {
 		return fmt.Errorf("presenter.targetSeconds: %d is not between 0 and %d", c.Presenter.TargetSeconds, MaxTargetSeconds)
 	}
-	for _, v := range []float64{c.Presenter.Layout.Main, c.Presenter.Layout.Side} {
+	for _, v := range []float64{c.Presenter.Layout.Main, c.Presenter.Layout.Side, c.Presenter.Layout.Audience} {
 		if v < 0.2 || v > 0.8 {
 			return fmt.Errorf("presenter.layout: %g is not between 0.2 and 0.8", v)
 		}
@@ -218,6 +238,35 @@ func (c Config) Validate() error {
 
 // KnownAction reports whether keys can be bound to the action.
 func KnownAction(a string) bool { return in(Actions, a) }
+
+// formerKeys are default key lists of earlier versions. A file made then still carries them; on
+// --refresh an action whose keys are exactly such a list gets the current default (up to v0.4
+// drafts, Enter moved on as well; now Enter only starts the presentation).
+var formerKeys = map[string][][]string{
+	"next": {{"ArrowRight", "ArrowDown", "PageDown", " ", "Enter"}},
+}
+
+// FormerDefaultKeys tells whether keys is a default list an earlier version gave to action.
+func FormerDefaultKeys(action string, keys []string) bool {
+	for _, l := range formerKeys[action] {
+		if sameList(l, keys) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameList(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 func in(list []string, s string) bool {
 	for _, x := range list {

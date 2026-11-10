@@ -10,7 +10,7 @@ This is the order in which the Keynote adapter was built. Most of its problems o
 
 4. **Write the Go adapter** in `internal/adapter/<format>/` with `Name`, `Detect`, `Collect`, `Meta` and `SkipStaticRef`, and add it to `internal/detect.Choose`. `Meta` returns slides, steps per slide, auto steps or delays, notes and thumbnails.
 
-5. **Write the JS adapter** in `runtime/src/20-model.js` with `ready`, `forward`, `back`, `jump` and `mediaRoot`. Drive the player only through synthetic keys or its public navigation (for example `#n`), and keep the state in the runtime. Run `go generate ./runtime` afterwards.
+5. **Write the JS adapter** in `runtime/src/20-model.js` with `ready`, `forward`, `back`, `jump`, `mediaRoot` and `shown` (the slide the player shows, or `null` when it cannot tell; the show window brings a player that went elsewhere back). If the player moves by itself on a click anywhere, set `guardClicks`; if it handles clicks on some elements itself (media, triggers), give it `interactive(target)`. Drive the player only through synthetic keys or its public navigation (for example `#n`), and keep the state in the runtime. Run `go generate ./runtime` afterwards.
 
 6. **Test the places where Keynote broke:**
    - the start screen on `file:` (preview, slide strip) and the presentation after "Start"

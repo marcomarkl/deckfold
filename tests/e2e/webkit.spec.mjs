@@ -71,3 +71,16 @@ test('WebKit: PowerPoint transitions (2D, 3D, tiles) end on the next slide', asy
     await expect.poll(() => shownSlide(page), { timeout: 8000 }).toBe(i + 1);
   }
 });
+
+test('WebKit: the presenter view closes with the window of the presentation, stays when that window reloads', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.reload();
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.waitForTimeout(2500);
+  expect(pres.isClosed()).toBe(false);
+  const closed = pres.waitForEvent('close', { timeout: 4000 });
+  await page.close();
+  await closed;
+  expect(pres.isClosed()).toBe(true);
+});

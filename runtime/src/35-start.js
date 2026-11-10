@@ -85,12 +85,32 @@ DF.startShow = function (snapshotHTML) {
       generic ? null : strip.el,
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
       hintEl,
-      DF.keyChips(generic ? [[["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]] :
-        [[["←", "→"], DF.t("slide")], [["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]]),
+      DF.keyHelp(keyGroups()),
       DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
     ])
   ]);
   document.body.appendChild(root);
+
+  // the complete key help, built from the keys as configured, so that it always matches them:
+  // start screen, slides, display, show, presenter view
+  function keyGroups() {
+    var k = cfg.keys || {};
+    var row = function (action, label) { return { action: action, keys: k[action] || [], label: label }; };
+    var start = { name: "start", title: DF.t("keysStart"), rows: [] };
+    // choosing the start slide takes every key of back and next; the first of each stands for them
+    if (!generic) start.rows.push({ action: "choose", keys: (k.prev || []).concat(k.next || []), label: DF.t("chooseSlide"),
+      caps: [(k.prev || [])[0], (k.next || [])[0]].filter(Boolean).map(DF.keyCap) });
+    start.rows.push({ action: "start", caps: ["Enter"], label: DF.t("start") });
+    var display = { name: "display", title: DF.t("keysDisplay"), rows: [row("fullscreen", DF.t("fullscreen")), row("black", DF.t("black")), row("white", DF.t("white"))] };
+    if (generic) return [start, display, { name: "run", title: DF.t("keysRun"), rows: [row("end", DF.t("endShow"))] }];
+    return [start,
+      { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
+        row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
+        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }] },
+      display,
+      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
+      { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
+  }
   try { performance.mark("deckfold:start-screen"); } catch (e) { }
   if (!generic) {
     // the preview runs the source player in an iframe on this window's thread; it is created after
@@ -137,9 +157,18 @@ DF.startShow = function (snapshotHTML) {
     if (d.type === "hello") { send(status("init")); return; }
     if (d.type === "hb") return;
     if (d.type === "cmd") {
-      if (phase === "show" && DF.audience) return DF.audience.act(d.cmd, d.arg);
-      if (phase === "start") selectBy(d.cmd, d.arg);
+      if (phase === "start") return selectBy(d.cmd, d.arg);
+      // from "Start" on: to the presentation; while it is still loading, kept for it
+      if (DF.audience) return DF.audience.act(d.cmd, d.arg);
+      early.push([d.cmd, d.arg]);
     }
+  }
+  // early: commands and keys between "Start" and the presentation being able to take them (the
+  // presenter view already shows the show then); carried out in order once it can
+  var early = [];
+  function runEarly() {
+    var q = early; early = [];
+    q.forEach(function (c) { DF.audience.act(c[0], c[1]); });
   }
   function selectBy(cmd, arg) {
     switch (cmd) {
@@ -164,8 +193,14 @@ DF.startShow = function (snapshotHTML) {
 
   // ---------- keys on the start screen ----------
   DF.installKeys(function (a, e) {
+    if (phase === "loading") {
+      // keys pressed while the presentation loads (until it takes them over)
+      if (a !== "digits" && a !== "start") early.push([a, a === "goto" ? e.slide : undefined]);
+      return true;
+    }
     if (phase !== "start") return true;
-    if (e && e.key === "Enter" && a !== "goto") { begin(); return true; }
+    // Enter starts here even where a configuration binds it to an action
+    if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
     switch (a) {
       case "digits": return true;
       case "goto": setSel(e.slide); return true;
@@ -199,6 +234,7 @@ DF.startShow = function (snapshotHTML) {
     }).then(function () {
       phase = "show";
       root.parentNode.removeChild(root);
+      runEarly();
       beat();
     }, function (err) { console.error("deckfold:", err); });
   }
