@@ -529,10 +529,33 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   expect(plain[2]).toBe(false);
   await page.mouse.click(plain[0], plain[1]);
   await at(L + 1);
-  // a link in a preview of the presenter view does nothing
+  // a link in a preview of the presenter view does nothing. The preview is inert and lies under a
+  // shield, so what a user can do there is click at the place of the link, and that click meets
+  // the shield.
   await to(L); await at(L);
-  await expect.poll(() => pres.evaluate(() => { const f = document.querySelector('.df-current iframe[data-df-preview]'); return f && f.contentDocument ? f.contentDocument.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]').length : 0; }), { timeout: 10000 }).toBe(links.length);
-  await pres.frameLocator('.df-current iframe[data-df-preview]').locator('.df-pptx-slide.df-on [data-df-jump="first"]').click({ force: true });
+  // what this step depends on, measured, so that a failure names it: the preview is visible and
+  // shows the slide with the links, the link has an area, and the shield lies over its place
+  const linkInPreview = () => pres.evaluate(() => {
+    const f = document.querySelector('.df-current iframe[data-df-preview]');
+    const doc = f && f.contentDocument;
+    const el = doc && doc.querySelector('.df-pptx-slide.df-on [data-df-jump="first"]');
+    const fr = f ? f.getBoundingClientRect() : null, er = el ? el.getBoundingClientRect() : null;
+    const k = f && f.offsetWidth ? fr.width / f.offsetWidth : 0; // the preview is scaled into its pane
+    const point = er && k ? [fr.left + (er.left + er.width / 2) * k, fr.top + (er.top + er.height / 2) * k] : null;
+    const top = point ? document.elementFromPoint(point[0], point[1]) : null;
+    return {
+      frame: f ? getComputedStyle(f).visibility : 'missing',
+      slide: doc ? [...doc.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')) : -1,
+      links: doc ? doc.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]').length : 0,
+      area: !!er && er.width > 0 && er.height > 0,
+      under: top ? String(top.className || top.tagName) : 'nothing',
+      point,
+    };
+  });
+  await expect.poll(async () => { const s = await linkInPreview(); delete s.point; return s; }, { timeout: 10000 })
+    .toEqual({ frame: 'visible', slide: L, links: links.length, area: true, under: 'df-shield' });
+  const spot = (await linkInPreview()).point;
+  await pres.mouse.click(spot[0], spot[1]);
   await pres.waitForTimeout(500);
   await at(L);
   // "end show" ends the presentation: the window is back at the start screen
