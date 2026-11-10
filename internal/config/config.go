@@ -64,7 +64,7 @@ func FormerDefaultElements(els []string) bool {
 }
 
 // Actions are the actions keys can be bound to.
-var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end"}
+var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end", "find"}
 
 // retiredActions were bound to keys by older versions; Merge accepts and drops them, so that
 // older configuration files still load (diagnostics showed the screen detection of v0.4 drafts).
@@ -98,6 +98,8 @@ func Default() Config {
 			"auto":       {"a", "A"},
 			"timerReset": {"t", "T"},
 			"end":        {"Escape"},
+			// search and outline; Ctrl+F and Cmd+F open it too and are not configurable
+			"find": {"/"},
 		},
 		WarnSize: "250MB",
 	}

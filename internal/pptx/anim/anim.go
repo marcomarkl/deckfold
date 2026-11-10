@@ -489,3 +489,27 @@ func readTransition(sld *xmltree.Node, out *Slide, rep *Report) {
 		break
 	}
 }
+
+// FirstStep returns the first step of the click order in which target (a shape id, or
+// "<spid>:p<n>" for a paragraph) shows: 0 when it is there as the slide appears, -1 when only a
+// trigger shows it or nothing does.
+func (s Slide) FirstStep(target string) int {
+	hidden := false
+	for _, h := range s.Hidden {
+		if h == target {
+			hidden = true
+			break
+		}
+	}
+	if !hidden {
+		return 0
+	}
+	for n, st := range s.Steps {
+		for _, e := range st.Effects {
+			if e.Target == target && e.Class == "entr" {
+				return n
+			}
+		}
+	}
+	return -1
+}

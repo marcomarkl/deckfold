@@ -84,9 +84,13 @@ export default async function setup() {
   deckfold([path.join(gen, 'deck.html'), '-o', path.join(OUT, 'generic.html'), '--force', '--generic']);
 
   // PowerPoint feature decks (public, no corpus needed)
-  for (const name of ['basic', 'media', 'animations', 'gifs', 'triggers', 'shapes3d', 'text2', 'morph', 'transitions3d', 'charts2']) {
+  for (const name of ['basic', 'media', 'animations', 'gifs', 'triggers', 'shapes3d', 'text2', 'morph', 'transitions3d', 'charts2', 'content', 'hostile']) {
     deckfold([pptxFixture(name), '-o', path.join(OUT, `pptx-${name}.html`), '--force'], BUNDLED);
   }
+  // the content deck with the search on another key (content.spec.mjs)
+  const keysCfg = path.join(OUT, 'find-key.json');
+  fs.writeFileSync(keysCfg, JSON.stringify({ keys: { find: ['s'] } }));
+  deckfold([pptxFixture('content'), '-o', path.join(OUT, 'pptx-content-keys.html'), '--force', '--config', keysCfg], BUNDLED);
   // every feature deck with PowerPoint reference images (pptx-fidelity.spec.mjs)
   const ref = path.join(ROOT, 'fixtures', 'pptx', 'ref');
   for (const name of fs.existsSync(ref) ? fs.readdirSync(ref) : []) {

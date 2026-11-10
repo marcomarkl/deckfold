@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -688,5 +689,69 @@ func TestPowerPointBuiltDecks(t *testing.T) {
 	}
 	if last := data.Slides[8]; last.Advance == nil || *last.Advance != 3 || last.Anim.Transition.Dur != 2000 {
 		t.Errorf("automatic advance %v, duration %v", last.Advance, last.Anim.Transition.Dur)
+	}
+}
+
+// The content deck: the text blocks the converter stores for the content model are the ones the
+// generator put on the slides, with their roles, list levels and the steps in which they show.
+// Footer, slide number and the hidden slide are not among them.
+func TestContentDeck(t *testing.T) {
+	d, spec := pptxgen.ContentWithSpec()
+	html, res, data := convert(t, d)
+	if data.Version != deck.BlocksVersion || len(data.Slides) != len(spec.Slides) {
+		t.Fatalf("version %d, %d slides, want version %d and %d slides", data.Version, len(data.Slides), deck.BlocksVersion, len(spec.Slides))
+	}
+	for i, want := range spec.Slides {
+		got := data.Slides[i]
+		if got.Label != want.Title || got.Notes != want.Notes {
+			t.Errorf("slide %d: title %q and notes %q, want %q and %q", i+1, got.Label, got.Notes, want.Title, want.Notes)
+		}
+		if len(got.Blocks) != len(want.Blocks) {
+			t.Errorf("slide %d: %d blocks, want %d: %+v", i+1, len(got.Blocks), len(want.Blocks), got.Blocks)
+			continue
+		}
+		for k, w := range want.Blocks {
+			g := got.Blocks[k]
+			if g.Role != w.Role || g.Text != w.Text || g.Step != w.Step || g.Level != w.Level {
+				t.Errorf("slide %d, block %d: %+v, want %+v", i+1, k+1, g, w)
+			}
+			// links to other slides: a slide by its index among the shown slides, or a direction
+			gj, wj := "", ""
+			if g.Jump != nil {
+				gj = g.Jump.To
+				if g.Jump.Slide != nil {
+					gj = fmt.Sprint(*g.Jump.Slide)
+				}
+			}
+			if w.Jump != nil {
+				wj = w.Jump.To
+				if w.Jump.Slide != nil {
+					wj = fmt.Sprint(*w.Jump.Slide)
+				}
+			}
+			if gj != wj {
+				t.Errorf("slide %d, block %q: jump %q, want %q", i+1, w.Text, gj, wj)
+			}
+		}
+	}
+	// the links are in the drawing too: one element per link on text, one on the linked shape
+	jumps := map[string]int{}
+	for _, tg := range htmlscan.Scan([]byte(html)).Tags {
+		if j, ok := tg.Get("data-df-jump"); ok {
+			jumps[tg.Name+" "+j.Val]++
+		}
+	}
+	want := map[string]int{"a next": 1, "a prev": 1, "a first": 1, "a last": 1, "a back": 1, "a end": 1, "a 1": 1, "g 2": 1}
+	if !reflect.DeepEqual(jumps, want) {
+		t.Errorf("links in the drawing: %v, want %v", jumps, want)
+	}
+	// the link to the hidden slide stays text and is reported; the other links are not
+	hidden, other := false, false
+	for _, w := range res.Warnings {
+		hidden = hidden || strings.Contains(w, "link to a hidden slide")
+		other = other || strings.Contains(w, "other than a jump")
+	}
+	if !hidden || other {
+		t.Errorf("warnings: %q", res.Warnings)
 	}
 }

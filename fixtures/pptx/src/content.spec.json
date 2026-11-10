@@ -1,0 +1,205 @@
+{
+  "slides": [
+    {
+      "title": "Content model deck",
+      "notes": "The notes of the first slide mention a walrus.",
+      "blocks": [
+        {
+          "role": "title",
+          "text": "Content model deck",
+          "step": 0
+        },
+        {
+          "role": "subtitle",
+          "text": "Titles, lists, links and builds",
+          "step": 0
+        }
+      ]
+    },
+    {
+      "title": "Lists and levels",
+      "notes": "Three clicks build the list.",
+      "blocks": [
+        {
+          "role": "title",
+          "text": "Lists and levels",
+          "step": 0
+        },
+        {
+          "role": "item",
+          "text": "The first entry is there from the start",
+          "step": 0
+        },
+        {
+          "role": "item",
+          "text": "The second entry appears on the first click",
+          "step": 1
+        },
+        {
+          "role": "item",
+          "text": "A nested entry appears on the second click",
+          "step": 2,
+          "level": 1
+        },
+        {
+          "role": "item",
+          "text": "The last entry appears on the third click",
+          "step": 3
+        },
+        {
+          "role": "text",
+          "text": "A plain paragraph below the list",
+          "step": 0
+        }
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "role": "text",
+          "text": "Free text on a slide without a title placeholder",
+          "step": 0
+        },
+        {
+          "role": "alt",
+          "text": "A gradient picture with a circle",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Cell one",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Cell two",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Cell three",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Cell four",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Grouped left",
+          "step": 1
+        },
+        {
+          "role": "text",
+          "text": "Grouped right",
+          "step": 1
+        },
+        {
+          "role": "text",
+          "text": "Show the hint",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "A hint only the button shows",
+          "step": -1
+        }
+      ]
+    },
+    {
+      "title": "Links to other slides",
+      "blocks": [
+        {
+          "role": "title",
+          "text": "Links to other slides",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "Next slide",
+          "step": 0,
+          "jump": {
+            "to": "next"
+          }
+        },
+        {
+          "role": "text",
+          "text": "Previous slide",
+          "step": 0,
+          "jump": {
+            "to": "prev"
+          }
+        },
+        {
+          "role": "text",
+          "text": "First slide",
+          "step": 0,
+          "jump": {
+            "to": "first"
+          }
+        },
+        {
+          "role": "text",
+          "text": "Last slide",
+          "step": 0,
+          "jump": {
+            "to": "last"
+          }
+        },
+        {
+          "role": "text",
+          "text": "Last slide viewed",
+          "step": 0,
+          "jump": {
+            "to": "back"
+          }
+        },
+        {
+          "role": "text",
+          "text": "End the show",
+          "step": 0,
+          "jump": {
+            "to": "end"
+          }
+        },
+        {
+          "role": "text",
+          "text": "The lists slide",
+          "step": 0,
+          "jump": {
+            "slide": 1
+          }
+        },
+        {
+          "role": "text",
+          "text": "The hidden slide",
+          "step": 0
+        },
+        {
+          "role": "text",
+          "text": "To the free text",
+          "step": 0,
+          "jump": {
+            "slide": 2
+          }
+        }
+      ]
+    },
+    {
+      "title": "The last slide",
+      "blocks": [
+        {
+          "role": "title",
+          "text": "The last slide",
+          "step": 0
+        },
+        {
+          "role": "item",
+          "text": "Nothing follows this slide",
+          "step": 0
+        }
+      ]
+    }
+  ]
+}

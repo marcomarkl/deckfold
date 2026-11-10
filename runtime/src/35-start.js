@@ -77,10 +77,13 @@ DF.startShow = function (snapshotHTML) {
   var stage = DF.el("div", { class: "df-start-stage" });
   stage.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
   if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
+  // search and outline: only the slide text here, because this window may already be on the
+  // projector; the presenter view searches the notes too
+  var finder = generic ? null : DF.finder({ notes: false, pick: function (i) { setSel(i); }, current: function () { return sel; } });
   var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
     DF.el("div", { class: "df-start-box" }, [
       DF.el("h1", { text: meta.title || document.title || "deckfold" }),
-      DF.el("p", { class: "df-sub", text: generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")) }),
+      DF.el("p", { class: "df-sub" }, [generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")), finder ? finder.button : null]),
       generic ? null : stage,
       generic ? null : strip.el,
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
@@ -106,7 +109,7 @@ DF.startShow = function (snapshotHTML) {
     return [start,
       { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
-        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }] },
+        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
       { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
       { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
@@ -199,6 +202,7 @@ DF.startShow = function (snapshotHTML) {
       return true;
     }
     if (phase !== "start") return true;
+    if (a === "find") { if (finder) finder.open(); return true; }
     // Enter starts here even where a configuration binds it to an action
     if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
     switch (a) {
@@ -221,6 +225,7 @@ DF.startShow = function (snapshotHTML) {
     if (wantFs) DF.requestFs().catch(function () { });
     startBtn.disabled = true;
     startBtn.textContent = DF.t("loading");
+    if (finder) finder.remove(); // no search in the presentation itself
     var start = generic ? null : DF.model.goto(sel);
     document.documentElement.classList.remove("df-start-mode");
     dropHash();

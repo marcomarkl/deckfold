@@ -60,6 +60,7 @@ var TEXT = {
     keysStart: "Startbildschirm", keysSlides: "Folien", keysDisplay: "Anzeige", keysRun: "Ablauf",
     chooseSlide: "Folie wählen", firstSlide: "Erste Folie", lastSlide: "Letzte Folie", gotoSlide: "Folie n",
     black: "Schwarz", white: "Weiß", timerReset: "Zeit zurücksetzen", click: "Klick",
+    search: "Suchen", noResults: "Keine Treffer",
     keySpace: "Leertaste", keyPgDn: "Bild ↓", keyPgUp: "Bild ↑", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "Rückschritt", keyDigits: "1 2 3 …",
   },
   en: {
@@ -80,6 +81,7 @@ var TEXT = {
     keysStart: "Start screen", keysSlides: "Slides", keysDisplay: "Display", keysRun: "Show",
     chooseSlide: "Choose slide", firstSlide: "First slide", lastSlide: "Last slide", gotoSlide: "Slide n",
     black: "Black", white: "White", timerReset: "Reset time", click: "Click",
+    search: "Search", noResults: "No results",
     keySpace: "Space", keyPgDn: "Page Down", keyPgUp: "Page Up", keyHome: "Home", keyEnd: "End", keyBackspace: "Backspace", keyDigits: "1 2 3 …",
   }
 };

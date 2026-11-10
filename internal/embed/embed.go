@@ -113,6 +113,17 @@ func prepare(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	for _, w := range warns {
 		rep.Warn("%s", w)
 	}
+	// what is written on the slides; a deck whose content cannot be read still converts, without
+	// search and outline
+	content, cwarns, cerr := ad.Content(adapter.SourceOf(in), meta)
+	for _, w := range cwarns {
+		rep.Warn("%s", w)
+	}
+	if cerr != nil {
+		rep.Warn("the slide text could not be read, so the output has no search and no outline: %v", cerr)
+		content = nil
+	}
+	content = adapter.Finish(content, meta)
 	res, err := assets.NewResolver(in.Root, opt.AllowOutside)
 	if err != nil {
 		return nil, meta, nil, err
@@ -196,6 +207,13 @@ func prepare(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	mb, err := inject.MetaBlock(map[string]any{"deck": meta, "shim": shim, "deckHash": deckHash})
 	if err != nil {
 		return nil, meta, nil, err
+	}
+	if content != nil {
+		cb, err := inject.ContentBlock(content)
+		if err != nil {
+			return nil, meta, nil, err
+		}
+		mb = append(append(mb, '\n'), cb...)
 	}
 	// the asset blocks are written straight from the store when the output is written
 	end := len(in.Src)

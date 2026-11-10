@@ -63,6 +63,7 @@ var TEXT = {
     keysStart: "Startbildschirm", keysSlides: "Folien", keysDisplay: "Anzeige", keysRun: "Ablauf",
     chooseSlide: "Folie w\u00e4hlen", firstSlide: "Erste Folie", lastSlide: "Letzte Folie", gotoSlide: "Folie n",
     black: "Schwarz", white: "Wei\u00df", timerReset: "Zeit zur\u00fccksetzen", click: "Klick",
+    search: "Suchen", noResults: "Keine Treffer",
     keySpace: "Leertaste", keyPgDn: "Bild \u2193", keyPgUp: "Bild \u2191", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "R\u00fcckschritt", keyDigits: "1 2 3 \u2026",
   },
   en: {
@@ -83,6 +84,7 @@ var TEXT = {
     keysStart: "Start screen", keysSlides: "Slides", keysDisplay: "Display", keysRun: "Show",
     chooseSlide: "Choose slide", firstSlide: "First slide", lastSlide: "Last slide", gotoSlide: "Slide n",
     black: "Black", white: "White", timerReset: "Reset time", click: "Click",
+    search: "Search", noResults: "No results",
     keySpace: "Space", keyPgDn: "Page Down", keyPgUp: "Page Up", keyHome: "Home", keyEnd: "End", keyBackspace: "Backspace", keyDigits: "1 2 3 \u2026",
   }
 };
@@ -224,11 +226,12 @@ DF.assets = (function () {
 function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { return DF.assets.url(h); }); }
 DF.fill = fillPlaceholders;
 
-// Snapshot for the srcdoc previews: the document before activation, without asset blocks.
-// The asset blocks are taken out of the document while it is cloned and put back right away, so
+// Snapshot for the srcdoc previews: the document before activation, without asset blocks and
+// without the content model (a preview searches nothing).
+// The blocks are taken out of the document while it is cloned and put back right away, so
 // that a large file is not copied in memory once more.
 function snapshot() {
-  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]'));
+  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"], script#df-content'));
   var spots = blocks.map(function (b) { var at = { parent: b.parentNode, next: b.nextSibling }; b.parentNode.removeChild(b); return at; });
   var root;
   try { root = document.documentElement.cloneNode(true); }
@@ -469,6 +472,10 @@ function runDeferred() {
 // until DF.activateScripts (so no medium plays and no source script runs on the start screen).
 DF.activate = function (opts) {
   DF.meta = readJSON("df-meta") || { deck: { slides: [] }, shim: {} };
+  // the content model (docs/content-model.md): what is written on the slides. A version this
+  // runtime does not know counts as no model.
+  var content = readJSON("df-content");
+  DF.content = content && content.version === 1 && content.slides ? content : null;
   return activateCSS().then(function () {
     if (opts.cssOnly) return; // the start screen does not wait for the fonts of the deck
     restoreAttrs(!opts.runScripts);
@@ -714,6 +721,8 @@ DF.adapters = {
     mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; },
     // videos, audio icons and trigger shapes act by themselves (their handlers are on the document)
     interactive: function (t) { return !!(window.__dfPptx && window.__dfPptx.interactive && window.__dfPptx.interactive(t)); },
+    // link: the target of a link to another slide under a click (see linkOf in the player)
+    link: function (t) { return window.__dfPptx && window.__dfPptx.linkOf ? window.__dfPptx.linkOf(t) : null; },
     shown: function () { return window.__dfPptx ? window.__dfPptx.state().slide : null; }
   },
   generic: {
@@ -770,8 +779,15 @@ function actionFor(e) {
 // The capture listeners are registered when the runtime loads (in <head>, before any source
 // script), so no source player with its own capture listener gets a key before deckfold does.
 var keyRouters = { keydown: null, keyup: null, keypress: null };
+// DF.modalKeys(type, event): while an overlay of deckfold is open (the search), it takes every
+// key. None reaches the handlers below or the source player: Escape closes the overlay instead
+// of ending the presentation, and the arrow keys move in its list instead of moving the slides.
+DF.modalKeys = null;
 ["keydown", "keyup", "keypress"].forEach(function (type) {
-  window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
+  window.addEventListener(type, function (e) {
+    if (DF.modalKeys && !e.__deckfold) { DF.modalKeys(type, e); return; }
+    if (keyRouters[type]) keyRouters[type](e);
+  }, true);
 });
 
 // Pointer input in the presentation (decision E15). A source player may move by itself on a click,
@@ -789,7 +805,9 @@ var pointerRouter = null;
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
-// itself; guardClicks keeps such clicks away from the player's document listener.
+// itself; guardClicks keeps such clicks away from the player's document listener; link(target)
+// returns the target of a link to another slide under the click, which follow(target) then goes
+// to (through deckfold's state, like every other move).
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -806,7 +824,9 @@ DF.installPointer = function (opts) {
       if (e.button !== 0) return;
       if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
       e.preventDefault(); e.stopImmediatePropagation();
-      opts.next();
+      var to = opts.link ? opts.link(e.target) : null;
+      if (to != null && opts.follow) opts.follow(to);
+      else opts.next();
       return;
     }
     // wheel and touch moves: never to the player (a tap still ends in a click, see above)
@@ -838,6 +858,11 @@ DF.installKeys = function (handler, opts) {
   var digits = "", timer = 0;
   keyRouters.keydown = function (e) {
     if (e.__deckfold) return; // eigene synthetische Taste
+    // Ctrl+F and Cmd+F open the search (fixed, next to the keys bound to "find")
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "f" || e.key === "F") && !(opts && opts.passthrough)) {
+      if (handler("find", e)) { e.preventDefault(); e.stopImmediatePropagation(); }
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (typing(e.target)) return;
     if (opts && opts.passthrough) {
@@ -1070,6 +1095,142 @@ DF.keyHelp = function (groups) {
   }));
 };
 
+// DF.finder: search and outline (docs/content-model.md). An overlay with a text field and a list:
+// without a search text every slide with its title (a slide without one shows the start of its
+// text), with a search text the slides that hold it, each with the first place found. Choosing
+// an entry closes the overlay and calls opts.pick(slide).
+// opts: notes (search the presenter notes too), pick(i), current() (the slide shown now).
+// Returns null when the deck has no content model; otherwise { button, open, close, isOpen,
+// remove }.
+DF.finder = function (opts) {
+  var model = DF.content, slides = DF.slides();
+  if (!model || !slides.length || model.slides.length !== slides.length) return null;
+  var input = DF.el("input", { type: "text", "data-df-find-input": "", placeholder: DF.t("search"), "aria-label": DF.t("search"),
+    autocomplete: "off", autocapitalize: "off", spellcheck: "false" });
+  var list = DF.el("div", { class: "df-find-list" });
+  var root = DF.el("div", { "data-df-ui": "", "data-df-finder": "", class: "df-finder" }, [DF.el("div", { class: "df-find-box" }, [input, list])]);
+  document.body.appendChild(root);
+  var isOpen = false, active = 0, items = [];
+
+  // fold: lower case without accents, one character for each character of s, so that a place
+  // found in the folded text is the same place in s
+  function fold(s) {
+    var out = "";
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charAt(i), f = c;
+      try { f = c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); } catch (e) { f = c.toLowerCase(); }
+      out += f.length === 1 ? f : (f.charAt(0) || c);
+    }
+    return out;
+  }
+  function cut(s, n) { return s.length > n ? s.slice(0, n).replace(/\s+\S*$/, "") + " \u2026" : s; }
+
+  // entries: what the list shows for the search text q (folded)
+  function entries(q) {
+    var out = [];
+    slides.forEach(function (sl, i) {
+      var sc = model.slides[i], title = sc.title || "";
+      if (!q) {
+        out.push({ i: i, title: title, start: title || !sc.blocks.length ? "" : cut(sc.blocks[0].text, 90) });
+        return;
+      }
+      var hits = 0, first = null;
+      var look = function (text, notes) {
+        var at = fold(text).indexOf(q);
+        if (at < 0) return;
+        hits++;
+        if (!first) first = { text: text, at: at, notes: notes };
+      };
+      // the title counts once: as its block when the slide has one, otherwise by itself
+      var ft = fold(title);
+      if (title && !sc.blocks.some(function (b) { return fold(b.text) === ft; })) look(title, false);
+      sc.blocks.forEach(function (b) { look(b.text, false); });
+      if (opts.notes && sl.notes) look(sl.notes, true);
+      if (hits) out.push({ i: i, title: title, hits: hits, first: first });
+    });
+    return out;
+  }
+  // place: the text around a place found, with the found part marked. Everything is a text node.
+  function place(f, len) {
+    var from = Math.max(0, f.at - 36), to = Math.min(f.text.length, f.at + len + 60);
+    return DF.el("span", { class: "df-find-place" }, [
+      f.notes ? DF.el("span", { class: "df-find-kind", "data-df-find-notes": "", text: DF.t("notes") }) : null,
+      (from > 0 ? "\u2026" : "") + f.text.slice(from, f.at),
+      DF.el("mark", { text: f.text.slice(f.at, f.at + len) }),
+      f.text.slice(f.at + len, to) + (to < f.text.length ? "\u2026" : "")]);
+  }
+  function render() {
+    var q = fold(input.value.replace(/^\s+|\s+$/g, ""));
+    var cur = opts.current ? opts.current() : -1;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    items = entries(q).map(function (e) {
+      var b = DF.el("button", { type: "button", class: "df-find-item" + (e.i === cur ? " df-cur" : ""), "data-df-find-item": "", "data-i": String(e.i),
+        onclick: function () { choose(e.i); } }, [
+        DF.el("span", { class: "df-find-n", text: String(e.i + 1) }),
+        DF.el("span", { class: "df-find-main" }, [
+          DF.el("span", { class: "df-find-title", text: e.title || (DF.t("slide") + " " + (e.i + 1)) }),
+          e.first ? place(e.first, q.length) : (e.start ? DF.el("span", { class: "df-find-place", text: e.start }) : null)]),
+        e.hits > 1 ? DF.el("span", { class: "df-find-count", "data-df-find-count": String(e.hits), text: e.hits + "\u00d7" }) : null]);
+      list.appendChild(b);
+      return { i: e.i, el: b };
+    });
+    if (!items.length) list.appendChild(DF.el("p", { class: "df-find-none", "data-df-find-none": "", text: DF.t("noResults") }));
+    // the outline starts at the slide shown now, a search at its first entry
+    active = 0;
+    if (!q) items.forEach(function (it, k) { if (it.i === cur) active = k; });
+    mark();
+  }
+  function mark() {
+    items.forEach(function (it, k) { it.el.classList.toggle("df-active", k === active); });
+    var a = items[active];
+    if (a && a.el.scrollIntoView) a.el.scrollIntoView({ block: "nearest" });
+  }
+  function choose(i) { close(); opts.pick(i); }
+  function keys(type, e) {
+    e.stopImmediatePropagation();
+    if (type !== "keydown") return;
+    switch (e.key) {
+      case "Escape": e.preventDefault(); close(); return;
+      case "ArrowDown": case "ArrowUp":
+        e.preventDefault();
+        if (items.length) { active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; mark(); }
+        return;
+      case "Enter": e.preventDefault(); if (items[active]) choose(items[active].i); return;
+      case "Tab": e.preventDefault(); return;
+    }
+    // Ctrl+F and Cmd+F stay with the overlay instead of opening the browser's own search
+    if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) { e.preventDefault(); input.select(); return; }
+    // typing goes to the text field wherever the focus is
+    if (document.activeElement !== input) input.focus();
+  }
+  function open() {
+    if (isOpen || !root.parentNode) return;
+    isOpen = true;
+    input.value = "";
+    root.classList.add("df-on");
+    DF.modalKeys = keys;
+    render();
+    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  }
+  // close: the focus goes back to the document, so that the keys move the slides again and no
+  // button shows a focus ring
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    root.classList.remove("df-on");
+    if (DF.modalKeys === keys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && root.contains(a) && a.blur) a.blur();
+  }
+  input.addEventListener("input", render);
+  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
+  return {
+    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: open }),
+    open: open, close: close, isOpen: function () { return isOpen; },
+    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+  };
+};
+
 // --- 35-start.js ---
 // Start screen of the show window (decision E14): title, a large preview of the chosen slide, a
 // strip of all slides to choose where to start, and the settings. The window is the presentation
@@ -1150,10 +1311,13 @@ DF.startShow = function (snapshotHTML) {
   var stage = DF.el("div", { class: "df-start-stage" });
   stage.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
   if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
+  // search and outline: only the slide text here, because this window may already be on the
+  // projector; the presenter view searches the notes too
+  var finder = generic ? null : DF.finder({ notes: false, pick: function (i) { setSel(i); }, current: function () { return sel; } });
   var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
     DF.el("div", { class: "df-start-box" }, [
       DF.el("h1", { text: meta.title || document.title || "deckfold" }),
-      DF.el("p", { class: "df-sub", text: generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")) }),
+      DF.el("p", { class: "df-sub" }, [generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")), finder ? finder.button : null]),
       generic ? null : stage,
       generic ? null : strip.el,
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
@@ -1179,7 +1343,7 @@ DF.startShow = function (snapshotHTML) {
     return [start,
       { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
-        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }] },
+        { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
       { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
       { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
@@ -1272,6 +1436,7 @@ DF.startShow = function (snapshotHTML) {
       return true;
     }
     if (phase !== "start") return true;
+    if (a === "find") { if (finder) finder.open(); return true; }
     // Enter starts here even where a configuration binds it to an action
     if (a === "start" || (e && e.key === "Enter" && a !== "goto")) { begin(); return true; }
     switch (a) {
@@ -1294,6 +1459,7 @@ DF.startShow = function (snapshotHTML) {
     if (wantFs) DF.requestFs().catch(function () { });
     startBtn.disabled = true;
     startBtn.textContent = DF.t("loading");
+    if (finder) finder.remove(); // no search in the presentation itself
     var start = generic ? null : DF.model.goto(sel);
     document.documentElement.classList.remove("df-start-mode");
     dropHash();
@@ -1432,11 +1598,29 @@ DF.startAudience = function (opts) {
     }
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
+    if (target.slide !== st.slide) before = st.slide;
     var to = st = { slide: target.slide, step: target.step };
     lastShown = st;
     drive(function () { return (o && o.jump) ? adapter.jump(to, from) : DF.drive(from, to); });
     report();
     scheduleAuto();
+  }
+  // before: the slide shown before the current one, for a link to "the last slide viewed"
+  var before = null;
+  // follow: a link to another slide on the current one (the content model's "jump"). A link goes
+  // to the start of its slide; "next" and "prev" mean slides here, not steps.
+  function follow(to) {
+    if (st.ended) return;
+    var n = DF.slides().length;
+    switch (to) {
+      case "next": return st.slide + 1 < n ? go(DF.model.goto(st.slide + 1)) : go(null);
+      case "prev": return st.slide > 0 ? go(DF.model.goto(st.slide - 1)) : undefined;
+      case "first": return go(DF.model.goto(0));
+      case "last": return go(DF.model.goto(n - 1));
+      case "back": return before != null ? go(DF.model.goto(before)) : undefined;
+      case "end": return finish();
+    }
+    if (/^\d+$/.test(to) && +to < n) return go(DF.model.goto(+to));
   }
   // drive: one move of the player after the ones before it; a move that fails does not stop the
   // later ones
@@ -1485,6 +1669,7 @@ DF.startAudience = function (opts) {
       case "last": return go(DF.model.last());
       case "goto": return go(DF.model.goto(arg));
       case "state": return go(arg, { jump: true });
+      case "follow": return follow(String(arg));
       case "black": return setBlank("black");
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
@@ -1551,7 +1736,8 @@ DF.startAudience = function (opts) {
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks });
+  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
+    link: adapter.link, follow: function (to) { take("follow", to); } });
 
   DF.audience = {
     act: take,
@@ -1625,6 +1811,9 @@ DF.startPresenter = function (snapshotHTML) {
   document.addEventListener("fullscreenchange", fsLabel);
   document.addEventListener("webkitfullscreenchange", fsLabel);
   fsLabel();
+  // search and outline, with the notes: only the presenter sees this window. An entry goes to its
+  // slide like a tile of the overview does.
+  var finder = DF.finder({ notes: true, pick: function (i) { command("goto", i); }, current: function () { return shown().slide; } });
   var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
   var autoInfo = DF.el("span", { class: "df-autoinfo" });
   var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
@@ -1639,6 +1828,7 @@ DF.startPresenter = function (snapshotHTML) {
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
     DF.el("button", { type: "button", "data-df-font": "-", text: "A\u2212", title: DF.t("smaller"), onclick: function () { fontBy(-2); } }),
     DF.el("button", { type: "button", "data-df-font": "+", text: "A+", title: DF.t("larger"), onclick: function () { fontBy(2); } }),
+    finder ? finder.button : null,
     fsBtn,
     endBtn
   ]);
@@ -1857,6 +2047,7 @@ DF.startPresenter = function (snapshotHTML) {
   // ---------- keys ----------
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
+    if (a === "find") { if (finder) finder.open(); return true; }
     if (a === "fullscreen") { DF.toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
     // Enter cannot start from here (full screen needs a click in the presentation window); it is

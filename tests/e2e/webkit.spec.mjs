@@ -84,3 +84,14 @@ test('WebKit: the presenter view closes with the window of the presentation, sta
   await closed;
   expect(pres.isClosed()).toBe(true);
 });
+
+test('WebKit: search and outline: open, search, choose', async ({ page }) => {
+  await startScreen(page, 'pptx-content.html');
+  await page.click('[data-df-find]');
+  await expect(page.locator('[data-df-finder].df-on [data-df-find-item]')).toHaveCount(await slideCount(page));
+  await page.keyboard.type('nested');
+  await expect(page.locator('[data-df-finder] [data-df-find-item]')).toHaveCount(1);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-df-finder].df-on')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => +document.querySelector('.df-start .df-strip .df-tile.df-cur').getAttribute('data-i'))).toBe(1);
+});

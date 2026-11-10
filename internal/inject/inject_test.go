@@ -3,10 +3,12 @@ package inject
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"deckfold/internal/assets"
+	"deckfold/internal/htmlscan"
 )
 
 // The asset blocks hold each asset in parts of at most PartBytes, which decode to the data.
@@ -37,5 +39,31 @@ func TestAssetBlocks(t *testing.T) {
 	}
 	if !bytes.Equal(data, big) {
 		t.Error("the parts do not decode to the data")
+	}
+}
+
+// Text in the content block is data: markup in it cannot end the script element or open a tag,
+// and the block reads back as the same JSON.
+func TestContentBlock(t *testing.T) {
+	text := `</script><img src=x onerror=alert(1)> & "quoted"`
+	in := map[string]any{"version": 1, "slides": []any{map[string]any{"blocks": []any{map[string]any{"role": "text", "text": text, "step": 0}}}}}
+	b, err := ContentBlock(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := htmlscan.Scan(b)
+	if len(d.Tags) != 1 || d.Tags[0].Name != "script" || d.Tags[0].Value("id") != ContentID || d.Tags[0].Value("type") != "application/json" {
+		t.Fatalf("the block is not one JSON script element: %d tags", len(d.Tags))
+	}
+	var out struct {
+		Slides []struct {
+			Blocks []struct{ Text string }
+		}
+	}
+	if err := json.Unmarshal(d.Content(d.Tags[0]), &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.Slides[0].Blocks[0].Text; got != text {
+		t.Errorf("text read back as %q", got)
 	}
 }

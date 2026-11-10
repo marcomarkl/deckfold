@@ -60,6 +60,8 @@ type Slide struct {
 	SVG    string // the slide content (an <svg> element)
 	// Shapes lists the shape ids on the slide in drawing order (data-sid values).
 	Shapes []string
+	// Blocks is the text of the slide for the content model, in drawing order.
+	Blocks []Block
 	// Anim holds the steps, effects and the transition of the slide.
 	Anim anim.Slide
 }
@@ -201,6 +203,9 @@ type slideRenderer struct {
 	split    map[string]string            // shape id -> "wd" or "lt" for word and letter builds
 	curSplit string                       // split mode of the text being written
 	curChart *xmltree.Node                // chart space of the chart being drawn
+	blocks   []Block                      // text of the slide for the content model
+	groups   []string                     // data-sid of the open groups of the slide
+	frame    string                       // data-sid of the slide's table or SmartArt frame being drawn
 }
 
 func (r *slideRenderer) newID(kind string) string {
@@ -237,7 +242,7 @@ func (r *slideRenderer) render() (Slide, error) {
 	}
 	svg.WriteString(body.String())
 	svg.WriteString("</svg>")
-	return Slide{Number: r.slide.Number, Label: r.label, Notes: r.slide.Notes, SVG: svg.String(), Shapes: r.sids}, nil
+	return Slide{Number: r.slide.Number, Label: r.label, Notes: r.slide.Notes, SVG: svg.String(), Shapes: r.sids, Blocks: r.blocks}, nil
 }
 
 // xf maps child coordinates (EMU) of a group to slide px.
@@ -256,19 +261,63 @@ type relLookup struct {
 	rd   *Renderer
 }
 
+// jumpScheme marks a link to another slide in the href of a text run: jumpScheme + the target as
+// jumpTarget returns it. A link to the web never starts with it (see SafeURL).
+const jumpScheme = "df-jump:"
+
+// showJumps maps the jump of ppaction://hlinkshowjump to the target in the content model.
+var showJumps = map[string]string{"nextslide": "next", "previousslide": "prev", "firstslide": "first", "lastslide": "last",
+	"lastslideviewed": "back", "endshow": "end"}
+
+// jumpTarget returns the target of a link to another slide: "next", "prev", "first", "last",
+// "back" (the slide viewed before), "end" (end the show), or the index of the slide among the
+// shown slides. It returns "" for every other link, and for a link to a hidden slide, which is
+// not part of the deck deckfold writes.
+func (rl relLookup) jumpTarget(h *xmltree.Node) string {
+	action := h.Attr("action")
+	if j, ok := strings.CutPrefix(action, "ppaction://hlinkshowjump?jump="); ok {
+		return showJumps[j]
+	}
+	if action != "ppaction://hlinksldjump" {
+		return ""
+	}
+	rel, ok := rl.part.Rels[h.RID("id")]
+	if !ok || rel.External {
+		return ""
+	}
+	shown := 0
+	for _, s := range rl.rd.pres.Slides {
+		if s.Name == rel.Target {
+			if s.Hidden {
+				rl.rd.warnOnce("a link to a hidden slide is shown as text without an action")
+				return ""
+			}
+			return strconv.Itoa(shown)
+		}
+		if !s.Hidden {
+			shown++
+		}
+	}
+	return ""
+}
+
+// href returns the target of a link on text: a web address, or jumpScheme and the target of a
+// link to another slide.
 func (rl relLookup) href(h *xmltree.Node) string {
+	if strings.HasPrefix(h.Attr("action"), "ppaction://") {
+		if j := rl.jumpTarget(h); j != "" {
+			return jumpScheme + j
+		}
+		if a := h.Attr("action"); a != "ppaction://hlinksldjump" {
+			rl.rd.warnOnce("links with an action other than a jump to a slide are shown as text without an action")
+		}
+	}
 	id := h.RID("id")
 	if id == "" {
-		if a := h.Attr("action"); a != "" {
-			rl.rd.warnOnce("links that jump to other slides are shown as text without an action")
-		}
 		return ""
 	}
 	rel, ok := rl.part.Rels[id]
 	if !ok || !rel.External {
-		if strings.HasPrefix(h.Attr("action"), "ppaction://") {
-			rl.rd.warnOnce("links that jump to other slides are shown as text without an action")
-		}
 		return ""
 	}
 	return SafeURL(rel.Target)
@@ -406,6 +455,20 @@ func (r *slideRenderer) shapeID(sp *xmltree.Node, owner ownerKind) string {
 	return prefix + id
 }
 
+// shapeJump returns the target of a link to another slide on the shape itself (a click anywhere
+// on it follows the link), "" when there is none. Only shapes of the slide have such links.
+func (r *slideRenderer) shapeJump(sp *xmltree.Node, owner ownerKind) string {
+	if owner != ownerSlide {
+		return ""
+	}
+	for _, nv := range []string{"nvSpPr", "nvPicPr", "nvGrpSpPr", "nvGraphicFramePr", "nvCxnSpPr"} {
+		if h := sp.Path(nv + "/cNvPr/hlinkClick"); h != nil {
+			return relLookup{r.slide.Part, r.Renderer}.jumpTarget(h)
+		}
+	}
+	return ""
+}
+
 // open starts the group of a shape and returns the markup that closes it. The outer group
 // carries the shape id and no transform, so that the player can animate it with CSS transforms;
 // a rotation sits on an inner group.
@@ -423,6 +486,9 @@ func (r *slideRenderer) open(b *strings.Builder, sp *xmltree.Node, owner ownerKi
 			rot = float64(x.Int("rot", 0)) / 60000
 		}
 		morph = fmt.Sprintf(` data-mk="%s" data-box="%s %s %s %s %s"`, morphKey(sp), f(box.x), f(box.y), f(box.w), f(box.h), f(rot))
+	}
+	if j := r.shapeJump(sp, owner); j != "" {
+		morph += ` data-df-jump="` + esc(j) + `"`
 	}
 	fmt.Fprintf(b, `<g data-sid="%s"%s>`, esc(sid), morph)
 	if x != nil {
@@ -475,6 +541,15 @@ func (r *slideRenderer) shape(b *strings.Builder, sp *xmltree.Node, owner ownerK
 	}
 	if sp.Child("txBody") != nil {
 		ts := r.styleFor(sp, owner)
+		if owner == ownerSlide {
+			ph := ""
+			if n := model.Ph(sp); n != nil {
+				ph = model.PhType(n)
+			}
+			r.collectText(sp.Child("txBody"), ts, r.shapeID(sp, owner), ph, true, false, relLookup{part, r.Renderer}, r.shapeJump(sp, owner))
+		} else if r.frame != "" {
+			r.collectText(sp.Child("txBody"), ts, r.frame, "", false, false, relLookup{part, r.Renderer}, "")
+		}
 		bp := newProps()
 		for _, n := range ts.bodyPr {
 			bp.add(n)
@@ -674,7 +749,10 @@ func (r *slideRenderer) writeText(b *strings.Builder, segs []textSeg) {
 		}
 		txt := fmt.Sprintf(`<text x="%s" y="%s" font-family="%s" font-size="%s" fill="%s"%s%s%s xml:space="preserve">%s</text>`,
 			f(s.x), f(s.y), alias, f(s.size), s.color.Hex(), op, style, dir, esc(s.text))
-		if s.href != "" {
+		if j, ok := strings.CutPrefix(s.href, jumpScheme); ok {
+			// a link to another slide: the control layer follows it (data-df-jump), no address
+			txt = `<a data-df-jump="` + esc(j) + `">` + txt + `</a>`
+		} else if s.href != "" {
 			txt = `<a href="` + esc(s.href) + `" target="_blank" rel="noopener">` + txt + `</a>`
 		}
 		b.WriteString(txt)
@@ -699,6 +777,11 @@ func (r *slideRenderer) picture(b *strings.Builder, pic *xmltree.Node, owner own
 	blip := pic.Path("blipFill/blip")
 	name, ok := r.blipAsset(blip, part)
 	end := r.open(b, pic, owner, box, x)
+	if owner == ownerSlide {
+		if descr := strings.TrimSpace(pic.Path("nvPicPr/cNvPr").Attr("descr")); descr != "" {
+			r.blocks = append(r.blocks, Block{Shape: r.shapeID(pic, owner), Para: -1, Groups: append([]string(nil), r.groups...), Role: "alt", Text: descr})
+		}
+	}
 	sppr := []*xmltree.Node{pic.Child("spPr")}
 	geo := firstChild(sppr, "prstGeom", "custGeom")
 	path, _ := r.geometry(geo, box)
@@ -965,12 +1048,18 @@ func (r *slideRenderer) group(b *strings.Builder, g *xmltree.Node, owner ownerKi
 		tx: t.tx + t.sx*(ox-cox*sx), ty: t.ty + t.sy*(oy-coy*sy),
 	}
 	end := r.open(b, g, owner, box, x)
+	if owner == ownerSlide {
+		r.groups = append(r.groups, r.shapeID(g, owner))
+	}
 	if ft := flipTransform(box, x.Bool("flipH", false), x.Bool("flipV", false)); ft != "" {
 		b.WriteString("<g" + ft + ">")
 		r.tree(b, g, owner, part, nt)
 		b.WriteString("</g>")
 	} else {
 		r.tree(b, g, owner, part, nt)
+	}
+	if owner == ownerSlide {
+		r.groups = r.groups[:len(r.groups)-1]
 	}
 	b.WriteString(end)
 }
@@ -986,7 +1075,11 @@ func (r *slideRenderer) graphicFrame(b *strings.Builder, gf *xmltree.Node, owner
 	switch {
 	case strings.HasSuffix(uri, "/table"):
 		_ = r.open(b, gf, owner, box, nil)
+		if owner == ownerSlide {
+			r.frame = r.shapeID(gf, owner)
+		}
 		r.table(b, gd.Child("tbl"), owner, part, box)
+		r.frame = ""
 		b.WriteString("</g>")
 		return
 	case strings.HasSuffix(uri, "/ole"):
@@ -1059,7 +1152,11 @@ func (r *slideRenderer) smartArt(b *strings.Builder, gf, gd *xmltree.Node, owner
 	off := gf.Path("xfrm/off")
 	nt := xf{sx: t.sx, sy: t.sy, tx: t.tx + t.sx*float64(off.Int("x", 0)), ty: t.ty + t.sy*float64(off.Int("y", 0))}
 	_ = r.open(b, gf, owner, box, nil)
+	if owner == ownerSlide {
+		r.frame = r.shapeID(gf, owner)
+	}
 	r.tree(b, tree, ownerKind(-1), model.Part{Name: dr.Target, Root: drawing, Rels: rels}, nt)
+	r.frame = ""
 	b.WriteString("</g>")
 	return true
 }

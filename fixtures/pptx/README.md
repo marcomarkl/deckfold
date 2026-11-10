@@ -11,6 +11,10 @@ Public test decks for the PPTX converter. Unlike `testdata/`, everything here is
 
 The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint itself writes. When a deck has no saved copy yet, they fall back to `src/` and skip the image comparison. The image comparison also checks `source.sha256`: if the saved copy changed after the reference images were made, the test fails instead of comparing against outdated images.
 
+## The content deck
+
+`content.pptx` is the deck for the content model (`docs/content-model.md`): titles and a subtitle, a list with two levels, a picture with a description, a table, a group, builds, a shape only a trigger shows, a footer and a slide number, a hidden slide, and links to other slides on text and on a shape. The generator writes down next to it what a reader of the deck would list (`src/content.spec.json`); the tests compare that with what the converter reads and with what the player shows in every step. `src/content.md` is the Markdown `--content` writes for the deck; it was read by hand and is compared as a whole.
+
 ## Making the reference
 
 1. Nothing to install: the script copies the bundled fonts it needs into `~/Library/Fonts` for the run and removes them again at the end. It quits PowerPoint before, because PowerPoint reads fonts when it starts.

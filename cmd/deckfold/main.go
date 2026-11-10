@@ -17,10 +17,13 @@ import (
 	"strings"
 	"time"
 
+	"deckfold/internal/adapter"
 	"deckfold/internal/assets"
 	"deckfold/internal/config"
+	"deckfold/internal/content"
 	"deckfold/internal/detect"
 	"deckfold/internal/embed"
+	"deckfold/internal/htmlscan"
 	"deckfold/internal/inject"
 	"deckfold/internal/pptx"
 	"deckfold/internal/pptx/opc"
@@ -45,7 +48,7 @@ func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 // valueFlags take a value; needed to allow positional arguments before flags.
 var valueFlags = map[string]bool{"o": true, "config": true, "warn-size": true, "auto-interval": true,
-	"presenter-elements": true, "notes-font-size": true, "target-minutes": true, "allow-outside": true, "proxy": true}
+	"presenter-elements": true, "notes-font-size": true, "target-minutes": true, "allow-outside": true, "proxy": true, "content": true}
 
 func main() {
 	setupConsole()
@@ -93,6 +96,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	notesSize := fs.Int("notes-font-size", 0, "notes font size in px")
 	target := fs.Int("target-minutes", -1, "target duration of the talk in minutes (0 = none)")
 	refresh := fs.Bool("refresh", false, "update the runtime of an existing deckfold output")
+	contentOut := fs.String("content", "", "write the slide text of an existing deckfold output to this file (.json or .md)")
 	var allow multi
 	fs.Var(&allow, "allow-outside", "allow a folder outside the input folder (repeatable)")
 	proxy := fs.String("proxy", "", "proxy for downloads (otherwise HTTPS_PROXY/NO_PROXY)")
@@ -100,7 +104,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVer := fs.Bool("version", false, "print the version")
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "deckfold %s: turn an HTML presentation into one self-contained file\n\n", Version)
-		fmt.Fprintf(stderr, "Usage:\n  deckfold <folder|file.html|file.pptx> [options]\n  deckfold --refresh <output.html> [options]\n\nOptions:\n")
+		fmt.Fprintf(stderr, "Usage:\n  deckfold <folder|file.html|file.pptx> [options]\n  deckfold --refresh <output.html> [options]\n  deckfold <output.html> --content <file.json|file.md>\n\nOptions:\n")
 		fs.PrintDefaults()
 		fmt.Fprintf(stderr, "\nExit codes: 0 success, 1 conversion failed, 2 format not recognized, 3 usage or configuration error\n")
 	}
@@ -125,6 +129,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	input := fs.Arg(0)
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if set["content"] {
+		if *refresh {
+			fmt.Fprintln(stderr, "error: --content and --refresh cannot be used together")
+			return 3
+		}
+		return doContent(input, *contentOut, *force, stdout, stderr)
+	}
 
 	// Configuration: built-in defaults (or, with --refresh, the defaults stored in the file),
 	// then the configuration file, then the flags.
@@ -339,6 +350,8 @@ func doRefresh(input, out string, force bool, src []byte, cfg config.Config, rt 
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
+	// the slide text for search and outline, read from the file itself
+	res = refreshContent(res, stdout, stderr)
 	target := input
 	if out != "" {
 		target = out
@@ -353,6 +366,118 @@ func doRefresh(input, out string, force bool, src []byte, cfg config.Config, rt 
 	}
 	fmt.Fprintf(stdout, "runtime updated to %s: %s (%s)\n", Version, target, report.HumanSize(len(res)))
 	return 0
+}
+
+// doContent writes the content model of a finished deckfold file (docs/content-model.md) as JSON
+// or Markdown, by the extension of the target.
+func doContent(input, target string, force bool, stdout, stderr io.Writer) int {
+	ext := strings.ToLower(filepath.Ext(target))
+	if ext != ".json" && ext != ".md" {
+		fmt.Fprintf(stderr, "error: --content writes JSON or Markdown: name the file .json or .md (got %q)\n", target)
+		return 3
+	}
+	src, err := os.ReadFile(input)
+	if err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 3
+	}
+	if _, _, err := inject.Find(src); err != nil {
+		fmt.Fprintf(stderr, "error: %s is not a deckfold output; --content reads a file deckfold has written\n", input)
+		return 3
+	}
+	d, err := content.Read(src)
+	if err != nil {
+		switch {
+		case errors.Is(err, content.ErrNoModel) && isPptxOutput(src):
+			fmt.Fprintf(stderr, "error: %s was made before deckfold read the slide text; convert the presentation again\n", input)
+		case errors.Is(err, content.ErrNoModel):
+			fmt.Fprintf(stderr, "error: %s was made before deckfold read the slide text; run deckfold --refresh on it first\n", input)
+		case errors.Is(err, content.ErrNewer):
+			fmt.Fprintf(stderr, "error: %s was made by a newer deckfold than this one (%s); update deckfold\n", input, Version)
+		default:
+			fmt.Fprintln(stderr, "error:", err)
+		}
+		return 1
+	}
+	if _, err := os.Stat(target); err == nil && !force {
+		fmt.Fprintf(stderr, "error: %s already exists (overwrite with --force)\n", target)
+		return 3
+	}
+	var out []byte
+	if ext == ".json" {
+		if out, err = d.JSON(); err != nil {
+			fmt.Fprintln(stderr, "error:", err)
+			return 1
+		}
+	} else {
+		out = d.Markdown()
+	}
+	if err := writeFile(target, out); err != nil {
+		fmt.Fprintln(stderr, "error:", err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "slide text of %d slides written: %s\n", len(d.Slides), target)
+	return 0
+}
+
+// isPptxOutput tells whether a finished file came from a PowerPoint presentation.
+func isPptxOutput(src []byte) bool {
+	m, _, err := content.Meta(htmlscan.Scan(src))
+	return err == nil && m.Format == "pptx"
+}
+
+// outputSource is the content source of a finished deckfold file: its HTML and its embedded
+// assets, found through the shim table of the deck metadata. The file is foreign input, so
+// nothing is read from the file system here, whatever a reference looks like.
+func outputSource(d *htmlscan.Doc, shim map[string]string) adapter.ContentSource {
+	as := inject.ReadAssets(d)
+	return adapter.ContentSource{Doc: d, Load: func(ref string) ([]byte, error) {
+		h, ok := shim[ref]
+		if !ok {
+			return nil, fmt.Errorf("%s is not embedded in the file", ref)
+		}
+		return as.Get(h)
+	}}
+}
+
+// refreshContent computes the content model from a finished file and puts it into the file.
+// Updating the runtime is what --refresh is for: when the slide text cannot be read, the file
+// stays as it is here (with the block it has, if any) and a note says why.
+func refreshContent(res []byte, stdout, stderr io.Writer) []byte {
+	d := htmlscan.Scan(res)
+	meta, shim, err := content.Meta(d)
+	if err != nil {
+		fmt.Fprintln(stderr, "warning: search and outline were not updated:", err)
+		return res
+	}
+	ad := detect.ByName(meta.Format)
+	if ad == nil {
+		return res // --generic, or a format this version does not know: no slide model
+	}
+	c, warns, err := ad.Content(outputSource(d, shim), meta)
+	for _, w := range warns {
+		fmt.Fprintln(stderr, "warning:", w)
+	}
+	if errors.Is(err, adapter.ErrConvertAgain) {
+		fmt.Fprintln(stdout, "note: this file was made before deckfold read the slide text;", err)
+		return res
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, "warning: the slide text could not be read, so search and outline were not updated:", err)
+		return res
+	}
+	if c = adapter.Finish(c, meta); c == nil {
+		return res
+	}
+	block, err := inject.ContentBlock(c)
+	if err == nil {
+		var out []byte
+		if out, err = inject.SetContent(d, block); err == nil {
+			return out
+		}
+	}
+	fmt.Fprintln(stderr, "warning: search and outline were not updated:", err)
+	return res
 }
 
 func cssModeOf(src []byte) string {

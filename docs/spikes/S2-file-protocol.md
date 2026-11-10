@@ -64,6 +64,16 @@ Reproduction with Playwright and Google Chrome 156.0.8078.75 in headed mode on t
 - `navigator.keyboard.lock(["Escape"])` resolves on `file://` in element full screen. With it, one real Escape ended the presentation in the maintainer's test.
 - A second manual test with the presenter view kept as a window still put the audience window on the laptop, at "Start" and at "Reopen", although deckfold passed the coordinates of the external screen. A reproduction with the opener on the laptop placed the window correctly. Note for reproductions: `--window-position` and `--window-size` apply to every new window of Chrome and override the position of a popup; move the opener through CDP (`Browser.setWindowBounds`) instead. Clicks must come from input events, because Chrome ignores the position of a popup opened without a user gesture.
 
+## Reproducing window and mouse behaviour (2026-11-09)
+
+Measured with Playwright and Google Chrome in headed mode on the built-in display only, while looking for a presenter view that moved after "Start" and a hover highlight that disappeared on a second screen:
+
+- `requestFullscreen` from a Playwright click set `document.fullscreenElement`, but the window stayed in the state "normal" at its size (900 x 600). With CDP `Browser.setWindowBounds` and `windowState: "fullscreen"` Chrome reported "fullscreen" at the size of the screen (1728 x 1084). Whether that matches the native macOS full screen a real click starts, with its own Space, is not known. Windows were placed with `Browser.getWindowForTarget` and `Browser.setWindowBounds`.
+- Playwright's mouse events do not move the real mouse pointer, so hover behaviour that depends on the pointer and the screen it is on cannot be reproduced this way.
+- For a measurement in which the maintainer works the windows, `addInitScript` loads the logging into every window (the CSP of the deck does not apply to it) and `exposeBinding` collects the log in the test script across reloads.
+
+A fault that does not show up under these conditions is not ruled out.
+
 ## Why deckfold does not place windows (2026-11-08)
 
 A research pass over the W3C Window Management specification, the Chrome documentation and the Chromium tests found:

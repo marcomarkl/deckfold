@@ -215,6 +215,8 @@ DF.adapters = {
     mediaRoot: function (slide) { return document.querySelectorAll(".df-pptx-slide")[slide] || document.body; },
     // videos, audio icons and trigger shapes act by themselves (their handlers are on the document)
     interactive: function (t) { return !!(window.__dfPptx && window.__dfPptx.interactive && window.__dfPptx.interactive(t)); },
+    // link: the target of a link to another slide under a click (see linkOf in the player)
+    link: function (t) { return window.__dfPptx && window.__dfPptx.linkOf ? window.__dfPptx.linkOf(t) : null; },
     shown: function () { return window.__dfPptx ? window.__dfPptx.state().slide : null; }
   },
   generic: {

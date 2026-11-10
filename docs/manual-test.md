@@ -29,6 +29,10 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Switch "Overview" off in the status bar, reload the presenter view | The strip stays hidden | |
 | Reload the presenter view during the show | It comes back at the current slide and keeps controlling the presentation | |
 | Restart the browser, open the file again | The start screen appears; the settings of the presenter view are kept | |
+| "Search" on the start screen, or `/`; type a word from a slide; Enter | The outline lists every slide; typing leaves the slides with the word; Enter chooses the slide as the start slide. A word that is only in the notes finds nothing here | |
+| During the show: "Search" in the presenter view, type a word from the notes, Enter | The slide is found with "Notes" next to the place; Enter shows the slide to the audience at its first step; the presentation window never shows the search | |
+| During the show: open the search in the presenter view, press the arrow keys and Escape | The arrows move in the list and the audience stays on its slide; Escape closes the search and the presentation goes on | |
+| PowerPoint deck with a link to another slide: click the link in the presentation | Both windows show the linked slide | |
 
 ## Clicker and keys
 

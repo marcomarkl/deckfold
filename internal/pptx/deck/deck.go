@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"deckfold/internal/adapter"
 	"deckfold/internal/inject"
 	"deckfold/internal/pptx/anim"
 	"deckfold/internal/pptx/render"
@@ -32,6 +33,7 @@ const (
 
 // Data is the deck description the player and the Go adapter read.
 type Data struct {
+	// Version is 2 since the slides carry their text blocks (BlocksVersion).
 	Version    int         `json:"version"`
 	Title      string      `json:"title"`
 	Width      float64     `json:"width"`
@@ -52,7 +54,12 @@ type SlideData struct {
 	Advance *float64    `json:"advance,omitempty"` // automatic advance after seconds (advTm)
 	Shapes  []string    `json:"shapes,omitempty"`
 	Anim    *anim.Slide `json:"anim,omitempty"`
+	// Blocks is the text of the slide for the content model (since Version 2).
+	Blocks []adapter.Block `json:"blocks,omitempty"`
 }
+
+// BlocksVersion is the first Data.Version whose slides carry Blocks.
+const BlocksVersion = 2
 
 // Fonts carries the embedded font files: CSS alias -> file name in assets.
 type Font struct {

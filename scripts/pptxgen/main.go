@@ -49,6 +49,11 @@ func main() {
 	if err := os.WriteFile(filepath.Join(*out, "animations.spec.json"), append(js, '\n'), 0o644); err != nil {
 		fail(err)
 	}
+	_, content := pptxgen.ContentWithSpec()
+	js, _ = json.MarshalIndent(content, "", "  ")
+	if err := os.WriteFile(filepath.Join(*out, "content.spec.json"), append(js, '\n'), 0o644); err != nil {
+		fail(err)
+	}
 	for _, n := range names {
 		p := filepath.Join(*out, n+".pptx")
 		if err := decks[n].Write(p); err != nil {

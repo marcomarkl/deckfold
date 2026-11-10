@@ -35,6 +35,7 @@ func Fixtures() map[string]*Deck {
 		"wmf":           WMF(),
 		"charts2":       Charts2(),
 		"ink":           InkDeck(),
+		"content":       Content(),
 	}
 }
 

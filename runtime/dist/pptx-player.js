@@ -1650,8 +1650,18 @@ function interactive(target) {
   return false;
 }
 
+// linkOf returns the target of a link to another slide under target, on the current slide: "next",
+// "prev", "first", "last", "back", "end" or the index of a slide (data-df-jump, written by the
+// converter); null when there is none. The control layer follows the link, so that the
+// presentation and the presenter view stay on the same slide.
+function linkOf(target) {
+  var el = target && target.closest ? target.closest("[data-df-jump]") : null;
+  var sec = sections[cur.slide];
+  return el && sec && sec.contains(el) ? el.getAttribute("data-df-jump") : null;
+}
+
 window.__dfPptx = {
-  goTo: goTo, next: next, prev: prev, showAll: showAll, interactive: interactive,
+  goTo: goTo, next: next, prev: prev, showAll: showAll, interactive: interactive, linkOf: linkOf,
   state: function () { return { slide: cur.slide, step: cur.step }; },
   deck: deck
 };

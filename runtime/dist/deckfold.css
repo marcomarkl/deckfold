@@ -6,6 +6,8 @@
    does not match them. */
 html.df-loading body { visibility: hidden !important; }
 html.df-nocursor, html.df-nocursor * { cursor: none !important; }
+/* a link to another slide in the presentation (PowerPoint decks) */
+html.df-audience [data-df-jump] { cursor: pointer; }
 
 [data-df-ui] {
   --df-bg: #15161a; --df-panel: #1f2127; --df-line: #33363f; --df-fg: #eceef2; --df-mute: #9aa0ab;
@@ -32,6 +34,31 @@ html.df-nocursor, html.df-nocursor * { cursor: none !important; }
 [data-df-ui] .df-toggles button:hover, [data-df-ui] [data-df-autobtn]:hover { color: var(--df-fg); border-color: var(--df-line); }
 [data-df-ui] .df-toggles button.df-active, [data-df-ui] [data-df-autobtn].df-active { background: #4a4e59; border-color: #4a4e59; color: #fff; }
 [data-df-ui] .df-hidden { display: none !important; }
+
+/* search and outline: an overlay above the start screen or the presenter view */
+.df-finder { position: fixed; inset: 0; z-index: 2147483640; display: none; justify-content: center; align-items: flex-start;
+  padding: min(12vh, 96px) 12px 12px; background: rgba(0, 0, 0, .55); }
+.df-finder.df-on { display: flex; }
+.df-find-box { width: min(640px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--df-panel);
+  border: 1px solid var(--df-line); border-radius: 10px; box-shadow: 0 18px 60px rgba(0, 0, 0, .6); overflow: hidden; }
+.df-finder[data-df-ui] input[data-df-find-input] { flex: 0 0 auto; width: 100%; border: 0; border-bottom: 1px solid var(--df-line); border-radius: 0;
+  padding: 12px 14px; font-size: 16px; background: transparent; cursor: text; outline: none; }
+.df-find-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.df-finder[data-df-ui] .df-find-item { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left; padding: 7px 8px;
+  background: transparent; border-color: transparent; }
+.df-finder[data-df-ui] .df-find-item:hover { background: #2a2d35; border-color: transparent; }
+.df-finder[data-df-ui] .df-find-item.df-active { background: #2f3440; border-color: var(--df-accent); }
+.df-find-n { flex: 0 0 2.2em; text-align: right; color: var(--df-mute); font-variant-numeric: tabular-nums; }
+.df-find-item.df-cur .df-find-n { color: var(--df-accent); font-weight: 650; }
+.df-find-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.df-find-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.df-find-place { color: var(--df-mute); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.df-find-place mark { background: #6b5510; color: #fff; border-radius: 2px; padding: 0 1px; }
+.df-find-kind { margin-right: 6px; padding: 0 5px; border: 1px solid var(--df-line); border-radius: 4px; font-size: 11px; }
+.df-find-count { flex: 0 0 auto; color: var(--df-mute); font-size: 12px; }
+.df-find-none { padding: 10px 8px; color: var(--df-mute); }
+.df-start .df-sub { display: flex; align-items: center; gap: 12px; }
+.df-start[data-df-ui] .df-sub [data-df-find] { padding: 3px 10px; font-size: 13px; }
 
 /* start screen in the show window (until "Start" the document itself stays hidden) */
 html.df-start-mode, html.df-start-mode body { background: #15161a !important; overflow: hidden !important; height: 100% !important; margin: 0 !important; }

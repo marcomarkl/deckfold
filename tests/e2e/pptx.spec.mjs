@@ -428,3 +428,114 @@ test('PowerPoint: a player moved past deckfold is brought back to deckfold\'s st
   expect(await page.evaluate(() => window.__dfPptx.state())).toEqual(s);
   expect(await audState(page)).toEqual(s);
 });
+
+// The content model (docs/content-model.md) of the content deck; the generator wrote down what
+// it put on the slides (fixtures/pptx/src/content.spec.json).
+const contentSpec = JSON.parse(fs.readFileSync(path.join(OUT, '..', '..', 'fixtures', 'pptx', 'src', 'content.spec.json'), 'utf8'));
+
+// For each text: whether the paragraph that holds it shows on the slide ("visible", "hidden"),
+// or "missing" when no paragraph holds it.
+const paragraphs = (page, slide, texts) => page.evaluate(([slide, texts]) => {
+  const sec = document.querySelectorAll('.df-pptx-slide')[slide];
+  const norm = (s) => s.replace(/\s+/g, '');
+  const groups = [...sec.querySelectorAll('g[data-sid] g[data-p]')];
+  return texts.map((t) => {
+    // a bullet is drawn in the group of its paragraph, before the text
+    const g = groups.find((g) => norm(g.textContent).endsWith(norm(t)));
+    if (!g) return 'missing';
+    for (let el = g; el && el !== sec; el = el.parentElement) {
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) < 0.01) return 'hidden';
+    }
+    return 'visible';
+  });
+}, [slide, texts]);
+
+test('PowerPoint content model: the blocks of the generator, each showing from its step on', async ({ page }) => {
+  await solo(page, 'pptx-content.html');
+  const model = await page.evaluate(() => JSON.parse(document.getElementById('df-content').textContent));
+  const plain = (slides) => slides.map((s) => ({ title: s.title || '', blocks: s.blocks.map((b) => [b.role, b.text, b.step, b.level || 0]) }));
+  expect(plain(model.slides)).toEqual(plain(contentSpec.slides));
+  const steps = await page.evaluate(() => window.__deckfold.slides().map((s) => s.steps));
+  for (let k = 0; k < steps.length; k++) {
+    const blocks = model.slides[k].blocks.filter((b) => b.role !== 'alt');
+    for (let s = 0; s < steps[k]; s++) {
+      await page.evaluate(([k, s]) => window.__deckfold.audience.act('state', { slide: k, step: s }), [k, s]);
+      await expect.poll(() => audState(page)).toEqual({ slide: k, step: s });
+      await expect.poll(() => paragraphs(page, k, blocks.map((b) => b.text)), { message: `slide ${k + 1}, step ${s}` })
+        .toEqual(blocks.map((b) => (b.step >= 0 && b.step <= s ? 'visible' : 'hidden')));
+    }
+  }
+  // a block that shows in no step of the click order appears when its trigger is clicked
+  const k = model.slides.findIndex((s) => s.blocks.some((b) => b.step === -1));
+  const hint = model.slides[k].blocks.find((b) => b.step === -1).text;
+  await page.evaluate((k) => window.__deckfold.audience.act('state', { slide: k, step: 0 }), k);
+  await expect.poll(() => paragraphs(page, k, [hint])).toEqual(['hidden']);
+  const box = await page.evaluate((k) => {
+    const sec = document.querySelectorAll('.df-pptx-slide')[k];
+    const g = [...sec.querySelectorAll('g[data-sid]')].find((g) => window.__dfPptx.interactive(g) && !g.querySelector('g[data-sid]'));
+    const r = g.getBoundingClientRect();
+    return [r.x + r.width / 2, r.y + r.height / 2];
+  }, k);
+  await page.mouse.click(box[0], box[1]);
+  await expect.poll(() => paragraphs(page, k, [hint])).toEqual(['visible']);
+  expect(await audState(page)).toEqual({ slide: k, step: 0 });
+});
+
+// Clicks the link with the given target on the slide the player shows.
+const clickLink = async (page, to) => {
+  const box = await page.evaluate((to) => {
+    const r = document.querySelector(`.df-pptx-slide.df-on [data-df-jump="${to}"]`).getBoundingClientRect();
+    return [r.x + r.width / 2, r.y + r.height / 2];
+  }, to);
+  await page.mouse.click(box[0], box[1]);
+};
+
+test('PowerPoint links to other slides: followed through deckfold, the presenter view in step', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-content.html');
+  const n = await slideCount(page);
+  // the slide with the links, and what the generator says each of them leads to
+  const L = contentSpec.slides.findIndex((s) => s.blocks.some((b) => b.jump));
+  const links = contentSpec.slides[L].blocks.filter((b) => b.jump).map((b) => (b.jump.to || String(b.jump.slide)));
+  expect(links.sort()).toEqual(['1', '2', 'back', 'end', 'first', 'last', 'next', 'prev']);
+  const to = (k) => page.evaluate((k) => window.__deckfold.audience.act('state', { slide: k, step: 0 }), k);
+  const at = async (k) => {
+    await expect.poll(() => audState(page)).toEqual({ slide: k, step: 0 });
+    await expect.poll(() => shown(page)).toBe(k);
+    await expect.poll(() => counter(pres)).toContain(`${k + 1} / ${n}`);
+  };
+  // every link the drawing has is one of the model
+  await to(L); await at(L);
+  expect(await page.evaluate(() => [...document.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]')].map((e) => e.getAttribute('data-df-jump')).sort())).toEqual(links);
+  for (const [link, target] of [['next', L + 1], ['prev', L - 1], ['first', 0], ['last', n - 1], ['1', 1], ['2', 2]]) {
+    await to(L); await at(L);
+    await clickLink(page, link);
+    await at(target);
+  }
+  // "last slide viewed": the slide shown before this one
+  await to(1); await at(1);
+  await to(L); await at(L);
+  await clickLink(page, 'back');
+  await at(1);
+  // the link to the hidden slide is plain text: a click on it moves on like any other click
+  await to(L); await at(L);
+  expect(await paragraphs(page, L, ['The hidden slide'])).toEqual(['visible']);
+  const plain = await page.evaluate((k) => {
+    const sec = document.querySelectorAll('.df-pptx-slide')[k];
+    const g = [...sec.querySelectorAll('g[data-sid] g[data-p]')].find((g) => g.textContent.replace(/\s+/g, '').endsWith('Thehiddenslide'));
+    const r = g.getBoundingClientRect();
+    return [r.x + r.width / 2, r.y + r.height / 2, !!g.closest('[data-df-jump]') || !!g.querySelector('[data-df-jump]')];
+  }, L);
+  expect(plain[2]).toBe(false);
+  await page.mouse.click(plain[0], plain[1]);
+  await at(L + 1);
+  // a link in a preview of the presenter view does nothing
+  await to(L); await at(L);
+  await expect.poll(() => pres.evaluate(() => { const f = document.querySelector('.df-current iframe[data-df-preview]'); return f && f.contentDocument ? f.contentDocument.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]').length : 0; }), { timeout: 10000 }).toBe(links.length);
+  await pres.frameLocator('.df-current iframe[data-df-preview]').locator('.df-pptx-slide.df-on [data-df-jump="first"]').click({ force: true });
+  await pres.waitForTimeout(500);
+  await at(L);
+  // "end show" ends the presentation: the window is back at the start screen
+  await clickLink(page, 'end');
+  await page.waitForSelector('.df-start [data-df-start]');
+});

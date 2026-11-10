@@ -81,6 +81,19 @@ func MetaBlock(meta any) ([]byte, error) {
 	return append(append([]byte(`<script type="application/json" id="df-meta">`), j...), []byte(`</script>`)...), nil
 }
 
+// ContentID is the id of the content model block.
+const ContentID = "df-content"
+
+// ContentBlock builds the block with the content model (docs/content-model.md), outside the
+// runtime markers like the metadata block.
+func ContentBlock(content any) ([]byte, error) {
+	j, err := jsonForScript(content)
+	if err != nil {
+		return nil, err
+	}
+	return append(append([]byte(`<script type="application/json" id="`+ContentID+`">`), j...), []byte(`</script>`)...), nil
+}
+
 // AssetBlocks encodes all assets as Base64 blocks (at most PartBytes binary per block).
 func AssetBlocks(s *assets.Store) []byte {
 	var b bytes.Buffer
