@@ -486,27 +486,6 @@ test('Enter: starts on the start screen, does nothing in the presentation and in
   await notes.click(); // back on for later tests
 });
 
-test('start screen: the key help lists every bound key, grouped, and the fixed keys', async ({ page }) => {
-  await startScreen(page, 'pptx-basic.html');
-  const help = await page.evaluate(() => {
-    const rows = [...document.querySelectorAll('[data-df-keyhelp] [data-df-action]')];
-    return { groups: document.querySelectorAll('[data-df-keyhelp] [data-df-keygroup]').length,
-      rows: rows.map((r) => [r.getAttribute('data-df-action'), JSON.parse(r.getAttribute('data-df-keys'))]),
-      keys: window.__deckfold.settings().keys };
-  });
-  expect(help.groups).toBeGreaterThanOrEqual(4);
-  // every key of every action is shown in a row of that action, and no row shows a key the action does not have
-  for (const [act, keys] of Object.entries(help.keys)) {
-    const shown = help.rows.filter(([a]) => a === act).flatMap(([, k]) => k);
-    expect(shown.length, act).toBeGreaterThan(0);
-    for (const k of keys) expect(shown, `${act}: ${JSON.stringify(k)}`).toContain(k);
-    for (const k of shown) expect(keys, `${act}: ${JSON.stringify(k)}`).toContain(k);
-  }
-  // the fixed keys: Enter starts, digits + Enter choose a slide, a click moves on
-  const acts = help.rows.map(([a]) => a);
-  for (const a of ['start', 'goto', 'click']) expect(acts).toContain(a);
-});
-
 // Every frame a preview paints, recorded inside the preview: the slide the player shows, its hidden
 // builds and whether the preview is visible at all (the iframe is hidden until it shows its first
 // state).

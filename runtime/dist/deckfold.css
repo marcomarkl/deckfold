@@ -35,13 +35,20 @@ html.df-audience [data-df-jump] { cursor: pointer; }
 [data-df-ui] .df-toggles button.df-active, [data-df-ui] [data-df-autobtn].df-active { background: #4a4e59; border-color: #4a4e59; color: #fff; }
 [data-df-ui] .df-hidden { display: none !important; }
 
-/* search and outline: an overlay above the start screen or the presenter view */
-.df-finder { position: fixed; inset: 0; z-index: 2147483640; display: none; justify-content: center; align-items: flex-start;
+/* overlays (the search, the key help of the start screen): a dimmed backdrop above the start screen
+   or the presenter view and a box in it, with a close button */
+.df-overlay { position: fixed; inset: 0; z-index: 2147483640; display: none; justify-content: center; align-items: flex-start;
   padding: min(12vh, 96px) 12px 12px; background: rgba(0, 0, 0, .55); }
-.df-finder.df-on { display: flex; }
-.df-find-box { width: min(640px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--df-panel);
+.df-overlay.df-on { display: flex; }
+.df-overlay-box { max-height: 100%; display: flex; flex-direction: column; background: var(--df-panel);
   border: 1px solid var(--df-line); border-radius: 10px; box-shadow: 0 18px 60px rgba(0, 0, 0, .6); overflow: hidden; }
-.df-finder[data-df-ui] input[data-df-find-input] { flex: 0 0 auto; width: 100%; border: 0; border-bottom: 1px solid var(--df-line); border-radius: 0;
+.df-overlay[data-df-ui] .df-close { flex: 0 0 auto; width: 30px; height: 30px; padding: 0; font-size: 22px; line-height: 1;
+  background: transparent; border-color: transparent; color: var(--df-mute); }
+.df-overlay[data-df-ui] .df-close:hover { color: var(--df-fg); border-color: var(--df-line); }
+/* search and outline */
+.df-find-box { width: min(640px, 100%); }
+.df-find-head { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid var(--df-line); }
+.df-finder[data-df-ui] input[data-df-find-input] { flex: 1 1 auto; min-width: 0; width: auto; border: 0; border-radius: 0;
   padding: 12px 14px; font-size: 16px; background: transparent; cursor: text; outline: none; }
 .df-find-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .df-finder[data-df-ui] .df-find-item { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left; padding: 7px 8px;
@@ -57,18 +64,40 @@ html.df-audience [data-df-jump] { cursor: pointer; }
 .df-find-kind { margin-right: 6px; padding: 0 5px; border: 1px solid var(--df-line); border-radius: 4px; font-size: 11px; }
 .df-find-count { flex: 0 0 auto; color: var(--df-mute); font-size: 12px; }
 .df-find-none { padding: 10px 8px; color: var(--df-mute); }
-.df-start .df-sub { display: flex; align-items: center; gap: 12px; }
-.df-start[data-df-ui] .df-sub [data-df-find] { padding: 3px 10px; font-size: 13px; }
+/* key help: the groups of keys, and the version of deckfold below them */
+.df-help { align-items: center; padding: 12px; }
+.df-help-box { width: min(980px, 100%); padding: 12px 18px 14px; gap: 14px; overflow-y: auto; }
+.df-help-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.df-help-head h2 { font-size: 16px; font-weight: 650; }
+.df-help .df-ver { color: var(--df-mute); font-size: 12px; }
 
 /* start screen in the show window (until "Start" the document itself stays hidden) */
 html.df-start-mode, html.df-start-mode body { background: #15161a !important; overflow: hidden !important; height: 100% !important; margin: 0 !important; }
 html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
-.df-start { position: fixed; inset: 0; z-index: 2147483600; background: var(--df-bg); overflow: auto; padding: 24px; display: flex; justify-content: center; }
-.df-start-box { max-width: 980px; width: 100%; display: flex; flex-direction: column; gap: 12px; margin: auto 0; }
-.df-start h1 { font-size: 28px; font-weight: 650; line-height: 1.2; }
-.df-start .df-sub, .df-start .df-ver, .df-mute { color: var(--df-mute); }
-.df-start .df-ver { font-size: 12px; }
-.df-start-stage { position: relative; height: min(40vh, 520px); max-width: 100%; background: #000; border-radius: 8px; overflow: hidden; margin: 0 auto; }
+/* The column is at most as high as the window. Its rows keep their height; the frame of the preview
+   (.df-start-view) is the one that gives way, down to a height that still shows the slide, and
+   below that the screen scrolls. The space below the last row is a row of its own (::after),
+   because the padding of a scrolling box does not follow content that overflows it. */
+.df-start { --df-pad: 24px; --df-gap: 10px; position: fixed; inset: 0; z-index: 2147483600; background: var(--df-bg); overflow: auto;
+  padding: var(--df-pad) var(--df-pad) 0; display: flex; justify-content: center; }
+.df-start-box { max-width: 850px; width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: var(--df-gap); margin: auto 0; }
+.df-start-box > * { flex: 0 0 auto; }
+/* with the gap before it, this row is as high as the padding above the title */
+.df-start-box::after { content: ""; flex: 0 0 calc(var(--df-pad) - var(--df-gap)); }
+.df-start h1 { font-size: 20px; font-weight: 650; line-height: 1.2; text-align: center; }
+.df-start .df-sub { text-align: center; }
+.df-start .df-sub, .df-start .df-count, .df-mute { color: var(--df-mute); }
+.df-start-view { display: flex; justify-content: center; align-items: center; min-width: 0; }
+.df-start-stage { position: relative; flex: 0 0 auto; height: min(42vh, 520px); aspect-ratio: var(--df-ar, 16 / 9); max-width: 100%;
+  background: #000; border-radius: 8px; overflow: hidden; }
+/* The preview is at most 42 % of the window high, so that it does not take over the screen. With
+   container units its frame wants the height that goes with the full width of the column, up to
+   that share, and shrinks to what is left; the stage is as large as fits into the frame in the
+   shape of the slide. Without them the preview keeps that share of the window height. */
+@supports (height: 1cqh) {
+  .df-start-box > .df-start-view { flex: 0 1 auto; width: 100%; aspect-ratio: var(--df-ar, 16 / 9); min-height: 180px; max-height: 42vh; container-type: size; }
+  .df-start-stage { height: min(100cqh, calc(100cqw / var(--df-ar, 1.7778))); }
+}
 .df-start-stage iframe { position: absolute; left: 0; top: 0; transform-origin: 0 0; border: 0; display: block; background: #000; }
 .df-strip-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .df-strip { flex: 1; min-width: 0; display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; scroll-snap-type: x proximity; scrollbar-width: thin; }
@@ -77,24 +106,33 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 [data-df-ui] .df-strip-nav:hover:not(:disabled) { background: var(--df-panel); border-color: var(--df-line); color: var(--df-fg); }
 [data-df-ui] .df-strip-nav:disabled { opacity: .25; cursor: default; }
 .df-start[data-df-ui] .df-strip .df-tile { flex: 0 0 160px; width: 160px; min-width: 0; scroll-snap-align: start; }
-.df-start-row { display: flex; align-items: stretch; gap: 14px; }
-.df-opts { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--df-line); border-radius: 8px; padding: 12px 14px; }
+/* the settings with "Start" beside them; below the settings and as wide as they are, a hint when
+   there is one (over both columns) and the footer, which starts at the left */
+.df-start-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--df-gap) 14px; align-items: stretch; }
+/* the settings stand in one line and wrap where the window is too narrow for it */
+.df-opts { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; border: 1px solid var(--df-line); border-radius: 8px; padding: 8px 14px; }
 .df-opt { display: flex; flex-direction: column; gap: 2px; }
-.df-opt-row { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.df-opt-row { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.df-start[data-df-ui] input[type="number"] { width: 60px; padding: 3px 8px; }
 .df-check { display: inline-flex; align-items: center; gap: 8px; }
 .df-check.df-disabled { opacity: .45; }
 [data-df-ui] input:disabled { cursor: default; }
-.df-start-hint { display: none; padding: 8px 12px; background: #3a2a0c; color: #ffe2a8; border: 1px solid #6b4e12; border-radius: 6px; }
+.df-start-hint { grid-column: 1 / -1; display: none; padding: 8px 12px; background: #3a2a0c; color: #ffe2a8; border: 1px solid #6b4e12; border-radius: 6px; }
 .df-start-hint.df-on { display: block; }
-[data-df-ui] .df-start-btn { flex: 0 0 auto; min-width: 180px; padding: 14px 36px; font-size: 22px; font-weight: 650; border-radius: 10px; }
-.df-keyhelp { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px 18px; color: var(--df-mute); font-size: 12px; }
+[data-df-ui] .df-start-btn { min-width: 132px; padding: 8px 26px; font-size: 18px; font-weight: 650; border-radius: 8px; }
+.df-start-foot { grid-column: 1; display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.df-start .df-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.df-start[data-df-ui] .df-start-foot [data-df-find] { height: 28px; padding: 0 10px; font-size: 13px; }
+.df-start[data-df-ui] .df-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--df-mute); }
+.df-start[data-df-ui] .df-icon-btn:hover { color: var(--df-fg); }
+.df-keyhelp { flex: 0 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 18px; color: var(--df-mute); font-size: 13px; }
 .df-keygroup[data-df-keygroup="slides"] { grid-column: span 2; }
 .df-keygroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .df-keygroup h4 { margin: 0 0 1px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); }
 .df-keyrow { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .df-keylabel { flex: 0 0 auto; min-width: 5.5em; color: var(--df-fg); }
 .df-caps { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
-.df-keyhelp kbd { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--df-fg); background: var(--df-panel); border: 1px solid var(--df-line);
+.df-keyhelp kbd { font: 11px/1 ui-monospace, Menlo, monospace; color: var(--df-fg); background: var(--df-bg); border: 1px solid var(--df-line);
   border-bottom-width: 2px; border-radius: 4px; padding: 2px 4px; min-width: 18px; text-align: center; }
 
 /* presenter view */

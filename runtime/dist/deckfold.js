@@ -63,7 +63,7 @@ var TEXT = {
     keysStart: "Startbildschirm", keysSlides: "Folien", keysDisplay: "Anzeige", keysRun: "Ablauf",
     chooseSlide: "Folie w\u00e4hlen", firstSlide: "Erste Folie", lastSlide: "Letzte Folie", gotoSlide: "Folie n",
     black: "Schwarz", white: "Wei\u00df", timerReset: "Zeit zur\u00fccksetzen", click: "Klick",
-    search: "Suchen", noResults: "Keine Treffer",
+    search: "Suchen", noResults: "Keine Treffer", close: "Schlie\u00dfen", shortcuts: "Tastaturk\u00fcrzel",
     keySpace: "Leertaste", keyPgDn: "Bild \u2193", keyPgUp: "Bild \u2191", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "R\u00fcckschritt", keyDigits: "1 2 3 \u2026",
   },
   en: {
@@ -84,7 +84,7 @@ var TEXT = {
     keysStart: "Start screen", keysSlides: "Slides", keysDisplay: "Display", keysRun: "Show",
     chooseSlide: "Choose slide", firstSlide: "First slide", lastSlide: "Last slide", gotoSlide: "Slide n",
     black: "Black", white: "White", timerReset: "Reset time", click: "Click",
-    search: "Search", noResults: "No results",
+    search: "Search", noResults: "No results", close: "Close", shortcuts: "Keyboard shortcuts",
     keySpace: "Space", keyPgDn: "Page Down", keyPgUp: "Page Up", keyHome: "Home", keyEnd: "End", keyBackspace: "Backspace", keyDigits: "1 2 3 \u2026",
   }
 };
@@ -1089,7 +1089,8 @@ document.addEventListener("click", function (e) {
 }, true);
 
 // keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
-// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
+// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (the key caps to show instead of
+// the ones of keys, for fixed keys and for what moves without a key, such as a click) }] }].
 // Each row carries data-df-action and data-df-keys (the configured keys), so tests read it
 // without depending on the language.
 var KEYNAMES = { ArrowRight: "\u2192", ArrowLeft: "\u2190", ArrowUp: "\u2191", ArrowDown: "\u2193", " ": "keySpace", PageDown: "keyPgDn", PageUp: "keyPgUp",
@@ -1100,16 +1101,77 @@ function keyCap(k) {
   return k.length === 1 ? k.toUpperCase() : k;
 }
 DF.keyCap = keyCap;
+// keyCaps: the caps of some keys, each once (two keys can have the same cap)
+DF.keyCaps = function (keys) {
+  var caps = [];
+  keys.forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+  return caps;
+};
 DF.keyHelp = function (groups) {
   return DF.el("div", { class: "df-keyhelp", "data-df-keyhelp": "" }, groups.map(function (g) {
     return DF.el("div", { class: "df-keygroup", "data-df-keygroup": g.name }, [DF.el("h4", { text: g.title })].concat(g.rows.map(function (r) {
-      var caps = r.caps || [];
-      if (!r.caps) (r.keys || []).forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+      var caps = r.caps || DF.keyCaps(r.keys || []);
       return DF.el("div", { class: "df-keyrow", "data-df-action": r.action, "data-df-keys": JSON.stringify(r.keys || []) }, [
         DF.el("span", { class: "df-keylabel", text: r.label }),
         DF.el("span", { class: "df-caps" }, caps.map(function (c) { return DF.el("kbd", { text: c }); }))]);
     })));
   }));
+};
+
+// DF.overlay: what the overlays of deckfold share (the search, the key help of the start screen):
+// a dimmed backdrop above the start screen or the presenter view, with a box in it that the caller
+// appends to root. While it is open it takes every key (DF.modalKeys). Escape, its close button and
+// a click beside the box close it, and the focus goes back to the document, so that the keys move
+// the slides again and no button shows a focus ring. Tab moves the focus through the stops of the
+// overlay and stays in it; on the close button Enter and Space press it.
+// opts: attr (data attribute of the root), cls (its class), keys(type, e) (every key event the
+// overlay does not take itself; optional), stops() (the elements Tab moves through; the close
+// button by default), onOpen() (optional).
+// Returns { root, closeButton, open, close, isOpen, remove }.
+DF.overlay = function (opts) {
+  var root = DF.el("div", { "data-df-ui": "", class: "df-overlay " + opts.cls });
+  root.setAttribute(opts.attr, "");
+  document.body.appendChild(root);
+  var isOpen = false;
+  function keys(type, e) {
+    e.stopImmediatePropagation();
+    var onClose = document.activeElement === closeButton;
+    if (e.key === "Tab" || (onClose && (e.key === "Enter" || e.key === " "))) {
+      // also on keyup and keypress, so that the browser neither moves the focus nor clicks
+      e.preventDefault();
+      if (type !== "keydown") return;
+      if (e.key !== "Tab") { close(); return; }
+      var stops = opts.stops ? opts.stops() : [closeButton];
+      var at = stops.indexOf(document.activeElement);
+      var to = stops[(at < 0 ? (e.shiftKey ? stops.length - 1 : 0) : at + (e.shiftKey ? stops.length - 1 : 1)) % stops.length];
+      try { to.focus({ preventScroll: true }); } catch (err) { to.focus(); }
+      return;
+    }
+    if (type === "keydown" && e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (opts.keys) opts.keys(type, e);
+  }
+  var closeButton = DF.el("button", { type: "button", class: "df-close", "data-df-close": "", title: DF.t("close"), "aria-label": DF.t("close"), text: "\u00d7", onclick: close });
+  function open() {
+    if (isOpen || !root.parentNode) return;
+    isOpen = true;
+    root.classList.add("df-on");
+    DF.modalKeys = keys;
+    if (opts.onOpen) opts.onOpen();
+  }
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    root.classList.remove("df-on");
+    if (DF.modalKeys === keys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && root.contains(a) && a.blur) a.blur();
+  }
+  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
+  return {
+    root: root, closeButton: closeButton,
+    open: open, close: close, isOpen: function () { return isOpen; },
+    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+  };
 };
 
 // DF.finder: search and outline (docs/content-model.md). An overlay with a text field and a list:
@@ -1125,9 +1187,14 @@ DF.finder = function (opts) {
   var input = DF.el("input", { type: "text", "data-df-find-input": "", placeholder: DF.t("search"), "aria-label": DF.t("search"),
     autocomplete: "off", autocapitalize: "off", spellcheck: "false" });
   var list = DF.el("div", { class: "df-find-list" });
-  var root = DF.el("div", { "data-df-ui": "", "data-df-finder": "", class: "df-finder" }, [DF.el("div", { class: "df-find-box" }, [input, list])]);
-  document.body.appendChild(root);
-  var isOpen = false, active = 0, items = [];
+  var ov = DF.overlay({ attr: "data-df-finder", cls: "df-finder", keys: keys, stops: function () { return [input, ov.closeButton]; }, onOpen: function () {
+    input.value = "";
+    render();
+    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  } });
+  // the close button sits beside the text field, which would otherwise lie under it
+  ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-find-box" }, [DF.el("div", { class: "df-find-head" }, [input, ov.closeButton]), list]));
+  var active = 0, items = [];
 
   // fold: lower case without accents, one character for each character of s, so that a place
   // found in the folded text is the same place in s
@@ -1202,58 +1269,71 @@ DF.finder = function (opts) {
     var a = items[active];
     if (a && a.el.scrollIntoView) a.el.scrollIntoView({ block: "nearest" });
   }
-  function choose(i) { close(); opts.pick(i); }
+  function choose(i) { ov.close(); opts.pick(i); }
   function keys(type, e) {
-    e.stopImmediatePropagation();
     if (type !== "keydown") return;
     switch (e.key) {
-      case "Escape": e.preventDefault(); close(); return;
       case "ArrowDown": case "ArrowUp":
         e.preventDefault();
         if (items.length) { active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; mark(); }
         return;
       case "Enter": e.preventDefault(); if (items[active]) choose(items[active].i); return;
-      case "Tab": e.preventDefault(); return;
     }
     // Ctrl+F and Cmd+F stay with the overlay instead of opening the browser's own search
     if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) { e.preventDefault(); input.select(); return; }
-    // typing goes to the text field wherever the focus is
-    if (document.activeElement !== input) input.focus();
-  }
-  function open() {
-    if (isOpen || !root.parentNode) return;
-    isOpen = true;
-    input.value = "";
-    root.classList.add("df-on");
-    DF.modalKeys = keys;
-    render();
-    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
-  }
-  // close: the focus goes back to the document, so that the keys move the slides again and no
-  // button shows a focus ring
-  function close() {
-    if (!isOpen) return;
-    isOpen = false;
-    root.classList.remove("df-on");
-    if (DF.modalKeys === keys) DF.modalKeys = null;
-    var a = document.activeElement;
-    if (a && root.contains(a) && a.blur) a.blur();
+    // typing goes to the text field wherever the focus is (a key such as Shift leaves it alone)
+    if (document.activeElement !== input && (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete")) input.focus();
   }
   input.addEventListener("input", render);
-  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
   return {
-    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: open }),
-    open: open, close: close, isOpen: function () { return isOpen; },
-    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: ov.open }),
+    open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
+  };
+};
+
+// The keyboard icon of the key help button: its case, two rows of keys and the space bar. It is
+// drawn here so that it looks the same on every machine (a character such as U+2328 would depend
+// on the fonts installed) and takes the text colour.
+function keyboardIcon() {
+  var ns = "http://www.w3.org/2000/svg";
+  var make = function (tag, attrs) { var e = document.createElementNS(ns, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; };
+  var svg = make("svg", { viewBox: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor", "stroke-width": "1.6",
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" });
+  svg.appendChild(make("rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }));
+  svg.appendChild(make("path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }));
+  return svg;
+}
+
+// DF.helpOverlay: the key help of the start screen behind a button with an icon: an overlay with
+// the groups of DF.keyHelp and, below them, the version of deckfold that wrote the file. It has no
+// key of its own; while it is open no key reaches the start screen.
+// Returns { button, open, close, isOpen, remove }.
+DF.helpOverlay = function (groups) {
+  var name = DF.t("shortcuts");
+  var ov = DF.overlay({ attr: "data-df-help-overlay", cls: "df-help", keys: function (type, e) {
+    // Nothing in the box is used with the keys, so what a key would do by itself is cancelled: it
+    // must not scroll the start screen behind the overlay, press a button or, with Ctrl+F or
+    // Cmd+F, open the search of the browser. Other shortcuts of the browser (reload) stay.
+    var find = (e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F");
+    if (find || !(e.metaKey || e.ctrlKey || e.altKey)) e.preventDefault();
+  } });
+  ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-help-box" }, [
+    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: name }), ov.closeButton]),
+    DF.keyHelp(groups),
+    DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })]));
+  return {
+    button: DF.el("button", { type: "button", class: "df-icon-btn", "data-df-help": "", title: name, "aria-label": name, onclick: ov.open }, [keyboardIcon()]),
+    open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };
 
 // --- 35-start.js ---
-// Start screen of the show window (decision E14): title, a large preview of the chosen slide, a
-// strip of all slides to choose where to start, and the settings. The window is the presentation
-// itself: "Start" activates the source player here. The presenter view is a second window that
-// the switch opens; deckfold never places windows and does not check where they are: the user
-// drags them where they belong (decision E14).
+// Start screen of the show window (decision E14): the title, a large preview of the chosen slide, a
+// strip of all slides to choose where to start, the settings with "Start", and below the settings
+// a footer with the button that opens the key help, the search and the number of slides. The
+// window is the presentation itself: "Start" activates the source player here. The presenter view
+// is a second window that the switch opens; deckfold never places windows and does not check where
+// they are: the user drags them where they belong (decision E14).
 
 DF.startShow = function (snapshotHTML) {
   var generic = DF.format() === "generic";
@@ -1325,22 +1405,29 @@ DF.startShow = function (snapshotHTML) {
   }
   hintEl = DF.el("p", { class: "df-start-hint", "data-df-hint": "" });
   startBtn = DF.el("button", { type: "button", class: "df-primary df-start-btn", "data-df-start": "", text: DF.t("start"), onclick: begin });
+  // the preview has the shape of the slide (--df-ar, width by height) and takes the height the
+  // other rows leave: its frame shrinks, and the stage keeps its shape inside it
   var stage = DF.el("div", { class: "df-start-stage" });
-  stage.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
+  var view = DF.el("div", { class: "df-start-view" }, [stage]);
+  view.style.setProperty("--df-ar", String((meta.width || 1920) / (meta.height || 1080)));
   if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
   // search and outline: only the slide text here, because this window may already be on the
   // projector; the presenter view searches the notes too
   var finder = generic ? null : DF.finder({ notes: false, pick: function (i) { setSel(i); }, current: function () { return sel; } });
+  // the key help and the version of deckfold are behind the button at the start of the footer
+  var help = DF.helpOverlay(keyGroups());
   var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
     DF.el("div", { class: "df-start-box" }, [
       DF.el("h1", { text: meta.title || document.title || "deckfold" }),
-      DF.el("p", { class: "df-sub" }, [generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")), finder ? finder.button : null]),
-      generic ? null : stage,
+      generic ? DF.el("p", { class: "df-sub", text: DF.t("generic") }) : null,
+      generic ? null : view,
       generic ? null : strip.el,
-      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
-      hintEl,
-      DF.keyHelp(keyGroups()),
-      DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
+      // the settings with "Start" beside them, and below the settings the footer, everything at
+      // the left: the key help, the search, the number of slides. Nothing stands below "Start".
+      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
+        DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
+          generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: slides.length + " " + DF.t("slides") })])
+      ])
     ])
   ]);
   document.body.appendChild(root);
@@ -1358,7 +1445,8 @@ DF.startShow = function (snapshotHTML) {
     var display = { name: "display", title: DF.t("keysDisplay"), rows: [row("fullscreen", DF.t("fullscreen")), row("black", DF.t("black")), row("white", DF.t("white"))] };
     if (generic) return [start, display, { name: "run", title: DF.t("keysRun"), rows: [row("end", DF.t("endShow"))] }];
     return [start,
-      { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
+      // a click moves on like the keys of "next": it stands in their row, after them
+      { name: "slides", title: DF.t("keysSlides"), rows: [{ action: "next", keys: k.next || [], label: DF.t("following"), caps: DF.keyCaps(k.next || []).concat([DF.t("click")]) },
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
         { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
@@ -1477,6 +1565,7 @@ DF.startShow = function (snapshotHTML) {
     startBtn.disabled = true;
     startBtn.textContent = DF.t("loading");
     if (finder) finder.remove(); // no search in the presentation itself
+    help.remove();
     var start = generic ? null : DF.model.goto(sel);
     document.documentElement.classList.remove("df-start-mode");
     dropHash();

@@ -1,8 +1,9 @@
-// Start screen of the show window (decision E14): title, a large preview of the chosen slide, a
-// strip of all slides to choose where to start, and the settings. The window is the presentation
-// itself: "Start" activates the source player here. The presenter view is a second window that
-// the switch opens; deckfold never places windows and does not check where they are: the user
-// drags them where they belong (decision E14).
+// Start screen of the show window (decision E14): the title, a large preview of the chosen slide, a
+// strip of all slides to choose where to start, the settings with "Start", and below the settings
+// a footer with the button that opens the key help, the search and the number of slides. The
+// window is the presentation itself: "Start" activates the source player here. The presenter view
+// is a second window that the switch opens; deckfold never places windows and does not check where
+// they are: the user drags them where they belong (decision E14).
 
 DF.startShow = function (snapshotHTML) {
   var generic = DF.format() === "generic";
@@ -74,22 +75,29 @@ DF.startShow = function (snapshotHTML) {
   }
   hintEl = DF.el("p", { class: "df-start-hint", "data-df-hint": "" });
   startBtn = DF.el("button", { type: "button", class: "df-primary df-start-btn", "data-df-start": "", text: DF.t("start"), onclick: begin });
+  // the preview has the shape of the slide (--df-ar, width by height) and takes the height the
+  // other rows leave: its frame shrinks, and the stage keeps its shape inside it
   var stage = DF.el("div", { class: "df-start-stage" });
-  stage.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
+  var view = DF.el("div", { class: "df-start-view" }, [stage]);
+  view.style.setProperty("--df-ar", String((meta.width || 1920) / (meta.height || 1080)));
   if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
   // search and outline: only the slide text here, because this window may already be on the
   // projector; the presenter view searches the notes too
   var finder = generic ? null : DF.finder({ notes: false, pick: function (i) { setSel(i); }, current: function () { return sel; } });
+  // the key help and the version of deckfold are behind the button at the start of the footer
+  var help = DF.helpOverlay(keyGroups());
   var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
     DF.el("div", { class: "df-start-box" }, [
       DF.el("h1", { text: meta.title || document.title || "deckfold" }),
-      DF.el("p", { class: "df-sub" }, [generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")), finder ? finder.button : null]),
-      generic ? null : stage,
+      generic ? DF.el("p", { class: "df-sub", text: DF.t("generic") }) : null,
+      generic ? null : view,
       generic ? null : strip.el,
-      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
-      hintEl,
-      DF.keyHelp(keyGroups()),
-      DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
+      // the settings with "Start" beside them, and below the settings the footer, everything at
+      // the left: the key help, the search, the number of slides. Nothing stands below "Start".
+      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
+        DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
+          generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: slides.length + " " + DF.t("slides") })])
+      ])
     ])
   ]);
   document.body.appendChild(root);
@@ -107,7 +115,8 @@ DF.startShow = function (snapshotHTML) {
     var display = { name: "display", title: DF.t("keysDisplay"), rows: [row("fullscreen", DF.t("fullscreen")), row("black", DF.t("black")), row("white", DF.t("white"))] };
     if (generic) return [start, display, { name: "run", title: DF.t("keysRun"), rows: [row("end", DF.t("endShow"))] }];
     return [start,
-      { name: "slides", title: DF.t("keysSlides"), rows: [row("next", DF.t("following")), { action: "click", caps: [DF.t("click")], label: DF.t("following") },
+      // a click moves on like the keys of "next": it stands in their row, after them
+      { name: "slides", title: DF.t("keysSlides"), rows: [{ action: "next", keys: k.next || [], label: DF.t("following"), caps: DF.keyCaps(k.next || []).concat([DF.t("click")]) },
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
         { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
@@ -226,6 +235,7 @@ DF.startShow = function (snapshotHTML) {
     startBtn.disabled = true;
     startBtn.textContent = DF.t("loading");
     if (finder) finder.remove(); // no search in the presentation itself
+    help.remove();
     var start = generic ? null : DF.model.goto(sel);
     document.documentElement.classList.remove("df-start-mode");
     dropHash();

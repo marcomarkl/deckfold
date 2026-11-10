@@ -129,7 +129,8 @@ document.addEventListener("click", function (e) {
 }, true);
 
 // keyHelp: the key bindings in groups, side by side. groups: [{ name, title, rows: [{ action,
-// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (fixed key caps instead of keys) }] }].
+// keys (as configured, e.g. "ArrowRight", " ", "f"), label, caps (the key caps to show instead of
+// the ones of keys, for fixed keys and for what moves without a key, such as a click) }] }].
 // Each row carries data-df-action and data-df-keys (the configured keys), so tests read it
 // without depending on the language.
 var KEYNAMES = { ArrowRight: "→", ArrowLeft: "←", ArrowUp: "↑", ArrowDown: "↓", " ": "keySpace", PageDown: "keyPgDn", PageUp: "keyPgUp",
@@ -140,16 +141,77 @@ function keyCap(k) {
   return k.length === 1 ? k.toUpperCase() : k;
 }
 DF.keyCap = keyCap;
+// keyCaps: the caps of some keys, each once (two keys can have the same cap)
+DF.keyCaps = function (keys) {
+  var caps = [];
+  keys.forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+  return caps;
+};
 DF.keyHelp = function (groups) {
   return DF.el("div", { class: "df-keyhelp", "data-df-keyhelp": "" }, groups.map(function (g) {
     return DF.el("div", { class: "df-keygroup", "data-df-keygroup": g.name }, [DF.el("h4", { text: g.title })].concat(g.rows.map(function (r) {
-      var caps = r.caps || [];
-      if (!r.caps) (r.keys || []).forEach(function (k) { var c = keyCap(k); if (caps.indexOf(c) < 0) caps.push(c); });
+      var caps = r.caps || DF.keyCaps(r.keys || []);
       return DF.el("div", { class: "df-keyrow", "data-df-action": r.action, "data-df-keys": JSON.stringify(r.keys || []) }, [
         DF.el("span", { class: "df-keylabel", text: r.label }),
         DF.el("span", { class: "df-caps" }, caps.map(function (c) { return DF.el("kbd", { text: c }); }))]);
     })));
   }));
+};
+
+// DF.overlay: what the overlays of deckfold share (the search, the key help of the start screen):
+// a dimmed backdrop above the start screen or the presenter view, with a box in it that the caller
+// appends to root. While it is open it takes every key (DF.modalKeys). Escape, its close button and
+// a click beside the box close it, and the focus goes back to the document, so that the keys move
+// the slides again and no button shows a focus ring. Tab moves the focus through the stops of the
+// overlay and stays in it; on the close button Enter and Space press it.
+// opts: attr (data attribute of the root), cls (its class), keys(type, e) (every key event the
+// overlay does not take itself; optional), stops() (the elements Tab moves through; the close
+// button by default), onOpen() (optional).
+// Returns { root, closeButton, open, close, isOpen, remove }.
+DF.overlay = function (opts) {
+  var root = DF.el("div", { "data-df-ui": "", class: "df-overlay " + opts.cls });
+  root.setAttribute(opts.attr, "");
+  document.body.appendChild(root);
+  var isOpen = false;
+  function keys(type, e) {
+    e.stopImmediatePropagation();
+    var onClose = document.activeElement === closeButton;
+    if (e.key === "Tab" || (onClose && (e.key === "Enter" || e.key === " "))) {
+      // also on keyup and keypress, so that the browser neither moves the focus nor clicks
+      e.preventDefault();
+      if (type !== "keydown") return;
+      if (e.key !== "Tab") { close(); return; }
+      var stops = opts.stops ? opts.stops() : [closeButton];
+      var at = stops.indexOf(document.activeElement);
+      var to = stops[(at < 0 ? (e.shiftKey ? stops.length - 1 : 0) : at + (e.shiftKey ? stops.length - 1 : 1)) % stops.length];
+      try { to.focus({ preventScroll: true }); } catch (err) { to.focus(); }
+      return;
+    }
+    if (type === "keydown" && e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (opts.keys) opts.keys(type, e);
+  }
+  var closeButton = DF.el("button", { type: "button", class: "df-close", "data-df-close": "", title: DF.t("close"), "aria-label": DF.t("close"), text: "\u00d7", onclick: close });
+  function open() {
+    if (isOpen || !root.parentNode) return;
+    isOpen = true;
+    root.classList.add("df-on");
+    DF.modalKeys = keys;
+    if (opts.onOpen) opts.onOpen();
+  }
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    root.classList.remove("df-on");
+    if (DF.modalKeys === keys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && root.contains(a) && a.blur) a.blur();
+  }
+  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
+  return {
+    root: root, closeButton: closeButton,
+    open: open, close: close, isOpen: function () { return isOpen; },
+    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+  };
 };
 
 // DF.finder: search and outline (docs/content-model.md). An overlay with a text field and a list:
@@ -165,9 +227,14 @@ DF.finder = function (opts) {
   var input = DF.el("input", { type: "text", "data-df-find-input": "", placeholder: DF.t("search"), "aria-label": DF.t("search"),
     autocomplete: "off", autocapitalize: "off", spellcheck: "false" });
   var list = DF.el("div", { class: "df-find-list" });
-  var root = DF.el("div", { "data-df-ui": "", "data-df-finder": "", class: "df-finder" }, [DF.el("div", { class: "df-find-box" }, [input, list])]);
-  document.body.appendChild(root);
-  var isOpen = false, active = 0, items = [];
+  var ov = DF.overlay({ attr: "data-df-finder", cls: "df-finder", keys: keys, stops: function () { return [input, ov.closeButton]; }, onOpen: function () {
+    input.value = "";
+    render();
+    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+  } });
+  // the close button sits beside the text field, which would otherwise lie under it
+  ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-find-box" }, [DF.el("div", { class: "df-find-head" }, [input, ov.closeButton]), list]));
+  var active = 0, items = [];
 
   // fold: lower case without accents, one character for each character of s, so that a place
   // found in the folded text is the same place in s
@@ -242,48 +309,60 @@ DF.finder = function (opts) {
     var a = items[active];
     if (a && a.el.scrollIntoView) a.el.scrollIntoView({ block: "nearest" });
   }
-  function choose(i) { close(); opts.pick(i); }
+  function choose(i) { ov.close(); opts.pick(i); }
   function keys(type, e) {
-    e.stopImmediatePropagation();
     if (type !== "keydown") return;
     switch (e.key) {
-      case "Escape": e.preventDefault(); close(); return;
       case "ArrowDown": case "ArrowUp":
         e.preventDefault();
         if (items.length) { active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; mark(); }
         return;
       case "Enter": e.preventDefault(); if (items[active]) choose(items[active].i); return;
-      case "Tab": e.preventDefault(); return;
     }
     // Ctrl+F and Cmd+F stay with the overlay instead of opening the browser's own search
     if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) { e.preventDefault(); input.select(); return; }
-    // typing goes to the text field wherever the focus is
-    if (document.activeElement !== input) input.focus();
-  }
-  function open() {
-    if (isOpen || !root.parentNode) return;
-    isOpen = true;
-    input.value = "";
-    root.classList.add("df-on");
-    DF.modalKeys = keys;
-    render();
-    try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
-  }
-  // close: the focus goes back to the document, so that the keys move the slides again and no
-  // button shows a focus ring
-  function close() {
-    if (!isOpen) return;
-    isOpen = false;
-    root.classList.remove("df-on");
-    if (DF.modalKeys === keys) DF.modalKeys = null;
-    var a = document.activeElement;
-    if (a && root.contains(a) && a.blur) a.blur();
+    // typing goes to the text field wherever the focus is (a key such as Shift leaves it alone)
+    if (document.activeElement !== input && (e.key.length === 1 || e.key === "Backspace" || e.key === "Delete")) input.focus();
   }
   input.addEventListener("input", render);
-  root.addEventListener("mousedown", function (e) { if (e.target === root) close(); });
   return {
-    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: open }),
-    open: open, close: close, isOpen: function () { return isOpen; },
-    remove: function () { close(); if (root.parentNode) root.parentNode.removeChild(root); }
+    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: ov.open }),
+    open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
+  };
+};
+
+// The keyboard icon of the key help button: its case, two rows of keys and the space bar. It is
+// drawn here so that it looks the same on every machine (a character such as U+2328 would depend
+// on the fonts installed) and takes the text colour.
+function keyboardIcon() {
+  var ns = "http://www.w3.org/2000/svg";
+  var make = function (tag, attrs) { var e = document.createElementNS(ns, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; };
+  var svg = make("svg", { viewBox: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor", "stroke-width": "1.6",
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" });
+  svg.appendChild(make("rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }));
+  svg.appendChild(make("path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }));
+  return svg;
+}
+
+// DF.helpOverlay: the key help of the start screen behind a button with an icon: an overlay with
+// the groups of DF.keyHelp and, below them, the version of deckfold that wrote the file. It has no
+// key of its own; while it is open no key reaches the start screen.
+// Returns { button, open, close, isOpen, remove }.
+DF.helpOverlay = function (groups) {
+  var name = DF.t("shortcuts");
+  var ov = DF.overlay({ attr: "data-df-help-overlay", cls: "df-help", keys: function (type, e) {
+    // Nothing in the box is used with the keys, so what a key would do by itself is cancelled: it
+    // must not scroll the start screen behind the overlay, press a button or, with Ctrl+F or
+    // Cmd+F, open the search of the browser. Other shortcuts of the browser (reload) stay.
+    var find = (e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F");
+    if (find || !(e.metaKey || e.ctrlKey || e.altKey)) e.preventDefault();
+  } });
+  ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-help-box" }, [
+    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: name }), ov.closeButton]),
+    DF.keyHelp(groups),
+    DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })]));
+  return {
+    button: DF.el("button", { type: "button", class: "df-icon-btn", "data-df-help": "", title: name, "aria-label": name, onclick: ov.open }, [keyboardIcon()]),
+    open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };

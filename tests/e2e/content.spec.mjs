@@ -1,7 +1,7 @@
 // The content model (docs/content-model.md) against what the source players show, and the search
 // and outline built on it.
 import { test, expect } from '@playwright/test';
-import { solo, startScreen, present, audState, need, visibleSlide } from './helpers.mjs';
+import { solo, startScreen, present, openPresenter, audState, need, visibleSlide } from './helpers.mjs';
 
 const content = (page) => page.evaluate(() => JSON.parse(document.getElementById('df-content').textContent));
 const chars = (s) => s.replace(/\s+/g, '').length;
@@ -143,6 +143,41 @@ test('presenter view: the search finds notes, keeps the keys to itself and goes 
   await page.keyboard.press('Control+f');
   await expect(page.locator('[data-df-finder]')).toHaveCount(0);
   expect(await audState(page)).toEqual({ slide: 2, step: 0 });
+});
+
+test('search: its close button closes it, on the start screen and in the presenter view', async ({ page, context }) => {
+  await startScreen(page, 'pptx-content.html');
+  // the button sits beside the text field, not on it
+  const beside = (doc) => doc.evaluate(() => {
+    const i = document.querySelector('[data-df-finder] [data-df-find-input]').getBoundingClientRect();
+    const c = document.querySelector('[data-df-finder] [data-df-close]');
+    if (!c) return null;
+    const r = c.getBoundingClientRect();
+    return { gap: r.left - i.right, inRow: r.top < i.bottom && r.bottom > i.top, label: c.getAttribute('aria-label') || '' };
+  });
+  await page.click('[data-df-find]');
+  expect(await finderOpen(page)).toBe(true);
+  let b = await beside(page);
+  expect(b, 'the close button of the search').not.toBeNull();
+  expect(b.gap).toBeGreaterThanOrEqual(0);
+  expect(b.inRow).toBe(true);
+  expect(b.label).not.toBe('');
+  await page.click('[data-df-finder] [data-df-close]');
+  expect(await finderOpen(page)).toBe(false);
+  expect(await page.evaluate(() => { const a = document.activeElement; return !!a && !!a.closest('[data-df-finder]'); })).toBe(false);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => chosen(page)).toBe(1);
+  // the same overlay in the presenter view
+  const pres = await openPresenter(page, context);
+  await pres.click('[data-df-find]');
+  expect(await finderOpen(pres)).toBe(true);
+  b = await beside(pres);
+  expect(b.gap).toBeGreaterThanOrEqual(0);
+  expect(b.inRow).toBe(true);
+  await pres.click('[data-df-finder] [data-df-close]');
+  expect(await finderOpen(pres)).toBe(false);
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => chosen(page)).toBe(2);
 });
 
 test('search: slide text with markup stays text in the list', async ({ page }) => {
