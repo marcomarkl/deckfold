@@ -13,10 +13,10 @@ Date: 2026-11-07. Keynote 15.4 (Keynote Creator Studio), macOS 27.2.
 
 ## Not done yet
 
-- A native Keynote test deck with builds, Magic Move, video, audio and self-playing timing. It has to be made by hand.
+- A test deck built in Keynote itself, with its own builds, Magic Move, video, audio and self-playing timing. It has to be made by hand: Keynote's scripting dictionary has neither builds nor links.
 - A Google Slides deck downloaded as PPTX.
 
-Builds, media (video and audio), soundtrack and self-playing mode are therefore not verified against a real export.
+Builds and links are confirmed on an export of a PowerPoint file that Keynote opened (section of 2026-11-10 below). Builds made in Keynote, Magic Move, media (video and audio), the soundtrack and self-playing mode are not verified against a real export.
 
 ## Findings
 
@@ -61,7 +61,7 @@ assets/player/*.png                UI images
 - The player dispatches `ShowController:SlideIndexDidChangeEvent` (with `detail.slideIndex`) on `document`.
 
 **Events:** every slide of this export has exactly one event (`effects[0].type = "transition"`).
-One event is one click; builds show up as additional events (still to be confirmed with a native deck).
+One event is one click; builds show up as additional events (confirmed on 2026-11-10 on an export of a PowerPoint file with builds, see below; not yet with builds made in Keynote).
 
 **Notes:** neither `header.json` nor the slide JSON files contain presenter notes. This confirms decision E6.
 
