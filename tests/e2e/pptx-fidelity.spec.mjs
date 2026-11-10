@@ -84,6 +84,9 @@ for (const name of decks) {
     await page.evaluate(() => document.fonts.ready);
     const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
     expect(n, 'one reference image per visible slide').toBe(images.length);
+    // every slide is measured before the test fails, so that a run in CI shows the value of
+    // each slide of a deck and not only of the first one below the threshold
+    const low = [];
     for (let i = 0; i < n; i++) {
       // the slide through deckfold first (it brings a player that went elsewhere back to its own
       // slide), then every object of it shown
@@ -100,7 +103,8 @@ for (const name of decks) {
       if (score < THRESHOLD && !EXCEPTIONS[key]) {
         fs.writeFileSync(path.join(OUT, `pptx-diff-${name}-${i + 1}.png`), PNG.sync.write(shot));
       }
-      if (!EXCEPTIONS[key]) expect(score, `${key} (rendering saved as tests/.out/pptx-diff-${name}-${i + 1}.png)`).toBeGreaterThanOrEqual(THRESHOLD);
+      if (!EXCEPTIONS[key] && score < THRESHOLD) low.push(`${key}: SSIM ${score.toFixed(3)} (rendering saved as tests/.out/pptx-diff-${name}-${i + 1}.png)`);
     }
+    expect(low, `slides below ${THRESHOLD}`).toEqual([]);
   });
 }
