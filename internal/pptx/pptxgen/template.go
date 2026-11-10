@@ -61,14 +61,14 @@ func master(d *Deck) string {
 	body := `<p:bodyStyle>`
 	sizes := []int{2800, 2400, 2000, 1800, 1800, 1800, 1800, 1800, 1800}
 	for l := 1; l <= 9; l++ {
-		body += fmt.Sprintf(`<a:lvl%dpPr marL="%d" indent="-228600" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPts val="%d"/></a:spcBef><a:buFont typeface="Arial" panose="020B0604020202020204" pitchFamily="34" charset="0"/><a:buChar char="&#8226;"/><a:defRPr sz="%d" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl%dpPr>`,
+		body += fmt.Sprintf(`<a:lvl%dpPr marL="%d" indent="-228600" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPts val="%d"/></a:spcBef><a:buFont typeface="Arial" panose="020B0604020202020204" pitchFamily="34" charset="0"/><a:buChar char="&#8226;"/><a:defRPr sz="%d"`+d.styleKern()+`><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl%dpPr>`,
 			l, 228600+(l-1)*457200, map[bool]int{true: 1000, false: 500}[l == 1], sizes[l-1], l)
 	}
 	body += `</p:bodyStyle>`
 	return xmlHead + `<p:sldMaster ` + nsDecl + `><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>` + tree + `</p:cSld>` + clrMap +
 		`<p:sldLayoutIdLst>` + layoutIDs + `</p:sldLayoutIdLst>` +
-		`<p:txStyles><p:titleStyle><a:lvl1pPr algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPct val="0"/></a:spcBef><a:buNone/><a:defRPr sz="4400" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mj-lt"/><a:ea typeface="+mj-ea"/><a:cs typeface="+mj-cs"/></a:defRPr></a:lvl1pPr></p:titleStyle>` +
-		body + `<p:otherStyle>` + levels("", d.BodyFont, 1800) + `</p:otherStyle></p:txStyles></p:sldMaster>`
+		`<p:txStyles><p:titleStyle><a:lvl1pPr algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:spcBef><a:spcPct val="0"/></a:spcBef><a:buNone/><a:defRPr sz="4400"` + d.styleKern() + `><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mj-lt"/><a:ea typeface="+mj-ea"/><a:cs typeface="+mj-cs"/></a:defRPr></a:lvl1pPr></p:titleStyle>` +
+		body + `<p:otherStyle>` + d.levels("", 1800) + `</p:otherStyle></p:txStyles></p:sldMaster>`
 }
 
 // layouts in the order of LayoutTitle, LayoutContent, LayoutBlank.
@@ -115,5 +115,5 @@ func notesMaster(d *Deck) string {
 	return xmlHead + `<p:notesMaster ` + nsDecl + `><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>` + spTreeHead +
 		ph(2, "Slide Image Placeholder 1", `<p:ph type="sldImg" idx="2"/>`, 685800, 1143000, 5486400, 3086100, "") +
 		ph(3, "Notes Placeholder 2", `<p:ph type="body" sz="quarter" idx="3"/>`, 685800, 4400550, 5486400, 3600450, emptyTx(`<a:bodyPr/>`, "")) +
-		`</p:spTree></p:cSld>` + clrMap + `<p:notesStyle>` + levels("", d.BodyFont, 1200) + `</p:notesStyle></p:notesMaster>`
+		`</p:spTree></p:cSld>` + clrMap + `<p:notesStyle>` + d.levels("", 1200) + `</p:notesStyle></p:notesMaster>`
 }

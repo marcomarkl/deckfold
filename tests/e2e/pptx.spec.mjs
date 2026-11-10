@@ -562,3 +562,84 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   await clickLink(page, 'end');
   await page.waitForSelector('.df-start [data-df-start]');
 });
+
+// Kerning. PowerPoint kerns a run from the font size in its kern attribute on, with the pairs
+// of the font's kern table (docs/spikes/S4-powerpoint-reference.md, "How PowerPoint kerns").
+// fixtures/pptx/ref/kerning/words.json has where PowerPoint put every word of the kerning deck;
+// here the browser has to draw every word there. That also shows that the browser adds no
+// kerning of its own: half of the rows are not kerned in PowerPoint.
+const kerningSpec = JSON.parse(fs.readFileSync(path.join(OUT, '..', '..', 'fixtures', 'pptx', 'src', 'kerning.spec.json'), 'utf8'));
+const kerningWords = JSON.parse(fs.readFileSync(path.join(OUT, '..', '..', 'fixtures', 'pptx', 'ref', 'kerning', 'words.json'), 'utf8'));
+
+test('PowerPoint kerning: the browser draws every word where PowerPoint put it', async ({ page }) => {
+  await solo(page, 'pptx-ref-kerning.html');
+  await page.waitForFunction(() => window.__dfPptx);
+  await page.evaluate(() => document.fonts.ready);
+  const n = await slideCount(page);
+  expect(n).toBe(Math.max(...kerningSpec.rows.map((r) => r.slide)));
+  // the letters of every text box, as the browser places them (px of the slide)
+  const boxes = {};
+  for (let i = 0; i < n; i++) {
+    await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
+    await page.waitForFunction((i) => window.__dfPptx.state().slide === i, i);
+    await page.evaluate((i) => window.__dfPptx.showAll(i), i);
+    const got = await page.evaluate((i) => [...document.querySelectorAll('.df-pptx-slide')[i].querySelectorAll('g[data-box]')].map((g) => {
+      const [x, y] = g.getAttribute('data-box').split(' ').map(Number);
+      const letters = [];
+      for (const t of g.querySelectorAll('text')) {
+        const s = t.textContent;
+        for (let k = 0; k < t.getNumberOfChars(); k++) {
+          const a = t.getStartPositionOfChar(k), b = t.getEndPositionOfChar(k);
+          letters.push({ c: s[k], x0: a.x, x1: b.x, y: a.y });
+        }
+      }
+      return { key: `${i + 1}/${Math.round(x)}/${Math.round(y)}`, letters };
+    }), i);
+    for (const b of got) boxes[b.key] = b.letters;
+  }
+  // words: letters between spaces, line by line
+  const wordsOf = (letters) => {
+    const ls = [...letters].sort((a, b) => a.y - b.y || a.x0 - b.x0);
+    const out = [];
+    let line = 0, cur = null;
+    ls.forEach((l, i) => {
+      if (i > 0 && Math.abs(l.y - ls[i - 1].y) > 1) { cur = null; line++; }
+      if (l.c === ' ') { cur = null; return; }
+      if (!cur) { cur = { text: '', line, x: l.x0, end: l.x1 }; out.push(cur); }
+      cur.text += l.c;
+      cur.end = l.x1;
+    });
+    return out;
+  };
+  const px = 96 / 72; // words.json has points
+  const drawn = {};
+  const bad = [];
+  kerningSpec.rows.forEach((row, i) => {
+    const want = kerningWords.rows[i];
+    expect([want.id, want.font]).toEqual([row.id, row.font]);
+    const ws = wordsOf(boxes[`${row.slide}/${row.box[0]}/${row.box[1]}`] || []);
+    drawn[`${row.font}/${row.id}`] = ws;
+    if (ws.length !== want.words.length) { bad.push(`${row.font} ${row.id}: ${ws.length} words drawn, PowerPoint has ${want.words.length}`); return; }
+    // PowerPoint drew the boxes with a stored font scale at 11.0 pt where the scale gives
+    // 11.2 pt; they are compared with their twins below
+    if (row.fontScale) return;
+    ws.forEach((w, j) => {
+      const p = want.words[j];
+      const x = p.x * px, width = p.width * px;
+      if (w.text !== p.text) bad.push(`${row.font} ${row.id}: word ${j} is "${w.text}", PowerPoint has "${p.text}"`);
+      else if (w.line !== p.line) bad.push(`${row.font} ${row.id}: "${w.text}" is on line ${w.line}, in PowerPoint on line ${p.line}`);
+      else if (Math.abs(w.x - x) > 0.006 * (x - ws[0].x) + 1) bad.push(`${row.font} ${row.id}: "${w.text}" starts at ${w.x.toFixed(1)} px, in PowerPoint at ${x.toFixed(1)} px`);
+      // the end of a letter includes the letter spacing in some browsers; the next word's start
+      // covers the width there
+      else if (!row.spcPt && Math.abs(w.end - w.x - width) > 0.012 * width + 0.3) bad.push(`${row.font} ${row.id}: "${w.text}" is ${(w.end - w.x).toFixed(2)} px wide, in PowerPoint ${width.toFixed(2)} px`);
+    });
+  });
+  for (const row of kerningSpec.rows) {
+    if (!row.fontScale || !row.twin) continue;
+    const a = drawn[`${row.font}/${row.id}`], b = drawn[`${row.font}/${row.twin}`];
+    a.forEach((w, j) => {
+      if (Math.abs(w.x - b[j].x) > 0.05) bad.push(`${row.font} ${row.id}: "${w.text}" starts at ${w.x.toFixed(2)} px, in its twin with kern off at ${b[j].x.toFixed(2)} px`);
+    });
+  }
+  expect(bad, 'words not where PowerPoint put them').toEqual([]);
+});

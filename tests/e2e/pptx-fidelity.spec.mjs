@@ -19,10 +19,19 @@ const EXCEPTIONS = {
   'charts/1': 'automatic plot area layout',
   // The same for the gridlines of the area chart (0.92); the pie and the doughnut match.
   'charts/2': 'automatic plot area layout',
-  // The embedded font is used and its glyphs match, but PowerPoint places the first baseline of
-  // this font (Liberation Serif metrics) about 3 px lower at 40 pt and 1 px lower at 28 pt than
-  // deckfold does (measured 0.918 on 2026-11-07).
-  'fontembed/1': 'baseline of Liberation Serif',
+  // The embedded font is used and its glyphs match, but PowerPoint places the baselines of this
+  // embedded font 1 pt higher than the metrics of the font give, which it does not do for an
+  // installed Liberation Serif with the same metrics (measured 0.924 on 2026-11-10).
+  'fontembed/1': 'baseline of the embedded font',
+  // The kerning deck: its words and its baselines stand where PowerPoint put them (the kerning
+  // test in pptx.spec.mjs, and internal/pptx/kerning_test.go and baseline_test.go against
+  // PowerPoint's numbers). What is left is the last pixel on slides full of text: PowerPoint's
+  // word widths lie up to 0.4 % from the font's, which moves the end of a line by a pixel, and
+  // its baselines sit on whole points, thirds of a pixel here (measured 0.958, 0.946 and 0.951
+  // on 2026-11-10; 0.749 on slide 1 before deckfold kerned and placed baselines this way).
+  'kerning/1': 'slide full of text: the last pixel',
+  'kerning/4': 'slide full of text: the last pixel',
+  'kerning/5': 'slide full of text: the last pixel',
 };
 // The charts of charts2 (scatter, bubble, radar, stock, pie and bar of pie, surface, and the 3D
 // charts) show the right data, axes and colors, but PowerPoint sets chart text without c:txPr in

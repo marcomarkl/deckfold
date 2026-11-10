@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"deckfold/internal/pptx/fonts"
 	"deckfold/internal/pptx/xmltree"
@@ -136,6 +137,17 @@ func spacingPx(rp *props) float64 {
 	return float64(rp.int("spc", 0)) / 100 * ptPx
 }
 
+// kerned reports whether PowerPoint kerns a run drawn in face at size px. The run attribute
+// kern is the smallest font size from which on it does, in hundredths of a point; without the
+// attribute, and with kern="0", it does not. PowerPoint compares the size it draws, so a size
+// that a stored font scale has shrunk below the value is not kerned. The pairs come from the
+// kern table of the font, never from GPOS (fonts.Face.Kern). Measured against PowerPoint with
+// the kerning deck: docs/spikes/S4-powerpoint-reference.md, "How PowerPoint kerns".
+func kerned(rp *props, face *fonts.Face, size float64) bool {
+	k := rp.int("kern", 0)
+	return k > 0 && face.Kerns() && size/ptPx >= float64(k)/100-1e-6
+}
+
 type facePart struct {
 	text string
 	face *fonts.Face
@@ -177,7 +189,7 @@ func (r *slideRenderer) splitByFace(text string, rp *props) []facePart {
 	return out
 }
 
-func (r *slideRenderer) addSeg(segs *[]textSeg, asc, desc *float64, x float64, text string, face *fonts.Face, size float64, rp *props, cx colorCtx, href string) {
+func (r *slideRenderer) addSeg(segs *[]textSeg, asc, desc *float64, x float64, text string, face *fonts.Face, size float64, kern bool, rp *props, cx colorCtx, href string) {
 	if text == "" {
 		return
 	}
@@ -186,14 +198,14 @@ func (r *slideRenderer) addSeg(segs *[]textSeg, asc, desc *float64, x float64, t
 	seg := textSeg{
 		x: x, text: text, face: face, size: size, color: r.runColor(rp, cx),
 		underline: u != "" && u != "none", strike: rp.attr("strike") != "" && rp.attr("strike") != "noStrike",
-		spacing: spacingPx(rp), href: href,
+		spacing: spacingPx(rp), href: href, kern: kern,
 	}
 	// continue the previous piece when it ends exactly here and looks the same
 	if n := len(*segs); n > 0 {
 		last := &(*segs)[n-1]
-		end := last.x + measure(last.face, last.text, last.size) + float64(len([]rune(last.text)))*last.spacing
+		end := last.x + width(last.face, last.text, last.size, last.kern) + float64(len([]rune(last.text)))*last.spacing + pairPx(last, text, face, size, kern)
 		if last.face == seg.face && last.size == seg.size && last.color == seg.color && last.underline == seg.underline &&
-			last.strike == seg.strike && last.spacing == seg.spacing && last.href == seg.href && math.Abs(end-x) < 0.01 {
+			last.strike == seg.strike && last.spacing == seg.spacing && last.href == seg.href && last.kern == seg.kern && math.Abs(end-x) < 0.01 {
 			last.text += text
 			*asc = math.Max(*asc, face.Ascent()*size)
 			*desc = math.Max(*desc, face.Descent()*size)
@@ -218,10 +230,43 @@ func measure(f *fonts.Face, text string, size float64) float64 {
 	return w * size
 }
 
-func fitRunes(f *fonts.Face, rs []rune, size, avail float64) int {
+// width returns the width of text in px: measure, plus the kerning between its characters when
+// the text is kerned. Shaped text has its kerning from the shaper already.
+func width(f *fonts.Face, text string, size float64, kern bool) float64 {
+	w := measure(f, text, size)
+	if !kern || fonts.Complex(text) {
+		return w
+	}
+	prev := rune(-1)
+	for _, c := range text {
+		if prev >= 0 {
+			w += f.Kern(prev, c) * size
+		}
+		prev = c
+	}
+	return w
+}
+
+// pairPx returns the kerning in px between the end of a piece of text on a line and the text
+// that follows it. PowerPoint kerns across the boundary of two runs and with a space like
+// inside a word; a pair exists only within one font at one size, and when both sides are
+// kerned.
+func pairPx(before *textSeg, after string, face *fonts.Face, size float64, kern bool) float64 {
+	if before == nil || !before.kern || !kern || before.face != face || before.size != size || before.text == "" || after == "" {
+		return 0
+	}
+	last, _ := utf8.DecodeLastRuneInString(before.text)
+	first, _ := utf8.DecodeRuneInString(after)
+	return face.Kern(last, first) * size
+}
+
+func fitRunes(f *fonts.Face, rs []rune, size, avail float64, kern bool) int {
 	w := 0.0
 	for i, c := range rs {
 		w += f.Advance(c) * size
+		if kern && i > 0 {
+			w += f.Kern(rs[i-1], c) * size
+		}
 		if w > avail+0.5 {
 			return i
 		}

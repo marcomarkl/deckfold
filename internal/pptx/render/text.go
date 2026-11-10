@@ -83,6 +83,7 @@ type textSeg struct {
 	bullet    bool    // the bullet of the line (character or picture)
 	wordSpace float64 // extra space per space character (justified lines), px
 	rtl       bool    // in a right-to-left paragraph
+	kern      bool    // PowerPoint kerns this text (see kerned)
 	unit      int     // word or letter number in the paragraph (builds by word or letter)
 }
 
@@ -192,6 +193,7 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 		segs      []textSeg
 		width     float64
 		asc, desc float64
+		below     float64 // what the font needs below the baseline; the text ends that far below its last line
 		para      int
 	}
 	var lines []pline
@@ -291,6 +293,7 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			space bool
 			br    bool
 			href  string
+			kern  bool
 		}
 		var atoms []atom
 		for _, rn := range ip.runs {
@@ -300,10 +303,14 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			}
 			text := applyCaps(rn.text, rn.rp.attr("cap"))
 			size := r.runSize(rn.rp, fontScale)
+			// a run with shaped or right-to-left text is laid out by the shaper and by the browser,
+			// as a whole: its spaces must not become kerned pieces of their own
+			plainRun := !fonts.Complex(text) && !fonts.RTL(text)
 			for _, piece := range splitBreakable(text) {
 				for _, part := range r.splitByFace(piece, rn.rp) {
-					w := measure(part.face, part.text, size) + float64(len([]rune(part.text)))*spacingPx(rn.rp)
-					atoms = append(atoms, atom{text: part.text, rp: rn.rp, face: part.face, size: size, width: w, space: strings.TrimSpace(part.text) == "", href: rn.href})
+					kern := plainRun && kerned(rn.rp, part.face, size)
+					w := width(part.face, part.text, size, kern) + float64(len([]rune(part.text)))*spacingPx(rn.rp)
+					atoms = append(atoms, atom{text: part.text, rp: rn.rp, face: part.face, size: size, width: w, space: strings.TrimSpace(part.text) == "", href: rn.href, kern: kern})
 				}
 			}
 		}
@@ -351,7 +358,7 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 				if s.image != "" {
 					end = math.Max(end, s.x+s.imgW)
 				} else if strings.TrimSpace(s.text) != "" {
-					end = math.Max(end, s.x+measure(s.face, s.text, s.size))
+					end = math.Max(end, s.x+width(s.face, s.text, s.size, s.kern))
 				}
 			}
 			cur.width = end
@@ -365,6 +372,14 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 			firstLine = false
 			x = lineStartX(false)
 		}
+		// lastText returns the text piece the next atom follows on the line, for the kerning
+		// between the two (nil at the start of a line and after a bullet)
+		lastText := func() *textSeg {
+			if n := len(cur.segs); n > 0 && !cur.segs[n-1].bullet && cur.segs[n-1].image == "" {
+				return &cur.segs[n-1]
+			}
+			return nil
+		}
 		for _, a := range atoms {
 			if a.br {
 				if cur.asc == 0 {
@@ -374,17 +389,19 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 				flush()
 				continue
 			}
-			if wrap && !a.space && x+a.width > avail+0.5 && len(cur.segs) > 0 && hasNonSpace(cur.segs) {
+			if wrap && !a.space && x+pairPx(lastText(), a.text, a.face, a.size, a.kern)+a.width > avail+0.5 && len(cur.segs) > 0 && hasNonSpace(cur.segs) {
 				flush()
 			}
 			if a.space && len(cur.segs) == 0 && !firstLine {
 				continue // spaces at the start of a wrapped line
 			}
+			// the pair with what stands before it on the line moves the atom
+			x += pairPx(lastText(), a.text, a.face, a.size, a.kern)
 			// a single atom wider than the line: break it by characters
 			if wrap && !a.space && a.width > avail-x+0.5 && x+a.width > avail {
 				rs := []rune(a.text)
 				for len(rs) > 0 {
-					n := fitRunes(a.face, rs, a.size, avail-x)
+					n := fitRunes(a.face, rs, a.size, avail-x, a.kern)
 					if n == 0 {
 						if len(cur.segs) > 0 {
 							flush()
@@ -393,8 +410,8 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 						n = 1
 					}
 					t := string(rs[:n])
-					r.addSeg(&cur.segs, &cur.asc, &cur.desc, x, t, a.face, a.size, a.rp, cx, a.href)
-					x += measure(a.face, t, a.size)
+					r.addSeg(&cur.segs, &cur.asc, &cur.desc, x, t, a.face, a.size, a.kern, a.rp, cx, a.href)
+					x += width(a.face, t, a.size, a.kern)
 					rs = rs[n:]
 					if len(rs) > 0 {
 						flush()
@@ -402,7 +419,7 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 				}
 				continue
 			}
-			r.addSeg(&cur.segs, &cur.asc, &cur.desc, x, a.text, a.face, a.size, a.rp, cx, a.href)
+			r.addSeg(&cur.segs, &cur.asc, &cur.desc, x, a.text, a.face, a.size, a.kern, a.rp, cx, a.href)
 			x += a.width
 		}
 		flush()
@@ -434,25 +451,37 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 					l.segs[i].x += shift
 				}
 			}
-			// PowerPoint's single line spacing is 1.2 times the largest font size of the line,
-			// whatever the font; the ascent only places the baseline (measured against the
-			// PowerPoint reference images, docs/spikes/S4-powerpoint-reference.md)
-			size := 0.0
+			// Where PowerPoint puts the baseline (measured against its PDF for 17 fonts, eight
+			// line spacings in percent, four in points, a stored reduction and all three anchors:
+			// docs/spikes/S4-powerpoint-reference.md, "Where PowerPoint puts the baseline").
+			// A single line is 1.2 times the largest font size of the line, whatever the font.
+			// The font divides it by its ascender and descender; the part below the baseline
+			// stays what it is under every line spacing. The line spacing sets the distance
+			// from baseline to baseline. The baseline sits at least three quarters of that
+			// distance below the top of its line, and never has more room above it than a
+			// single line gives, unless the three quarters ask for it.
+			size, hasc, hdesc := 0.0, 0.0, 0.0
 			for _, sg := range l.segs {
 				if sg.image == "" { // a picture bullet does not make the line higher
 					size = math.Max(size, sg.size)
+					hasc = math.Max(hasc, sg.face.LineAscent()*sg.size)
+					hdesc = math.Max(hdesc, sg.face.LineDescent()*sg.size)
 				}
 			}
-			h := (l.asc + l.desc) * lnPct
-			if size > 0 {
-				h = 1.2 * size * lnPct
+			if hasc+hdesc == 0 {
+				hasc, hdesc = l.asc, l.desc // a line without text: the font of the paragraph end
 			}
-			a := l.asc * lnPct
+			single := l.asc + l.desc
+			if size > 0 {
+				single = 1.2 * size
+			}
+			below := single * hdesc / (hasc + hdesc)
+			h := single * lnPct
 			if lnPts > 0 {
 				h = lnPts
-				a = lnPts * l.asc / (l.asc + l.desc)
 			}
-			l.asc, l.desc = a, h-a
+			a := math.Max(0.75*h, math.Min(h, single)-below)
+			l.asc, l.desc, l.below = a, h-a, below
 		}
 		natural := 0.0
 		if len(lines) > startLine {
@@ -478,6 +507,12 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 		}
 	}
 
+	// the text ends below its last baseline by what the font needs there, not by the rest of the
+	// line spacing: that is what PowerPoint centers and bottom-aligns
+	if n := len(lines); n > 0 && lines[n-1].below > 0 {
+		lines[n-1].desc = lines[n-1].below
+	}
+
 	// total height and vertical anchor
 	total := 0.0
 	for i, l := range lines {
@@ -495,6 +530,9 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 	for i, l := range lines {
 		y += spaceBefore[i]
 		base := y + l.asc
+		if baselinesOnPoints {
+			base = top + math.Round((base-top)/ptPx)*ptPx
+		}
 		for _, s := range l.segs {
 			s.x += inner.x
 			s.y = base
@@ -505,6 +543,11 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 	}
 	return out
 }
+
+// baselinesOnPoints: PowerPoint's PDF has every baseline a whole number of points below the top
+// of the text (27, 61 and 94 pt for three lines of 28 pt Liberation Sans, where the line
+// spacing gives 27.2, 60.8 and 94.4 pt).
+const baselinesOnPoints = true
 
 // justify spreads extra px over the spaces between the words of a line (not over leading or
 // trailing spaces, and not after the bullet) and moves the segments after each space.
@@ -580,7 +623,7 @@ func mirrorLine(segs []textSeg, end float64) {
 	for i := range segs {
 		w := segs[i].imgW
 		if segs[i].image == "" {
-			w = measure(segs[i].face, segs[i].text, segs[i].size)
+			w = width(segs[i].face, segs[i].text, segs[i].size, segs[i].kern)
 		}
 		segs[i].x = start + end - (segs[i].x + w)
 		segs[i].rtl = true

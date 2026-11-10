@@ -44,6 +44,10 @@ type Deck struct {
 	ShowLoop      bool   // presentation property: loop until Escape
 	TableStyles   string // raw a:tblStyle elements for ppt/tableStyles.xml
 	UseTimings    *bool  // presentation property: use rehearsed timings (nil = default true)
+	// NoStyleKern leaves kern out of every text style (master, other and default text style),
+	// where PowerPoint and the other decks have kern="1200". The kerning deck sets kern on its
+	// runs itself, and needs one row that inherits none.
+	NoStyleKern bool
 	// Fonts are embedded as ppt/fonts/fontN.fntdata (EOT data, see fonts.EOT).
 	Fonts  []Font
 	Slides []*Slide
@@ -403,7 +407,7 @@ func (d *Deck) parts() [][2]string {
 		}
 		pres.WriteString(`</p:embeddedFontLst>`)
 	}
-	pres.WriteString(`<p:defaultTextStyle>` + levels("", d.BodyFont, 1800) + `</p:defaultTextStyle></p:presentation>`)
+	pres.WriteString(`<p:defaultTextStyle>` + d.levels("", 1800) + `</p:defaultTextStyle></p:presentation>`)
 	presRels.WriteString(`</Relationships>`)
 	add("ppt/presentation.xml", pres.String())
 	add("ppt/_rels/presentation.xml.rels", presRels.String())
@@ -494,12 +498,20 @@ func (d *Deck) parts() [][2]string {
 	return out
 }
 
-// levels returns a:lvl1pPr..a:lvl9pPr with the given font and size (in hundredths of a point).
-func levels(extra, font string, size int) string {
+// styleKern returns the kern attribute of the text styles (with its leading space).
+func (d *Deck) styleKern() string {
+	if d.NoStyleKern {
+		return ""
+	}
+	return ` kern="1200"`
+}
+
+// levels returns a:lvl1pPr..a:lvl9pPr with the given size (in hundredths of a point).
+func (d *Deck) levels(extra string, size int) string {
 	var b strings.Builder
 	b.WriteString(`<a:defPPr><a:defRPr lang="en-US"/></a:defPPr>`)
 	for l := 1; l <= 9; l++ {
-		b.WriteString(fmt.Sprintf(`<a:lvl%dpPr marL="%d" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"%s><a:defRPr sz="%d" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl%dpPr>`,
+		b.WriteString(fmt.Sprintf(`<a:lvl%dpPr marL="%d" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"%s><a:defRPr sz="%d"`+d.styleKern()+`><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl%dpPr>`,
 			l, (l-1)*457200, extra, size, l))
 	}
 	return b.String()

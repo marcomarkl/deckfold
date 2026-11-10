@@ -7,6 +7,7 @@ Public test decks for the PPTX converter. Unlike `testdata/`, everything here is
 | `src/` | decks written by the generator | `go run ./scripts/pptxgen` |
 | `.` | the same decks after PowerPoint opened and saved them | `scripts/pptxref/pptxref.sh` |
 | `ref/<name>/` | one PNG per shown slide (PowerPoint's PDF export, rendered with PDFKit), plus `source.sha256` | `scripts/pptxref/pptxref.sh` |
+| `ref/kerning/words.json` | where PowerPoint put every word of the kerning deck, read from the same PDF | `scripts/kernmeasure` |
 | `powerpoint/` | the animations and transitions decks, with effects and transitions added by PowerPoint itself | `scripts/pptxref/ppdecks.sh` |
 
 The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint itself writes. When a deck has no saved copy yet, they fall back to `src/` and skip the image comparison. The image comparison also checks `source.sha256`: if the saved copy changed after the reference images were made, the test fails instead of comparing against outdated images.
@@ -14,6 +15,20 @@ The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint i
 ## The content deck
 
 `content.pptx` is the deck for the content model (`docs/content-model.md`): titles and a subtitle, a list with two levels, a picture with a description, a table, a group, builds, a shape only a trigger shows, a footer and a slide number, a hidden slide, and links to other slides on text and on a shape. The generator writes down next to it what a reader of the deck would list (`src/content.spec.json`); the tests compare that with what the converter reads and with what the player shows in every step. `src/content.md` is the Markdown `--content` writes for the deck; it was read by hand and is compared as a whole.
+
+## The kerning deck
+
+`kerning.pptx` measures when PowerPoint kerns (`docs/spikes/S4-powerpoint-reference.md`, "How PowerPoint kerns"). Every row is one line of the same words in Liberation Sans, Liberation Serif or Carlito, with one combination of size and the run attribute `kern`; most rows have a twin with `kern="0"`. The generator writes the rows to `src/kerning.spec.json`. Unlike the other decks it has no `kern` in its text styles, so that one row can go without.
+
+After a new reference for it, write PowerPoint's word positions again. `words.json` carries the hash of the saved copy it was read from, like `source.sha256`:
+
+```bash
+go run ./scripts/kernmeasure -spec fixtures/pptx/src/kerning.spec.json -pdf tests/.out/pptxref/kerning.pdf -saved fixtures/pptx/kerning.pptx -words fixtures/pptx/ref/kerning/words.json
+```
+
+The same measurement for fonts that are installed but not bundled (Calibri, Arial, Lato and others) stays local: `go run ./scripts/pptxgen -kernlocal tests/.out/kerning-local` writes the deck, `scripts/pptxref/pptxref.sh --pdf tests/.out/kerning-local/kerning-local.pptx` has PowerPoint export only the PDF, and `kernmeasure` reads it with the spec next to the deck.
+
+A third deck of this kind measures where PowerPoint puts the baselines under different line spacings and anchors: `go run ./scripts/pptxgen -baselinelocal tests/.out/baseline`, exported with `pptxref.sh --pdf`. It has no reference here; the baselines read from PowerPoint's PDF stand in `internal/pptx/baseline_test.go`.
 
 ## Making the reference
 

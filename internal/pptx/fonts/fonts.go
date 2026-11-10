@@ -55,12 +55,17 @@ type Face struct {
 	upem     float64
 	ascent   float64 // in em
 	descent  float64 // in em (positive)
+	lineAsc  float64 // hhea ascender in em, for the place of the baseline in a line
+	lineDesc float64 // hhea descender in em (positive)
 	noSubset bool
 	mu       sync.Mutex
 	used     map[rune]bool
 	// shaping (shape.go), loaded on first use
 	shapeFace   *gtfont.Face
 	shapeFailed bool
+	// kerning (kern.go)
+	kern kernSource
+	gpos map[[2]rune]float64 // pairs asked of GPOS so far
 }
 
 // Ascent returns the ascent in em (OS/2 winAscent, as PowerPoint uses it for line height).
@@ -68,6 +73,12 @@ func (f *Face) Ascent() float64 { return f.ascent }
 
 // Descent returns the descent in em, positive.
 func (f *Face) Descent() float64 { return f.descent }
+
+// LineAscent and LineDescent return the ascender and the descender of the hhea table in em (the
+// descender positive). PowerPoint for Mac places the baseline in a line by their ratio, see
+// baselineIn in the renderer; for most fonts they equal Ascent and Descent.
+func (f *Face) LineAscent() float64  { return f.lineAsc }
+func (f *Face) LineDescent() float64 { return f.lineDesc }
 
 // Advance returns the advance width of a rune in em.
 func (f *Face) Advance(r rune) float64 {
@@ -193,6 +204,7 @@ func (r *Resolver) find(family string, bold, italic bool) *Face {
 	style := styleName(bold, italic)
 	if data, ok := r.embedded[strings.ToLower(family)+"|"+style]; ok {
 		if f, err := load(data, 0, family, "embedded:"+family+" "+style, Embedded, bold, italic); err == nil && f.allowed() {
+			f.setKern("")
 			return f
 		} else if err != nil {
 			r.warn("embedded font %s (%s) cannot be read: %v", family, style, err)
@@ -211,6 +223,7 @@ func (r *Resolver) find(family string, bold, italic bool) *Face {
 			if data, err := os.ReadFile(best.path); err == nil {
 				if f, err := load(data, best.index, family, best.path, Installed, bold, italic); err == nil {
 					if f.allowed() {
+						f.setKern("")
 						return f
 					}
 					r.warn("font %s may not be embedded (fsType 0x%04x); a substitute is used", family, f.sfnt.OS2.FsType)
@@ -225,6 +238,7 @@ func (r *Resolver) find(family string, bold, italic bool) *Face {
 		panic(fmt.Sprintf("bundled font %s: %v", name, err))
 	}
 	f.Subst = !exact
+	f.setKern(name)
 	return f
 }
 
@@ -278,6 +292,10 @@ func load(data []byte, index int, family, file string, src Source, bold, italic 
 	}
 	if f.ascent <= 0 {
 		f.ascent, f.descent = 0.9, 0.25
+	}
+	f.lineAsc, f.lineDesc = f.ascent, f.descent
+	if sf.Hhea != nil && sf.Hhea.Ascender > 0 && sf.Hhea.Descender < 0 {
+		f.lineAsc, f.lineDesc = float64(sf.Hhea.Ascender)/f.upem, -float64(sf.Hhea.Descender)/f.upem
 	}
 	return f, nil
 }
@@ -334,6 +352,10 @@ var (
 	bundleMu    sync.Mutex
 	bundleCache = map[string][]byte{}
 )
+
+// BundledFile returns the file of a bundled font ("Carlito", "LiberationSans", "LiberationSerif",
+// "LiberationMono") in the given style, for the reference tools.
+func BundledFile(name string, bold, italic bool) []byte { return bundledData(name, bold, italic) }
 
 func bundledData(name string, bold, italic bool) []byte {
 	suffix := map[string]string{"regular": "Regular", "bold": "Bold", "italic": "Italic", "boldItalic": "BoldItalic"}[styleName(bold, italic)]
