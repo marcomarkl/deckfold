@@ -71,6 +71,17 @@ SSIM per slide after all three runs (Chrome on macOS, measured on 2026-11-07):
 
 The decks of the first run kept their values. The images show the editing view, so they cover the static drawing only; the transitions and Morph are checked by the browser tests in `tests/e2e/pptx.spec.mjs`.
 
+## A reference drawn with another font (2026-11-10)
+
+The first reference for the content deck compared at SSIM 0.954 on its list slide and failed on the Windows runner at 0.948. Every line of text was 1 to 4 px shorter in PowerPoint's image than in deckfold's. The cause was the reference: the PDF of that run names Calibri where the PDFs of every earlier run name Carlito (`pdffonts`). PowerPoint had not found the bundled fonts, replaced them without a word, and kerned Calibri. Why it did not find them in that run is not known; a second run minutes later found them.
+
+`pptxref.sh` now waits until the system lists the bundled fonts before it starts PowerPoint, and it reads the font names from every exported PDF. When the deck names a bundled font that the PDF does not have, while the PDF has a font the deck does not name, it writes no reference for that deck. With the right font the list slide compares at 0.972.
+
+Two things this showed about text:
+
+- PowerPoint does not kern Carlito. Carlito has its kerning in GPOS only (no `kern` table), and deckfold's unkerned text matches PowerPoint's to SSIM 0.997 on a text slide. Kerning deckfold's text with the GPOS pairs made 19 of 87 slides worse and was taken back.
+- PowerPoint does kern Calibri (the shorter lines of the wrong reference). deckfold measures and draws every font without kerning, so a deck in Calibri, converted on a machine that has Calibri, has lines up to 0.7 % longer than PowerPoint's. That is not measured against a reference yet.
+
 ## Still open
 
 - A comparison of the 3D shapes with WebGL in a browser with a GPU: the tests draw WebGL with SwiftShader.
