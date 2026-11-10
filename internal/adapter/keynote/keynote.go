@@ -55,8 +55,22 @@ type slideJSON struct {
 		Effects []struct {
 			Type string `json:"type"`
 		} `json:"effects"`
-		Automatic bool `json:"automatic"`
+		Automatic  bool        `json:"automatic"`
+		Hyperlinks []hyperlink `json:"hyperlinks"`
 	} `json:"events"`
+}
+
+// Link is a link to another slide for the runtime (deck.extra.links, one list per slide): its
+// rectangle in slide units, the step in which it can be clicked and its target. The Keynote
+// player draws the slides on a canvas, so the runtime finds the link under a click by its
+// rectangle.
+type Link struct {
+	Step int     `json:"step"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+	W    float64 `json:"w"`
+	H    float64 `json:"h"`
+	To   string  `json:"to"`
 }
 
 // readJSONOrP reads .json or, if only that exists, .jsonp (stripping the fn( ... ) wrapper).
@@ -143,6 +157,8 @@ func (a Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 	m := adapter.Meta{Format: "keynote", Title: h.Title, Width: int(h.SlideWidth), Height: int(h.SlideHeight), Version: ver,
 		Extra: map[string]any{"showMode": h.ShowMode, "autoplayTransitionDelay": h.AutoplayTransitionDelay,
 			"autoplayBuildDelay": h.AutoplayBuildDelay, "loop": h.LoopSlideshow != 0, "creator": h.Creator}}
+	var links [][]Link
+	anyLink, lost := false, 0
 	for _, id := range h.SlideList {
 		b, err := readJSONOrP(filepath.Join(in.HTMLDir, "assets", id, id+".json"))
 		if err != nil {
@@ -171,11 +187,37 @@ func (a Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 			}
 		}
 		sl := adapter.Slide{Steps: builds + 1}
+		// links to other slides: an event is one step; the event of the transition is the last
+		var ls []Link
+		for n, e := range sj.Events {
+			step := n
+			if step > builds {
+				step = builds
+			}
+			for _, l := range e.Hyperlinks {
+				to, ok := linkTarget(l.URL, h.SlideList)
+				if !ok {
+					if strings.HasPrefix(l.URL, "?slideid=") {
+						lost++
+					}
+					continue
+				}
+				ls = append(ls, Link{Step: step, X: l.Rect.X, Y: l.Rect.Y, W: l.Rect.Width, H: l.Rect.Height, To: to})
+			}
+		}
+		links = append(links, ls)
+		anyLink = anyLink || len(ls) > 0
 		if h.ShowMode == 1 { // 1 = self-playing (2 = links only)
 			// self-playing: time until the next build or the next slide
 			sl.Delay = append(delays, h.AutoplayTransitionDelay)
 		}
 		m.Slides = append(m.Slides, sl)
+	}
+	if anyLink {
+		m.Extra["links"] = links
+	}
+	if lost > 0 {
+		warns = append(warns, fmt.Sprintf("%d link(s) lead to a slide that is not in the export (skipped in Keynote); a click on them moves on like any click", lost))
 	}
 	if len(m.Slides) != h.SlideCount {
 		warns = append(warns, fmt.Sprintf("Keynote export: slideCount is %d but slideList has %d slides", h.SlideCount, len(m.Slides)))

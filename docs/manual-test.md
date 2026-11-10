@@ -32,7 +32,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | "Search" on the start screen, or `/`; type a word from a slide; Enter | The outline lists every slide; typing leaves the slides with the word; Enter chooses the slide as the start slide. A word that is only in the notes finds nothing here | |
 | During the show: "Search" in the presenter view, type a word from the notes, Enter | The slide is found with "Notes" next to the place; Enter shows the slide to the audience at its first step; the presentation window never shows the search | |
 | During the show: open the search in the presenter view, press the arrow keys and Escape | The arrows move in the list and the audience stays on its slide; Escape closes the search and the presentation goes on | |
-| PowerPoint deck with a link to another slide: click the link in the presentation | Both windows show the linked slide | |
+| PowerPoint deck, and Keynote export, with a link to another slide: click the link in the presentation, in a window and in full screen | Both windows show the linked slide | |
 
 ## Clicker and keys
 

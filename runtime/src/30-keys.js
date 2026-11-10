@@ -51,9 +51,9 @@ var pointerRouter = null;
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
-// itself; guardClicks keeps such clicks away from the player's document listener; link(target)
-// returns the target of a link to another slide under the click, which follow(target) then goes
-// to (through deckfold's state, like every other move).
+// itself; guardClicks keeps such clicks away from the player's document listener; link(target,
+// event) returns the target of a link to another slide under the click, which follow(target)
+// then goes to (through deckfold's state, like every other move).
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -70,7 +70,7 @@ DF.installPointer = function (opts) {
       if (e.button !== 0) return;
       if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
       e.preventDefault(); e.stopImmediatePropagation();
-      var to = opts.link ? opts.link(e.target) : null;
+      var to = opts.link ? opts.link(e.target, e) : null;
       if (to != null && opts.follow) opts.follow(to);
       else opts.next();
       return;

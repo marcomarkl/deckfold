@@ -70,6 +70,39 @@ are in the header. That gives decision E7 a source for Keynote timings.
 
 **Version:** `header.creator` ("Apple Keynote 15.4") and `majorVersion`/`minorVersion` (1.2) are used for version detection.
 
+## Links, builds and the text for screen readers (2026-11-10)
+
+Measured on an export of the content deck (`fixtures/pptx/src/content.pptx`, opened in Keynote 15.4 and exported as HTML): 5 slides, because the slide hidden in PowerPoint is not exported.
+
+**What Keynote takes over from the PowerPoint file:** links to other slides on text and on a shape, builds by paragraph and by object. A shape that only a trigger shows becomes an ordinary build (Keynote has no triggers).
+
+**Links** are in `events[].hyperlinks` of the slide JSON. Each has a `url`, a `targetRectangle` (x, y, width, height in slide units; the stage of this export is 960 x 540) and, for most targets, `events` with the drawn transition to the target.
+
+| Link in PowerPoint | `url` |
+|---|---|
+| next, previous, first, last slide | `?slide=next`, `?slide=previous`, `?slide=first`, `?slide=last` |
+| last slide viewed | `?action=retreat` |
+| end show | `?action=exitpresentation` |
+| a slide | `?slideid=<id of the slide in slideList>` |
+
+The link to the hidden slide has a `?slideid=` that is not in `slideList`. A link on text has exactly the rectangle of its entry in `accessibility` (8 of 8); the link on the shape has the rectangle of the shape, and no entry has that rectangle.
+
+**Where the slide is in the window:** the elements `#stageArea`, `#stage` and `#hyperlinkPlane` have the bounding box of the slide. In a window of 1400 x 820 the slide is 960 x 540 at (220, 140), unscaled; in a window of 900 x 700 it is 900 x 506 with `matrix(0.9375, ...)` on `#stage`. A click is mapped to slide units with the bounding box of `#stage`.
+
+**Builds:** a slide with three paragraph builds has four events (`buildIn` three times, then `transition`), a slide with two object builds has three. An event is one click, and the event of the transition is the last step.
+
+**The text for screen readers is not the visible state.** `events[].accessibility` lists texts with a rectangle each:
+
+- On the slide with object builds, all six texts are in every event, also the two objects that appear on the first and second click.
+- On the slide with paragraph builds, the paragraphs are added event by event, but the third event lists none of the list's paragraphs, although three are visible then.
+- The last event lists everything on both slides.
+
+What is visible is in the layer tree of each event: every texture has `initialState.hidden`, and there the built objects and paragraphs change from hidden to shown in the right event. deckfold does not read steps from it: assigning a text to a layer would go through rectangles and would be ambiguous where objects overlap. The blocks of a Keynote deck have no step.
+
+**What the list holds:** the name of a picture ("Gradient"), not its description; the footer text; for the slide number field one entry with the object replacement character (U+FFFC) as its text; no text of the table.
+
+**Opening the file from a script:** three attempts opened two documents. The first `open` through AppleScript did not return within two minutes. Keynote showed a dialog that the file could not be imported, and while it was open the next `open` did not return either. After the dialog was closed, two documents named "content" appeared (from the waiting requests). The file was in a git-ignored folder of the project. Why one attempt failed is not known. A dialog in Keynote blocks Apple events to it, as in PowerPoint.
+
 ## Consequences for the implementation
 
 - Keynote detection: `index.html` + `assets/header.json(p)` + `assets/player/main.js` (not `kpf.json`).

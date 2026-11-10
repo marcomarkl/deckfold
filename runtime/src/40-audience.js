@@ -247,7 +247,7 @@ DF.startAudience = function (opts) {
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
   if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
-    link: adapter.link, follow: function (to) { take("follow", to); } });
+    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null, follow: function (to) { take("follow", to); } });
 
   DF.audience = {
     act: take,

@@ -35,9 +35,9 @@ The model is a JSON block in the output file, next to the deck metadata:
 | `blocks` | The text on the slide in the order of the source. A slide without text has an empty list. |
 | `role` | `title`, `subtitle`, `text`, `item` (a list entry) or `alt` (the description of a picture). |
 | `text` | The text with white space collapsed. A line break inside a block is a space. |
-| `step` | The first step of the slide in which the block shows; 0 means from the start. When a block sits inside something that appears later, the later step counts. `-1` means the block shows in no step of the click order: a PowerPoint shape that only a trigger shows, or one that stays hidden. |
+| `step` | The first step of the slide in which the block shows; 0 means from the start. When a block sits inside something that appears later, the later step counts. `-1` means the block shows in no step of the click order: a PowerPoint shape that only a trigger shows, or one that stays hidden. The field is missing when the source does not tell the step, which is the case for every block of a Keynote export. |
 | `level` | The list level of an `item`, left out for the first level. |
-| `jump` | A link to another slide: `{"slide": n}` with an index into `slides`, or `{"to": "next"}` with `next` and `prev` (the next and the previous slide, not step), `first`, `last`, `back` (the slide shown before) or `end` (end the presentation). So far only PowerPoint decks have them. A link to a hidden slide is not a link here, because hidden slides are not in the deck. |
+| `jump` | A link to another slide: `{"slide": n}` with an index into `slides`, or `{"to": "next"}` with `next` and `prev` (the next and the previous slide, not step), `first`, `last`, `back` (the slide shown before) or `end` (end the presentation). PowerPoint decks and Keynote exports have them. A link to a hidden or skipped slide is not a link here, because such slides are not in the deck. |
 
 There are no positions in the model, and no links to the web.
 
@@ -53,7 +53,7 @@ A role comes from the structure of the source. deckfold does not guess one from 
 
 - **PowerPoint:** the placeholder type gives `title` (title and centered title) and `subtitle`; a paragraph with a bullet or a number is an `item` with its `level`; every other paragraph is `text`. The description of a picture (its alt text) is `alt`. Blocks are the paragraphs of the shapes on the slide itself, shapes in groups and table cells included. Text from the layout and the master, the placeholders for date, footer and slide number, and the labels of charts are not in the model.
 - **claude.ai:** a list entry (`li`) is an `item`, every other text is `text`, the alt text of a picture is `alt`. A block is the text of the innermost block element; bold or colored parts of a sentence belong to the block around them. The slide title is only in `title`, because the export does not mark the element that shows it.
-- **Keynote:** every text is `text`, in the order of the export. The export lists the text of a slide for screen readers and marks neither titles nor lists.
+- **Keynote:** every text is `text`. The export draws the slides as pictures; the only text in it is what it lists for screen readers, and that marks neither titles nor lists. The order is the one of that list, which is not always top to bottom. The list has what Keynote puts into it: the name of a picture instead of its description, no text of tables, and the footer. It does not say in which step a text shows: an object that a build shows later is listed from the start, and a step in between can leave out paragraphs that are visible. So Keynote blocks have no `step`. A link is on the block that has exactly the rectangle of the link; a link on a shape has no such block and is followed in the presentation only.
 
 ## Versions
 

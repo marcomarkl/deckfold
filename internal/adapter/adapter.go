@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -97,15 +98,53 @@ type SlideContent struct {
 	Blocks []Block `json:"blocks"`
 }
 
+// StepUnknown is the Step of a block whose source does not tell in which step it shows. The
+// Keynote export is such a source: what it lists for screen readers is not what is visible in a
+// step. In the JSON the field is left out then.
+const StepUnknown = -2
+
 // Block is one piece of text on a slide.
 type Block struct {
-	Role string `json:"role"`
-	Text string `json:"text"`
+	Role string
+	Text string
 	// Step is the first step of the slide in which the block shows (0: from the start); -1 when
-	// it shows in no step of the click order (only on a trigger, or never).
-	Step  int   `json:"step"`
-	Level int   `json:"level,omitempty"` // list level of an item, 0 for the first
-	Jump  *Jump `json:"jump,omitempty"`
+	// it shows in no step of the click order (only on a trigger, or never); StepUnknown when
+	// the source does not tell.
+	Step  int
+	Level int // list level of an item, 0 for the first
+	Jump  *Jump
+}
+
+// blockJSON is the form of a Block in the content model.
+type blockJSON struct {
+	Role  string `json:"role"`
+	Text  string `json:"text"`
+	Step  *int   `json:"step,omitempty"`
+	Level int    `json:"level,omitempty"`
+	Jump  *Jump  `json:"jump,omitempty"`
+}
+
+// MarshalJSON leaves "step" out when the step is unknown.
+func (b Block) MarshalJSON() ([]byte, error) {
+	j := blockJSON{Role: b.Role, Text: b.Text, Level: b.Level, Jump: b.Jump}
+	if b.Step != StepUnknown {
+		st := b.Step
+		j.Step = &st
+	}
+	return json.Marshal(j)
+}
+
+// UnmarshalJSON reads a missing "step" as unknown.
+func (b *Block) UnmarshalJSON(data []byte) error {
+	var j blockJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	*b = Block{Role: j.Role, Text: j.Text, Step: StepUnknown, Level: j.Level, Jump: j.Jump}
+	if j.Step != nil {
+		b.Step = *j.Step
+	}
+	return nil
 }
 
 // Jump is a link to another slide: either Slide (index into Content.Slides) or To ("next",
@@ -135,8 +174,12 @@ func SourceOf(in *Input) ContentSource {
 	}}
 }
 
-// CleanText collapses white space (line breaks included) and trims the ends.
-func CleanText(s string) string { return strings.Join(strings.Fields(s), " ") }
+// CleanText collapses white space (line breaks included) and trims the ends. The object
+// replacement character (U+FFFC), which stands for an embedded object such as a slide number
+// field in a Keynote export, is not text and goes.
+func CleanText(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\uFFFC", " ")), " ")
+}
 
 // Finish brings the content an adapter returned into its final form: one entry per slide of
 // meta, titles from the slide labels (the same source as the labels of the slide tiles), cleaned

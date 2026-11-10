@@ -187,6 +187,23 @@ DF.adapters = {
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; },
+    // link: the target of a link to another slide under a click. The player draws the slide on a
+    // canvas, so the link is found by its rectangle: deck.extra.links has, per slide, the links
+    // of the export in slide units with the step in which each can be clicked, and the player's
+    // stage element says where the slide is in the window and how large (it is scaled to fit).
+    link: function (t, e, st) {
+      var deck = DF.meta.deck || {}, links = ((deck.extra || {}).links || [])[st.slide];
+      var stage = document.getElementById("stage");
+      if (!links || !links.length || !stage || !e || !deck.width) return null;
+      var r = stage.getBoundingClientRect();
+      if (!r.width) return null;
+      var k = deck.width / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+      for (var i = 0; i < links.length; i++) {
+        var l = links[i];
+        if (l.step === st.step && x >= l.x && x <= l.x + l.w && y >= l.y && y <= l.y + l.h) return l.to;
+      }
+      return null;
+    },
     // shown: the slide index of the player's last slide change event. A self-playing export (its
     // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
     // is not compared there.

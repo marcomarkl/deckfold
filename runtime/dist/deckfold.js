@@ -693,6 +693,23 @@ DF.adapters = {
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; },
+    // link: the target of a link to another slide under a click. The player draws the slide on a
+    // canvas, so the link is found by its rectangle: deck.extra.links has, per slide, the links
+    // of the export in slide units with the step in which each can be clicked, and the player's
+    // stage element says where the slide is in the window and how large (it is scaled to fit).
+    link: function (t, e, st) {
+      var deck = DF.meta.deck || {}, links = ((deck.extra || {}).links || [])[st.slide];
+      var stage = document.getElementById("stage");
+      if (!links || !links.length || !stage || !e || !deck.width) return null;
+      var r = stage.getBoundingClientRect();
+      if (!r.width) return null;
+      var k = deck.width / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
+      for (var i = 0; i < links.length; i++) {
+        var l = links[i];
+        if (l.step === st.step && x >= l.x && x <= l.x + l.w && y >= l.y && y <= l.y + l.h) return l.to;
+      }
+      return null;
+    },
     // shown: the slide index of the player's last slide change event. A self-playing export (its
     // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
     // is not compared there.
@@ -805,9 +822,9 @@ var pointerRouter = null;
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
-// itself; guardClicks keeps such clicks away from the player's document listener; link(target)
-// returns the target of a link to another slide under the click, which follow(target) then goes
-// to (through deckfold's state, like every other move).
+// itself; guardClicks keeps such clicks away from the player's document listener; link(target,
+// event) returns the target of a link to another slide under the click, which follow(target)
+// then goes to (through deckfold's state, like every other move).
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -824,7 +841,7 @@ DF.installPointer = function (opts) {
       if (e.button !== 0) return;
       if (own(e.target)) { if (opts.guardClicks) e.__dfOwn = true; return; }
       e.preventDefault(); e.stopImmediatePropagation();
-      var to = opts.link ? opts.link(e.target) : null;
+      var to = opts.link ? opts.link(e.target, e) : null;
       if (to != null && opts.follow) opts.follow(to);
       else opts.next();
       return;
@@ -1737,7 +1754,7 @@ DF.startAudience = function (opts) {
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
   if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
-    link: adapter.link, follow: function (to) { take("follow", to); } });
+    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null, follow: function (to) { take("follow", to); } });
 
   DF.audience = {
     act: take,

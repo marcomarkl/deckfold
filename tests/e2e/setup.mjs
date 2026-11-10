@@ -51,11 +51,22 @@ function findCorpus() {
   // scripts/keynoteref/keynoteref.sh
   const exportIn = (d) => list(d).map((e) => path.join(d, e)).find((e) => fs.existsSync(path.join(ROOT, e, 'assets', 'player', 'main.js')));
   const keynote = pick('keynote', exportIn) || exportIn('tests/.out/keynote') || null;
+  // A Keynote export with links to other slides: the content deck of fixtures/pptx, exported by
+  // Keynote into tests/.out/keynote/content
+  const hasLinks = (e) => {
+    try {
+      const assets = path.join(ROOT, e, 'assets');
+      return JSON.parse(fs.readFileSync(path.join(assets, 'header.json'), 'utf8')).slideList.some((id) =>
+        JSON.parse(fs.readFileSync(path.join(assets, id, id + '.json'), 'utf8')).events.some((ev) => (ev.hyperlinks || []).length > 0));
+    } catch { return false; }
+  };
+  const exportsIn = (d) => list(d).map((e) => path.join(d, e)).filter((e) => fs.existsSync(path.join(ROOT, e, 'assets', 'player', 'main.js')));
+  const keynoteLinks = ['fixtures/keynote', 'testdata/keynote', 'tests/.out/keynote'].flatMap(exportsIn).find(hasLinks) || null;
   // A claude.ai deck with builds (a slide with more than one step) for the preview tests; a copy
   // placed in tests/.out/claude-src counts too
   const withBuilds = (d) => list(d).filter((f) => f.endsWith('.html')).map((f) => path.join(d, f)).find(hasBuilds);
   const claudeSteps = pick('claude', withBuilds) || withBuilds('tests/.out/claude-src') || null;
-  return { claude, keynote, claudeSteps };
+  return { claude, keynote, claudeSteps, keynoteLinks };
 }
 
 // Inserts html after the n-th slide canvas wrapper of a claude.ai deck.
@@ -112,6 +123,7 @@ export default async function setup() {
   deckfold([path.join(pgen, 'big.pptx'), '-o', path.join(OUT, 'pptx-big.html'), '--force'], BUNDLED);
   fs.writeFileSync(path.join(OUT, 'pptx-big.json'), JSON.stringify({ convertMs: Date.now() - t0 }));
 
+  if (corpus.keynoteLinks) deckfold([path.join(ROOT, corpus.keynoteLinks), '-o', path.join(OUT, 'keynote-links.html'), '--force']);
   if (corpus.keynote) {
     deckfold([path.join(ROOT, corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);
   }

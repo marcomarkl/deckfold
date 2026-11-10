@@ -1,6 +1,10 @@
 package adapter
 
-import "testing"
+import (
+	"encoding/json"
+	"reflect"
+	"testing"
+)
 
 // Finish gives every slide of the metadata an entry, takes the title from the slide label, cleans
 // the text and drops empty blocks.
@@ -28,5 +32,30 @@ func TestFinish(t *testing.T) {
 	}
 	if Finish(nil, meta) != nil {
 		t.Error("no content must stay no content")
+	}
+}
+
+// A block whose step is unknown has no "step" in the JSON, and reads back as unknown; every
+// other step, 0 and -1 included, is written.
+func TestBlockStepJSON(t *testing.T) {
+	in := []Block{{Role: RoleText, Text: "a"}, {Role: RoleText, Text: "b", Step: -1}, {Role: RoleText, Text: "c", Step: StepUnknown}, {Role: RoleItem, Text: "d", Step: 2, Level: 1}}
+	js, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"role":"text","text":"a","step":0},{"role":"text","text":"b","step":-1},{"role":"text","text":"c"},{"role":"item","text":"d","step":2,"level":1}]`
+	if string(js) != want {
+		t.Errorf("got  %s\nwant %s", js, want)
+	}
+	var out []Block
+	if err := json.Unmarshal(js, &out); err != nil || !reflect.DeepEqual(out, in) {
+		t.Errorf("read back %+v, %v", out, err)
+	}
+	// the object replacement character is not text
+	if got := CleanText("a \uFFFC b"); got != "a b" {
+		t.Errorf("CleanText: %q", got)
+	}
+	if c := Finish(&Content{Slides: []SlideContent{{Blocks: []Block{{Role: RoleText, Text: "\uFFFC"}}}}}, Meta{Slides: []Slide{{}}}); len(c.Slides[0].Blocks) != 0 {
+		t.Errorf("a block of an object placeholder only: %+v", c.Slides[0].Blocks)
 	}
 }

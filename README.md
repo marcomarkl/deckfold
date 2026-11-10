@@ -73,7 +73,7 @@ Exit codes: 0 success, 1 conversion failed (for example unresolved assets), 2 fo
 
 ### The slide text
 
-deckfold reads what is written on the slides and stores it in the file: the text of every slide in the order of the source, the title where the source marks one, list entries with their level, the description of pictures, and the step in which each text shows. The search and the outline of the presentation use it. For other programs, `deckfold deck.html --content deck.json` writes it with the titles and notes of the slides, and `--content deck.md` writes Markdown. `docs/content-model.md` describes the fields.
+deckfold reads what is written on the slides and stores it in the file: the text of every slide in the order of the source, the title where the source marks one, list entries with their level, the description of pictures, and the step in which each text shows (not for Keynote exports, which do not say). The search and the outline of the presentation use it. For other programs, `deckfold deck.html --content deck.json` writes it with the titles and notes of the slides, and `--content deck.md` writes Markdown. `docs/content-model.md` describes the fields.
 
 A file from before can get the slide text with `--refresh` when the deck came from claude.ai or Keynote. A PowerPoint presentation has to be converted again.
 
@@ -99,7 +99,7 @@ Open the file in a browser. The window it opens in is the presentation. It shows
 
 "Start" or Enter begins the presentation in this window; it starts only there, because full screen needs a click in the window that goes full screen. The arrow keys choose the start slide, also from the presenter view, so a clicker works before the start. Below the settings, the start screen lists every key as it is set.
 
-In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. A link to another slide in a PowerPoint deck goes there in both windows. The mouse wheel and swipes on a trackpad or touch screen do nothing, so that a gesture cannot move the slides by accident. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
+In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. A link to another slide in a PowerPoint deck or a Keynote export goes there in both windows. The mouse wheel and swipes on a trackpad or touch screen do nothing, so that a gesture cannot move the slides by accident. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
 
 deckfold does not place windows itself and does not check where they are. Put each window where it belongs, for example the presentation on the projector and the presenter view on the laptop; full screen can always be chosen. The presenter view goes into full screen with F or its "Full screen" button, which then reads "Window" and takes it back.
 
