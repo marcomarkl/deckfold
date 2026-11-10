@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // Builds deckfold and writes the test outputs to tests/.out/.
 //
 // Public decks in fixtures/claude/*.html and fixtures/keynote/<export>/index.html are used
@@ -38,6 +39,10 @@ function wav(file, seconds) {
 
 // The decks for the claude.ai and Keynote tests, as paths relative to the repository: public
 // decks in fixtures/ come first, the private corpus in testdata/ otherwise.
+function hasBuilds(rel) {
+  const m = fs.readFileSync(path.join(ROOT, rel), 'utf8').match(/<script[^>]*id="deck-motion"[^>]*>([\s\S]*?)<\/script>/);
+  try { return !!m && JSON.parse(m[1]).slides.some((s) => (s.steps || []).length > 1); } catch { return false; }
+}
 function findCorpus() {
   const list = (d) => (fs.existsSync(path.join(ROOT, d)) ? fs.readdirSync(path.join(ROOT, d)).sort() : []);
   const pick = (kind, find) => find('fixtures/' + kind) || find('testdata/' + kind) || null;
@@ -46,7 +51,11 @@ function findCorpus() {
   // scripts/keynoteref/keynoteref.sh
   const exportIn = (d) => list(d).map((e) => path.join(d, e)).find((e) => fs.existsSync(path.join(ROOT, e, 'assets', 'player', 'main.js')));
   const keynote = pick('keynote', exportIn) || exportIn('tests/.out/keynote') || null;
-  return { claude, keynote };
+  // A claude.ai deck with builds (a slide with more than one step) for the preview tests; a copy
+  // placed in tests/.out/claude-src counts too
+  const withBuilds = (d) => list(d).filter((f) => f.endsWith('.html')).map((f) => path.join(d, f)).find(hasBuilds);
+  const claudeSteps = pick('claude', withBuilds) || withBuilds('tests/.out/claude-src') || null;
+  return { claude, keynote, claudeSteps };
 }
 
 // Inserts html after the n-th slide canvas wrapper of a claude.ai deck.
@@ -102,6 +111,7 @@ export default async function setup() {
   if (corpus.keynote) {
     deckfold([path.join(ROOT, corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);
   }
+  if (corpus.claudeSteps) deckfold([path.join(ROOT, corpus.claudeSteps), '-o', path.join(OUT, 'claude-steps.html'), '--force']);
   if (!corpus.claude) return;
   const claudeSrc = path.join(ROOT, corpus.claude);
   deckfold([claudeSrc, '-o', path.join(OUT, 'claude.html'), '--force']);
@@ -128,5 +138,13 @@ export default async function setup() {
     const h = injectIntoSlide(fs.readFileSync(claudeSrc, 'utf8'), 3, '<video src="film.mp4" preload="none"></video>');
     fs.writeFileSync(path.join(big, 'deck.html'), h);
     deckfold([path.join(big, 'deck.html'), '-o', bigOut, '--force']);
+  }
+  // made in an earlier run: bring the runtime block up to date, but only when the runtime changed,
+  // because rewriting 300 MB right before the performance test slows down its first load
+  const runtimeHash = crypto.createHash('sha256').update(fs.readFileSync(BIN)).digest('hex');
+  const stamp = path.join(OUT, 'big.runtime');
+  if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== runtimeHash) {
+    deckfold(['--refresh', bigOut]);
+    fs.writeFileSync(stamp, runtimeHash);
   }
 }

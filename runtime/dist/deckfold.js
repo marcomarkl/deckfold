@@ -13,67 +13,69 @@ function readJSON(id) {
 DF.cfg = readJSON("df-config") || { defaults: {} };
 DF.version = DF.cfg.version;
 
-// Role: "preview" (srcdoc iframe of the presenter view), "audience" (audience window),
-// "start" (the window the file was opened in; it becomes the presenter view, or the solo
-// audience view after a reload). The solo role is also kept in sessionStorage because WebKit
-// drops window.name when a file:// page reloads.
-function soloFlag() { try { return sessionStorage.getItem("df-solo"); } catch (e) { return null; } }
+// Roles:
+// "show": the window the file was opened in. It shows the start screen first and runs the source
+//   player only after "Start"; it owns the state.
+// "presenter": the presenter view, a popup the show window opens (window.name "df-presenter:<token>",
+//   kept in sessionStorage too, because WebKit drops window.name when a file:// page reloads).
+// "preview": srcdoc iframes in the start screen and the presenter view.
 DF.role = (function () {
   try {
     if (window.frameElement && window.frameElement.hasAttribute("data-df-preview")) return "preview";
   } catch (e) { /* cross-origin */ }
-  var n = window.name || "";
-  if (n.indexOf("df-audience:") === 0 || n.indexOf("df-solo:") === 0 || soloFlag()) return "audience";
-  return "start";
+  var n = window.name || "", saved = null;
+  try { saved = sessionStorage.getItem("df-presenter"); } catch (e) { }
+  if (n.indexOf("df-presenter:") === 0 || saved) return "presenter";
+  return "show";
 })();
-DF.solo = DF.role === "audience" && ((window.name || "").indexOf("df-solo:") === 0 || (!!soloFlag() && (window.name || "").indexOf("df-audience:") !== 0));
-DF.token = DF.role === "audience" ? ((window.name || "").split(":")[1] || soloFlag() || "") : "";
-DF.setSolo = function (token) {
-  try { if (token) sessionStorage.setItem("df-solo", token); else sessionStorage.removeItem("df-solo"); } catch (e) { }
-  window.name = token ? "df-solo:" + token : "";
-};
+// Token of the session; both windows use the same one. The show window keeps it across reloads.
+DF.token = (function () {
+  if (DF.role === "preview") return "";
+  try {
+    if (DF.role === "presenter") {
+      var t = (window.name || "").indexOf("df-presenter:") === 0 ? window.name.split(":")[1] : sessionStorage.getItem("df-presenter");
+      sessionStorage.setItem("df-presenter", t);
+      return t;
+    }
+    var have = sessionStorage.getItem("df-token");
+    if (have) return have;
+  } catch (e) { }
+  return null; // set by the show window once randomToken exists
+})();
 
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    present: "Pr\u00e4sentieren", audienceOnly: "Nur Publikumsansicht", settings: "Einstellungen",
     slides: "Folien", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
-    screens: "Bildschirme", audienceScreen: "Publikum", presenterScreen: "Referent", presenterFs: "Referentenansicht im Vollbild",
-    remember: "Auswahl merken", start: "Start", cancel: "Abbrechen", close: "Schlie\u00dfen", save: "Speichern",
-    reset: "Zur\u00fccksetzen", screensHint: "Dieser Browser kann Fenster nicht selbst auf einen Bildschirm legen. Zieh das Publikumsfenster auf den Beamer und klick dort auf \u201eVollbild\u201c.",
-    screensDenied: "Kein Zugriff auf die Bildschirme. Das Publikumsfenster \u00f6ffnet sich am Standardplatz; zieh es auf den Beamer.",
-    presenterStays: "Die Referentenansicht bleibt, wo dieses Fenster liegt.",
-    clickFs: "Klicken f\u00fcr Vollbild", fullscreen: "Vollbild", popupBlocked: "Das Publikumsfenster wurde blockiert.",
-    openAudience: "Publikumsfenster \u00f6ffnen", audienceLost: "Publikumsfenster nicht erreichbar.", reopen: "Neu \u00f6ffnen",
-    searching: "Suche Publikumsfenster \u2026", screensChanged: "Die Bildschirme haben sich ge\u00e4ndert.", chooseAgain: "Neu w\u00e4hlen",
+    start: "Start", presenterView: "Referentenansicht",
+    fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
+    slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
+    popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups f\u00fcr diese Datei und schalte die Referentenansicht noch einmal ein.",
+    startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.",
+    loading: "Wird geladen \u2026",
+    clickFs: "Klicken f\u00fcr Vollbild",
     current: "Aktuell", next: "Als N\u00e4chstes", notes: "Notizen", time: "Zeit", overview: "\u00dcbersicht",
     end: "Ende", endShow: "Beenden", noNotes: "Keine Notizen", elapsed: "Verstrichen", remaining: "Rest",
-    clock: "Uhr", pause: "Pause", resume: "Weiter", auto: "Auto", autoOn: "Auto an", autoOff: "Auto aus",
-    elements: "Elemente der Referentenansicht", notesSize: "Schriftgr\u00f6\u00dfe Notizen (px)", target: "Zieldauer (Minuten, 0 = keine)",
-    autoInterval: "Auto-Intervall (Sekunden)", autoLoop: "Auto-Modus in Schleife", autoStart: "Im Auto-Modus starten",
-    endOfShow: "Ende der Pr\u00e4sentation", step: "Schritt", noPresenter: "F\u00fcr dieses Format gibt es keine Referentenansicht. Tasten werden an das Publikumsfenster weitergegeben.",
+    clock: "Uhr", pause: "Pause", resume: "Weiter", autoOn: "Auto an", autoOff: "Auto aus", reset: "Zur\u00fccksetzen",
+    target: "Ziel", smaller: "Notizen kleiner", larger: "Notizen gr\u00f6\u00dfer",
+    endOfShow: "Ende der Pr\u00e4sentation", step: "Schritt",
     offline: "Live-Inhalt \u2013 ohne Netz nicht verf\u00fcgbar", media: "Medien laufen",
-    keysHelp: "Weiter: \u2192 \u2193 Bild\u2193 Leertaste \u00b7 Zur\u00fcck: \u2190 \u2191 Bild\u2191 \u00b7 Folie: Ziffern + Enter \u00b7 B schwarz \u00b7 W wei\u00df \u00b7 A Auto \u00b7 F Vollbild"
   },
   en: {
-    present: "Present", audienceOnly: "Audience view only", settings: "Settings",
     slides: "slides", generic: "Unknown format: no presenter view, overview or auto mode.",
-    screens: "Screens", audienceScreen: "Audience", presenterScreen: "Presenter", presenterFs: "Presenter view in full screen",
-    remember: "Remember choice", start: "Start", cancel: "Cancel", close: "Close", save: "Save",
-    reset: "Reset", screensHint: "This browser cannot place windows on a screen. Drag the audience window to the projector and click \u201cFull screen\u201d there.",
-    screensDenied: "No access to the screens. The audience window opens at the default position; drag it to the projector.",
-    presenterStays: "The presenter view stays where this window is.",
-    clickFs: "Click for full screen", fullscreen: "Full screen", popupBlocked: "The audience window was blocked.",
-    openAudience: "Open audience window", audienceLost: "Audience window not reachable.", reopen: "Reopen",
-    searching: "Looking for the audience window \u2026", screensChanged: "The screen setup changed.", chooseAgain: "Choose again",
+    start: "Start", presenterView: "Presenter view",
+    fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
+    slide: "Slide", previous: "Back", following: "Forward",
+    popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
+    startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.",
+    loading: "Loading \u2026",
+    clickFs: "Click for full screen",
     current: "Current", next: "Next", notes: "Notes", time: "Time", overview: "Overview",
     end: "End", endShow: "End show", noNotes: "No notes", elapsed: "Elapsed", remaining: "Left",
-    clock: "Clock", pause: "Pause", resume: "Resume", auto: "Auto", autoOn: "Auto on", autoOff: "Auto off",
-    elements: "Presenter view elements", notesSize: "Notes font size (px)", target: "Target duration (minutes, 0 = none)",
-    autoInterval: "Auto interval (seconds)", autoLoop: "Loop auto mode", autoStart: "Start in auto mode",
-    endOfShow: "End of presentation", step: "Step", noPresenter: "This format has no presenter view. Keys are passed to the audience window.",
+    clock: "Clock", pause: "Pause", resume: "Resume", autoOn: "Auto on", autoOff: "Auto off", reset: "Reset",
+    target: "Target", smaller: "Smaller notes", larger: "Larger notes",
+    endOfShow: "End of presentation", step: "Step",
     offline: "Live content \u2013 not available offline", media: "media playing",
-    keysHelp: "Next: \u2192 \u2193 PgDn Space \u00b7 Back: \u2190 \u2191 PgUp \u00b7 Slide: digits + Enter \u00b7 B black \u00b7 W white \u00b7 A auto \u00b7 F full screen"
   }
 };
 function t(k) { return (TEXT[LANG] && TEXT[LANG][k]) || TEXT.en[k] || k; }
@@ -140,6 +142,22 @@ function fmtTime(ms) {
 }
 DF.fmtTime = fmtTime;
 
+// Target duration typed as minutes:seconds. parseMinSec returns seconds (0 = no target), or null
+// for input it cannot read: "20" is 20:00, "5:3" is 05:03, "1:75" is 02:15, ":30" is 00:30;
+// at most 600:00.
+DF.parseMinSec = function (v) {
+  v = String(v == null ? "" : v).trim();
+  if (v === "") return 0;
+  var m = /^(\d*)(?::(\d*))?$/.exec(v);
+  if (!m || (m[1] === "" && !m[2])) return null;
+  return Math.min(parseInt(m[1] || "0", 10) * 60 + parseInt(m[2] || "0", 10), 36000);
+};
+DF.fmtMinSec = function (t) {
+  var m = Math.floor(t / 60), s = t % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+};
+
+
 // --- 10-loader.js ---
 // Loader: decode asset blocks, activate styles and attributes, shim runtime loads,
 // start the deferred source scripts in their original order.
@@ -199,10 +217,16 @@ function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { re
 DF.fill = fillPlaceholders;
 
 // Snapshot for the srcdoc previews: the document before activation, without asset blocks.
+// The asset blocks are taken out of the document while it is cloned and put back right away, so
+// that a large file is not copied in memory once more.
 function snapshot() {
-  var root = document.documentElement.cloneNode(true);
-  var drop = root.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]');
-  for (var i = 0; i < drop.length; i++) drop[i].parentNode.removeChild(drop[i]);
+  var blocks = [].slice.call(document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-"]'));
+  var spots = blocks.map(function (b) { var at = { parent: b.parentNode, next: b.nextSibling }; b.parentNode.removeChild(b); return at; });
+  var root;
+  try { root = document.documentElement.cloneNode(true); }
+  finally {
+    for (var j = blocks.length - 1; j >= 0; j--) spots[j].parent.insertBefore(blocks[j], spots[j].next);
+  }
   var ui = root.querySelectorAll("[data-df-ui]");
   for (var k = 0; k < ui.length; k++) ui[k].parentNode.removeChild(ui[k]);
   root.classList.remove("df-loading", "df-presenter-mode");
@@ -230,8 +254,9 @@ function activateCSS() {
 }
 
 var ATTRS = ["src", "srcset", "href", "xlink:href", "poster", "data", "style", "background"];
-function restoreAttrs(quiet) {
-  var all = document.querySelectorAll("*");
+function restoreAttrs(quiet, root) {
+  var all = [].slice.call((root || document).querySelectorAll("*"));
+  if (root) all.unshift(root);
   for (var i = 0; i < all.length; i++) {
     var e = all[i];
     if (e.tagName === "SCRIPT" && e.type === "text/df-deferred") continue;
@@ -432,18 +457,34 @@ function runDeferred() {
 }
 
 // activate: styles, attributes, fonts; with runScripts also the shim and the source scripts.
+// With cssOnly only styles and fonts: the show window before "Start", whose document stays inert
+// until DF.activateScripts (so no medium plays and no source script runs on the start screen).
 DF.activate = function (opts) {
   DF.meta = readJSON("df-meta") || { deck: { slides: [] }, shim: {} };
   return activateCSS().then(function () {
+    if (opts.cssOnly) return; // the start screen does not wait for the fonts of the deck
     restoreAttrs(!opts.runScripts);
-    var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
-    return Promise.race([fonts, new Promise(function (r) { setTimeout(r, 3000); })]);
+    return fontsReady();
   }).then(function () {
     if (!opts.runScripts) return;
     installShim();
     return runDeferred();
   });
 };
+function fontsReady() {
+  var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  return Promise.race([fonts, new Promise(function (r) { setTimeout(r, 3000); })]);
+}
+// activateScripts: the rest of a cssOnly activation (attributes, fonts, shim, source scripts).
+DF.activateScripts = function () {
+  restoreAttrs(false);
+  return fontsReady().then(function () {
+    installShim();
+    return runDeferred();
+  });
+};
+// restoreIn: attributes of a copied subtree (slide tiles), with media kept quiet.
+DF.restoreIn = function (node) { restoreAttrs(true, node); };
 DF.snapshot = snapshot;
 DF.quietMedia = quietMedia;
 
@@ -465,10 +506,25 @@ function chain(s) {
   return { slide: s.slide, step: step };
 }
 
+function rawPrev(s) {
+  var sl = slidesOf();
+  if (s.step > 0) {
+    var st = s.step - 1, cur = sl[s.slide];
+    // go back over auto steps to the last manual step
+    while (st > 0 && cur.auto && cur.auto[st]) st--;
+    return { slide: s.slide, step: st };
+  }
+  if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
+  return null;
+}
+function hasAuto(i) { var sl = slidesOf()[i]; return !!(sl && sl.auto && sl.auto.some(Boolean)); }
+
 DF.model = {
   first: function () { return chain({ slide: 0, step: 0 }); },
   last: function () { var n = slidesOf().length; return chain({ slide: Math.max(0, n - 1), step: 0 }); },
   goto: function (slide) { var n = slidesOf().length; return chain({ slide: Math.max(0, Math.min(n - 1, slide)), step: 0 }); },
+  // end: slide i as it looks after all its steps (what the previews show)
+  end: function (i) { var sl = slidesOf()[i] || {}; return { slide: i, step: Math.max(0, (sl.steps || 1) - 1) }; },
   // next returns null at the end of the presentation.
   next: function (s) {
     var sl = slidesOf(), cur = sl[s.slide];
@@ -477,16 +533,13 @@ DF.model = {
     if (s.slide + 1 < sl.length) return chain({ slide: s.slide + 1, step: 0 });
     return null;
   },
+  // prev returns a state the source player rests in, like next: a state followed by an auto step
+  // would not stay (the player runs on by itself), so back skips over whole auto runs. On a slide
+  // whose steps after the first are all auto, back goes to the slide before.
   prev: function (s) {
-    var sl = slidesOf();
-    if (s.step > 0) {
-      var st = s.step - 1, cur = sl[s.slide];
-      // go back over auto steps to the last manual step
-      while (st > 0 && cur.auto && cur.auto[st]) st--;
-      return { slide: s.slide, step: st };
-    }
-    if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
-    return null;
+    var c = rawPrev(s);
+    while (c && DF.model.same(chain(c), s)) c = rawPrev(c);
+    return c ? chain(c) : null;
   },
   same: function (a, b) { return a && b && a.slide === b.slide && a.step === b.step; }
 };
@@ -517,11 +570,17 @@ DF.adapters = {
     ready: function () { return Promise.resolve(); },
     forward: function () { synthKey("ArrowRight", 39); },
     back: function () { synthKey("ArrowLeft", 37); },
-    // jump: slide via hash (the player goes to step 0), then manual steps up to the target.
+    // jump: slide via hash (the player goes to step 0), then single steps up to the target.
+    // The player runs auto steps by itself, each after a timer of at least 140 ms, and a key
+    // press during such a run moves it on by one step only. So when the target is the end of the
+    // auto run that starts the slide, the audience sees the run play; otherwise (and always in a
+    // preview, which shows the end state at once) every step is pressed, 60 ms apart, which is
+    // faster than the player's own timer.
     jump: function (target, current) {
       var self = this;
       var cur = current;
       var p = Promise.resolve();
+      var playRun = DF.role !== "preview" && DF.model.same(chain({ slide: target.slide, step: 0 }), target);
       if (!cur || cur.slide !== target.slide || cur.step > target.step) {
         p = p.then(function () {
           if (location.hash === "#" + (target.slide + 1)) {
@@ -529,14 +588,14 @@ DF.adapters = {
             location.hash = "#" + (target.slide === 0 ? 2 : target.slide);
           }
           location.hash = "#" + (target.slide + 1);
-          cur = chain({ slide: target.slide, step: 0 });
+          cur = playRun ? target : { slide: target.slide, step: 0 };
           return wait(80);
         });
       }
       return p.then(function loop() {
         if (!cur || cur.step >= target.step) return;
         self.forward();
-        cur = chain({ slide: target.slide, step: cur.step + 1 });
+        cur = { slide: target.slide, step: cur.step + 1 };
         return wait(60).then(loop);
       });
     },
@@ -604,9 +663,15 @@ DF.adapters = {
 DF.adapter = function () { return DF.adapters[DF.format()] || DF.adapters.generic; };
 
 // Bring the player to a target state: single steps as a key press (animated), otherwise jump.
+// On a claude.ai slide with auto steps the player may still be in its auto run, where a key
+// press moves it by one step only, so a move away from such a slide is a jump. A preview also
+// jumps onto such a slide, which presses every step instead of waiting for the player's timers.
 DF.drive = function (from, to) {
   var a = DF.adapter();
   if (!to) return Promise.resolve();
+  var claude = DF.format() === "claude";
+  if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
+  if (claude && DF.role === "preview" && hasAuto(to.slide)) return a.jump(to, null);
   if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
   if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
   return a.jump(to, from);
@@ -644,13 +709,32 @@ var keyRouters = { keydown: null, keyup: null, keypress: null };
   window.addEventListener(type, function (e) { if (keyRouters[type]) keyRouters[type](e); }, true);
 });
 
+// Keyboard Lock (Chrome, Edge): in full screen, Escape reaches the key handler above instead of only
+// leaving full screen, so that one Escape ends the presentation; holding Escape still leaves full
+// screen. Browsers without Keyboard Lock leave full screen on the first Escape as before.
+document.addEventListener("fullscreenchange", function () {
+  var kb = navigator.keyboard;
+  if (!kb || !kb.lock) return;
+  try {
+    if (document.fullscreenElement) kb.lock(["Escape"]).catch(function () { });
+    else kb.unlock();
+  } catch (e) { }
+});
+
+// typing: keys go to a text or number field (not to a checkbox, whose focus must not stop the
+// clicker after it was clicked).
+function typing(t) {
+  var tag = t && t.tagName;
+  if (tag === "SELECT" || tag === "TEXTAREA") return true;
+  return tag === "INPUT" && !/^(checkbox|radio|button|submit|range)$/i.test(t.type || "");
+}
+
 DF.installKeys = function (handler, opts) {
   var digits = "", timer = 0;
   keyRouters.keydown = function (e) {
     if (e.__deckfold) return; // eigene synthetische Taste
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var tag = e.target && e.target.tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (typing(e.target)) return;
     if (opts && opts.passthrough) {
       // generic: only intercept deckfold's own keys
       var act0 = actionFor(e);
@@ -687,8 +771,7 @@ DF.installKeys = function (handler, opts) {
   // keep keyup/keypress of bound keys away from the source player as well
   var guard = function (e) {
     if (e.__deckfold || (opts && opts.passthrough)) return;
-    var tag = e.target && e.target.tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (typing(e.target)) return;
     if (opts && opts.swallowAll) { e.stopImmediatePropagation(); return; }
     if (actionFor(e) || /^[0-9]$/.test(e.key) || e.key === "Enter") e.stopImmediatePropagation();
   };
@@ -724,17 +807,349 @@ DF.toggleFs = function () {
   return DF.requestFs();
 };
 
-// --- 40-audience.js ---
-// Audience window: owns the state and drives the source player; auto mode, black/white screen,
-// full-screen fallback, wake lock, mouse cursor and the heartbeat to the presenter view.
+// --- 32-ui.js ---
+// Building blocks shared by the start screen and the presenter view: preview iframes and slide tiles.
 
-DF.startAudience = function () {
-  var opener = null;
-  try { opener = DF.solo ? null : window.opener; } catch (e) { opener = null; }
-  var send = DF.channel(function () { return opener; }, function () { return DF.token; }, onMsg);
+// previewFrame: a muted srcdoc iframe that shows a state of the deck without animating it. The
+// iframe runs the source player in the role "preview" and gets its assets from this window.
+// The iframe always has the aspect ratio of the deck and is scaled into its pane: a player may
+// change its layout with the shape of its viewport (the claude.ai player shows all slides in a
+// scroll view when the viewport is not wider than high). Players scale their slides to the
+// viewport, so a width of 1280 pixels is enough.
+DF.previewFrame = function (host, snapshotHTML) {
+  var meta = DF.meta.deck || {};
+  var W = 1280, H = Math.round(W * (meta.height || 1080) / (meta.width || 1920));
+  var f = DF.el("iframe", { "data-df-preview": "", tabindex: "-1", inert: true, title: "preview", "aria-hidden": "true" });
+  f.style.width = W + "px"; f.style.height = H + "px";
+  f.srcdoc = snapshotHTML;
+  host.appendChild(f);
+  host.appendChild(DF.el("div", { class: "df-shield" }));
+  function fit() {
+    var w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    var k = Math.min(w / W, h / H);
+    f.style.transform = "translate(" + ((w - W * k) / 2) + "px," + ((h - H * k) / 2) + "px) scale(" + k + ")";
+  }
+  if ("ResizeObserver" in window) new ResizeObserver(fit).observe(host);
+  else window.addEventListener("resize", fit);
+  fit();
+  var rec = { el: f, want: null, ready: false };
+  rec.show = function (s) { rec.want = s; push(); };
+  function push() {
+    if (!rec.ready || !rec.want) return;
+    try { f.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+  }
+  f.addEventListener("load", function () {
+    var w = f.contentWindow;
+    (function waitReady() {
+      if (w.__deckfold && w.__deckfold.previewReady) w.__deckfold.previewReady.then(function () { rec.ready = true; push(); });
+      else setTimeout(waitReady, 50);
+    })();
+  });
+  return rec;
+};
+
+// slideTile: a button with a picture of slide i (the thumbnail of the source, otherwise a copy of
+// the slide). The picture is built only when the tile becomes visible, so that a deck with
+// hundreds of slides does not copy all of them at once.
+var tileObserver = null;
+function fillTile(box) {
+  if (box.__dfFilled) return;
+  box.__dfFilled = true;
+  var meta = DF.meta.deck || {}, i = +box.getAttribute("data-i"), s = DF.slides()[i] || {};
+  var w = meta.width || 1920;
+  if (s.thumb) { box.appendChild(DF.el("img", { src: DF.assets.url(s.thumb), alt: "" })); return; }
+  var src = document.querySelectorAll(meta.slideSelector || ".deck-slide")[i];
+  if (!src) return;
+  var canvas = src.querySelector(".deck-scaler > *") || src;
+  var c = canvas.cloneNode(true);
+  [].slice.call(c.querySelectorAll("script,iframe,video,audio")).forEach(function (x) { x.parentNode.removeChild(x); });
+  c.removeAttribute("id");
+  DF.restoreIn(c);
+  var holder = DF.el("div", { class: "df-clone" });
+  holder.style.width = w + "px"; holder.style.height = (meta.height || 1080) + "px";
+  holder.appendChild(c);
+  box.appendChild(holder);
+  scaleTile(box);
+}
+function scaleTile(box) {
+  var c = box.querySelector(".df-clone");
+  if (c) c.style.transform = "scale(" + (box.clientWidth / ((DF.meta.deck || {}).width || 1920)) + ")";
+}
+DF.slideTile = function (i, onclick) {
+  var meta = DF.meta.deck || {}, s = DF.slides()[i] || {};
+  var box = DF.el("div", { class: "df-thumb", "data-i": String(i) });
+  box.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
+  var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: onclick }, [box,
+    DF.el("span", { text: (i + 1) + (s.label ? " \u00b7 " + s.label : "") })]);
+  if (!tileObserver && "IntersectionObserver" in window) {
+    tileObserver = new IntersectionObserver(function (ents) {
+      ents.forEach(function (en) { if (en.isIntersecting) { fillTile(en.target); tileObserver.unobserve(en.target); } });
+    }, { rootMargin: "200px" });
+  }
+  if (tileObserver) tileObserver.observe(box); else setTimeout(function () { fillTile(box); }, 0);
+  return tile;
+};
+DF.rescaleTiles = function (root) { [].slice.call(root.querySelectorAll(".df-thumb")).forEach(scaleTile); };
+
+// slideStrip: a horizontally scrolling band of slide tiles with a subtle arrow button on each side,
+// used by the start screen and by the presenter view. opts.pick(i) is called for a click on a
+// tile, opts.step(-1 | 1) for the arrows. mark(i) highlights the tile and scrolls it into view;
+// nav(canBack, canForward) enables or disables the arrows.
+DF.slideStrip = function (opts) {
+  var band = DF.el("div", { class: "df-strip", "data-df-strip": "" });
+  DF.slides().forEach(function (s, i) { band.appendChild(DF.slideTile(i, function () { opts.pick(i); })); });
+  var back = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-prev": "", "aria-label": DF.t("previous"), title: DF.t("previous"), text: "\u2039", onclick: function () { opts.step(-1); } });
+  var fwd = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-next": "", "aria-label": DF.t("following"), title: DF.t("following"), text: "\u203a", onclick: function () { opts.step(1); } });
+  var el = DF.el("div", { class: "df-strip-wrap" }, [back, band, fwd]);
+  window.addEventListener("resize", function () { DF.rescaleTiles(band); });
+  return {
+    el: el, band: band,
+    mark: function (i) {
+      [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-cur", +t.getAttribute("data-i") === i); });
+      var cur = band.querySelector('.df-tile[data-i="' + i + '"]');
+      if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
+    },
+    nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
+    // scroll: move the band by most of its width without choosing a slide
+    scroll: function (dir) { band.scrollBy({ left: dir * band.clientWidth * 0.8, behavior: "smooth" }); }
+  };
+};
+
+// keyChips: a compact row of key caps with a short word each.
+DF.keyChips = function (list) {
+  return DF.el("div", { class: "df-keychips", "data-df-keychips": "" }, list.map(function (it) {
+    return DF.el("span", { class: "df-chip" }, it[0].map(function (k) { return DF.el("kbd", { text: k }); }).concat([DF.el("span", { text: it[1] })]));
+  }));
+};
+
+// --- 35-start.js ---
+// Start screen of the show window (decision E14): title, a large preview of the chosen slide, a
+// strip of all slides to choose where to start, and the settings. The window is the presentation
+// itself: "Start" activates the source player here. The presenter view is a second window that
+// the switch opens; deckfold never places windows and does not check where they are: the user
+// drags them where they belong (decision E14).
+
+DF.startShow = function (snapshotHTML) {
+  var generic = DF.format() === "generic";
+  var slides = DF.slides();
+  var meta = DF.meta.deck || {};
+  if (!DF.token) {
+    DF.token = DF.randomToken();
+    try { sessionStorage.setItem("df-token", DF.token); } catch (e) { }
+  }
+  // A source player can read its position from the address (the claude.ai player reads #n). After
+  // the reload at the end the address still holds the last slide, which would override the chosen
+  // start slide, so the hash goes before the player runs.
+  function dropHash() {
+    if (!location.hash) return;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { }
+  }
+  dropHash();
+  var cfg = DF.settings();
+  var phase = "start"; // start, loading, show
+  var rWin = null;
+  var last = DF.ss.get("df-last");
+  var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
+  var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
+  document.documentElement.classList.add("df-start-mode");
+
+  // ---------- start screen ----------
+  var frame = null, strip = null, hintEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
+  var showFs = !(cfg.show && cfg.show.fullscreen === false);
+  function check(attr, label, checked, onchange) {
+    var box = DF.el("input", { type: "checkbox", checked: checked });
+    box.setAttribute(attr, "");
+    box.addEventListener("change", onchange);
+    return { box: box, label: DF.el("label", { class: "df-check" }, [box, " " + label]) };
+  }
+  var fs = check("data-df-fs", DF.t("fullscreen"), showFs, function () {
+    cfg.show = cfg.show || {}; cfg.show.fullscreen = fs.box.checked; DF.saveSettings(cfg);
+  });
+  fsBox = fs.box;
+  var opts = [];
+  if (!generic) {
+    var pre = check("data-df-presenter", DF.t("presenterView"), false, function () { if (pre.box.checked) openR(); else closeR(); });
+    preBox = pre.box;
+    opts.push(DF.el("div", { class: "df-opt" }, [pre.label]));
+  }
+  opts.push(DF.el("div", { class: "df-opt" }, [fs.label]));
+  if (!generic) {
+    var au = check("data-df-auto", DF.t("auto"), cfg.auto.enabled, saveAuto);
+    autoBox = au.box;
+    intervalIn = DF.el("input", { type: "number", "data-df-interval": "", min: "1", max: "3600", step: "0.5", value: String(cfg.auto.intervalSeconds) });
+    intervalIn.addEventListener("change", saveAuto);
+    var lp = check("data-df-loop", DF.t("autoLoop"), cfg.auto.loop, saveAuto);
+    loopBox = lp.box;
+    opts.push(DF.el("div", { class: "df-opt df-opt-row" }, [au.label,
+      DF.el("label", { class: "df-check" }, [DF.t("autoInterval") + " ", intervalIn]), lp.label]));
+  }
+  // interval and loop can only be set while auto mode is checked
+  function autoFields() {
+    intervalIn.disabled = loopBox.disabled = !autoBox.checked;
+    intervalIn.parentNode.classList.toggle("df-disabled", !autoBox.checked);
+    loopBox.parentNode.classList.toggle("df-disabled", !autoBox.checked);
+  }
+  function saveAuto() {
+    autoFields();
+    var v = parseFloat(intervalIn.value);
+    cfg.auto.enabled = autoBox.checked;
+    cfg.auto.intervalSeconds = isFinite(v) ? Math.max(1, Math.min(3600, v)) : 8;
+    cfg.auto.loop = loopBox.checked;
+    DF.saveSettings(cfg);
+  }
+  hintEl = DF.el("p", { class: "df-start-hint", "data-df-hint": "" });
+  startBtn = DF.el("button", { type: "button", class: "df-primary df-start-btn", "data-df-start": "", text: DF.t("start"), onclick: begin });
+  var stage = DF.el("div", { class: "df-start-stage" });
+  stage.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
+  if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
+  var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
+    DF.el("div", { class: "df-start-box" }, [
+      DF.el("h1", { text: meta.title || document.title || "deckfold" }),
+      DF.el("p", { class: "df-sub", text: generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")) }),
+      generic ? null : stage,
+      generic ? null : strip.el,
+      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn]),
+      hintEl,
+      DF.keyChips(generic ? [[["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]] :
+        [[["\u2190", "\u2192"], DF.t("slide")], [["Enter"], DF.t("start")], [["F"], DF.t("fullscreen")], [["Esc"], DF.t("end")]]),
+      DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
+    ])
+  ]);
+  document.body.appendChild(root);
+  try { performance.mark("deckfold:start-screen"); } catch (e) { }
+  if (!generic) {
+    // the preview runs the source player in an iframe on this window's thread; it is created after
+    // the start screen has been drawn, so that the screen can be used at once
+    requestAnimationFrame(function () {
+      setTimeout(function () { frame = DF.previewFrame(stage, snapshotHTML); frame.show(finalState(sel)); }, 0);
+    });
+    autoFields();
+    setSel(sel);
+  }
+  try { startBtn.focus({ preventScroll: true }); } catch (e) { }
+
+  // the large preview shows the chosen slide as it looks after all its steps (effects included)
+  function finalState(i) { return DF.model.end(i); }
+  function setSel(i) {
+    if (generic || !slides.length) return;
+    sel = Math.max(0, Math.min(slides.length - 1, i));
+    // the choice survives a reload; the show writes the same key, so the later of the two counts
+    DF.ss.set("df-last", { slide: sel, step: 0 });
+    if (frame) frame.show(finalState(sel));
+    strip.mark(sel);
+    strip.nav(sel > 0, sel < slides.length - 1);
+    beat();
+  }
+
+  // ---------- presenter view window ----------
+  function openR() {
+    if (rWin && !rWin.closed) return;
+    rWin = window.open(location.href.split("#")[0], "df-presenter:" + DF.token, "popup,width=1200,height=760");
+    if (!rWin) { preBox.checked = false; hint("popupBlocked"); return; }
+    hint(null);
+  }
+  var closedWin = null; // the window the switch closed: its last messages must not bring it back
+  function closeR() {
+    if (rWin && !rWin.closed) { try { rWin.close(); } catch (e) { } }
+    closedWin = rWin;
+    rWin = null;
+  }
+  function onMsg(d, source) {
+    if (!rWin && source) {
+      if (source === closedWin || source.closed) return;
+      rWin = source; if (preBox) preBox.checked = true; // after a reload of this window
+    }
+    if (d.type === "hello") { send(status("init")); return; }
+    if (d.type === "hb") return;
+    if (d.type === "cmd") {
+      if (phase === "show" && DF.audience) return DF.audience.act(d.cmd, d.arg);
+      if (phase === "start") selectBy(d.cmd, d.arg);
+    }
+  }
+  function selectBy(cmd, arg) {
+    switch (cmd) {
+      case "next": return setSel(sel + 1);
+      case "prev": return setSel(sel - 1);
+      case "first": return setSel(0);
+      case "last": return setSel(slides.length - 1);
+      case "goto": return setSel(arg);
+    }
+  }
+  function status(type) {
+    var m = { type: type, phase: phase === "show" ? "show" : "start", sel: sel };
+    if (phase === "show" && DF.audience) { var i = DF.audience.info(); for (var k in i) m[k] = i[k]; }
+    return m;
+  }
+  function beat() { if (rWin) send(status("hb")); }
+  setInterval(function () {
+    if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; }
+    beat();
+  }, 1000);
+  function hint(k) { hintEl.textContent = k ? DF.t(k) : ""; hintEl.classList.toggle("df-on", !!k); }
+
+  // ---------- keys on the start screen ----------
+  DF.installKeys(function (a, e) {
+    if (phase !== "start") return true;
+    if (e && e.key === "Enter" && a !== "goto") { begin(); return true; }
+    switch (a) {
+      case "digits": return true;
+      case "goto": setSel(e.slide); return true;
+      case "next": case "prev": case "first": case "last": selectBy(a); return true;
+      default: return true;
+    }
+  }, { swallowAll: true });
+
+  // ---------- start and end ----------
+  function begin(e) {
+    if (phase !== "start") return;
+    phase = "loading";
+    // the click on "Start" must not reach the source player: it registers its listeners while the
+    // scripts start and would take the click as "next"
+    if (e && e.stopPropagation) e.stopPropagation();
+    // full screen must be requested inside the click or key press, before anything async
+    var wantFs = fsBox.checked;
+    if (wantFs) DF.requestFs().catch(function () { });
+    startBtn.disabled = true;
+    startBtn.textContent = DF.t("loading");
+    var start = generic ? null : DF.model.goto(sel);
+    document.documentElement.classList.remove("df-start-mode");
+    dropHash();
+    // the scripts start after the click or key event has ended
+    new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
+      return DF.startAudience({
+        start: start, fullscreen: wantFs,
+        send: function (m) { m.sel = sel; return send(m); },
+        onEnd: end
+      });
+    }).then(function () {
+      phase = "show";
+      root.parentNode.removeChild(root);
+      beat();
+    }, function (err) { console.error("deckfold:", err); });
+  }
+  // end: back to the start screen with the last slide chosen, by reloading this window; the source
+  // player stops with the reload, the presenter view stays open and reconnects
+  function end(lastState) {
+    if (lastState) DF.ss.set("df-last", lastState);
+    send({ type: "ended" });
+    phase = "start";
+    location.reload();
+  }
+};
+
+// --- 40-audience.js ---
+// The show window during the presentation (after "Start"): owns the state and drives the source
+// player; auto mode, black/white screen, full-screen fallback, wake lock and mouse cursor.
+//
+// opts: start (state to begin with), fullscreen (the start screen asked for full screen),
+// send(msg) (to the presenter view), onEnd(lastState). Returns a promise that resolves once the first slide is shown.
+
+DF.startAudience = function (opts) {
+  var send = opts.send;
   var generic = DF.format() === "generic";
   var adapter = DF.adapter();
-  var st = { slide: 0, step: 0 };
+  var st = { slide: 0, step: 0 }, lastShown = null;
   var driving = Promise.resolve();
   var blank = null;
   var auto = { on: false, due: 0, timer: 0, waiting: false };
@@ -743,7 +1158,7 @@ DF.startAudience = function () {
 
   // ---------- Overlays ----------
   var blankEl = DF.el("div", { "data-df-ui": "", class: "df-blank" });
-  var fsEl = DF.el("div", { "data-df-ui": "", class: "df-fs-overlay" }, [DF.el("button", { type: "button", text: DF.t("clickFs") })]);
+  var fsEl = DF.el("div", { "data-df-ui": "", class: "df-fs-overlay" }, [DF.el("button", { type: "button", "data-df-fs-overlay": "", text: DF.t("clickFs") })]);
   var endEl = DF.el("div", { "data-df-ui": "", class: "df-endslide" }, [DF.el("span", { text: DF.t("endOfShow") })]);
   document.body.appendChild(blankEl);
   document.body.appendChild(endEl);
@@ -755,15 +1170,18 @@ DF.startAudience = function () {
   }
 
   // ---------- full screen ----------
+  // The start screen requested full screen in the click on "Start". If that failed, one click on
+  // the overlay is enough. While the presenter view is on the same screen, no full screen.
+  var fsWanted = !!opts.fullscreen;
   function needFs() {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
-  function updateFsOverlay() { fsEl.classList.toggle("df-on", needFs() && fsWanted); }
-  var fsWanted = true;
+  function updateFsOverlay() { fsEl.classList.toggle("df-on", fsWanted && needFs()); }
   fsEl.addEventListener("click", function () { DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
   document.addEventListener("fullscreenchange", updateFsOverlay);
   window.addEventListener("resize", updateFsOverlay);
-  DF.requestFs().then(updateFsOverlay, function () { setTimeout(updateFsOverlay, 300); });
+  setInterval(updateFsOverlay, 1000);
+  setTimeout(updateFsOverlay, 300);
 
   // ---------- live embeds without network (E9): neutral placeholder ----------
   function liveFrames() {
@@ -795,10 +1213,9 @@ DF.startAudience = function () {
   setTimeout(markOffline, 500);
 
   // ---------- wake lock and mouse cursor ----------
-  var lock = null;
   function wake() {
     if (!navigator.wakeLock || document.visibilityState !== "visible") return;
-    navigator.wakeLock.request("screen").then(function (l) { lock = l; }, function () { });
+    navigator.wakeLock.request("screen").then(function () { }, function () { });
   }
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") wake(); });
   wake();
@@ -812,11 +1229,14 @@ DF.startAudience = function () {
   showCursor();
 
   // ---------- state ----------
+  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }; }
   function report() {
-    send({ type: "state", state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended });
-    DF.ss.set("df-audience-state", { state: st, auto: auto.on });
+    var m = info();
+    m.type = "state"; m.phase = "show";
+    send(m);
+    if (lastShown) DF.ss.set("df-last", lastShown);
   }
-  function go(target, opts) {
+  function go(target, o) {
     if (generic) return;
     if (!target) {
       // end reached
@@ -830,14 +1250,21 @@ DF.startAudience = function () {
     endEl.classList.remove("df-on");
     var from = st.ended ? null : st;
     st = { slide: target.slide, step: target.step };
-    driving = driving.then(function () { return (opts && opts.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
+    lastShown = st;
+    driving = driving.then(function () { return (o && o.jump) ? adapter.jump(st, from) : DF.drive(from, st); });
     report();
     scheduleAuto();
   }
+  function finish() {
+    stopAuto();
+    opts.onEnd(lastShown || st);
+  }
   function act(a, arg) {
     switch (a) {
-      case "next": return go(st.ended ? null : DF.model.next(st));
-      case "prev": return go(st.ended ? st : DF.model.prev(st));
+      // after the end slide, one more step returns to the start screen (as in PowerPoint)
+      case "next": return st.ended ? finish() : go(DF.model.next(st));
+      // on the first slide there is nothing before it: no end slide
+      case "prev": if (st.ended) return go(st); var pv = DF.model.prev(st); return pv ? go(pv) : undefined;
       case "first": return go(DF.model.first());
       case "last": return go(DF.model.last());
       case "goto": return go(DF.model.goto(arg));
@@ -845,13 +1272,11 @@ DF.startAudience = function () {
       case "black": return setBlank("black");
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
-      case "fullscreen": fsWanted = true; return DF.toggleFs();
-      case "end":
-        if (document.fullscreenElement) return;
-        send({ type: "ended" });
-        if (DF.solo) { DF.setSolo(null); DF.ss.del("df-audience-state"); location.reload(); } else window.close();
-        return;
-      case "timerReset": return send({ type: "action", action: "timerReset" });
+      case "fullscreen":
+        if (document.fullscreenElement) return DF.toggleFs();
+        fsWanted = true;
+        return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
+      case "end": return finish();
     }
   }
 
@@ -896,349 +1321,198 @@ DF.startAudience = function () {
   function stopAuto(rep) { auto.on = false; clearTimeout(auto.timer); auto.due = 0; auto.waiting = false; if (rep) report(); }
 
   // ---------- keys ----------
-  var forwardKey = function (e) { /* generic: the source gets the key unchanged */ };
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     act(a, e && e.slide);
-    return true; // Escape in full screen too: the browser leaves full screen itself, the player never gets the key
-  }, generic ? { passthrough: true, forward: forwardKey } : { swallowAll: true });
+    return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
+  }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
 
-  // ---------- messages from the presenter view ----------
-  function onMsg(d) {
-    if (d.type === "init") { if (!DF.audienceInit(d.state)) act("state", d.state); if (d.settings) cfg = DF.merge(cfg, d.settings); return; }
-    if (d.type === "cmd") act(d.cmd, d.arg);
-    else if (d.type === "settings") { cfg = DF.merge(cfg, d.settings || {}); if (auto.on) scheduleAuto(); }
-    else if (d.type === "key" && generic) {
-      DF.synthKey(d.key, d.keyCode, { code: d.code, shift: d.shift });
-    } else if (d.type === "end") { window.close(); }
-  }
-  setInterval(function () { send({ type: "hb", state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }); }, 1000);
-  window.addEventListener("pagehide", function () { send({ type: "ended", reload: true }); });
+  DF.audience = {
+    act: act,
+    state: function () { return st; },
+    info: info,
+    settings: function (s) { cfg = DF.merge(cfg, s || {}); if (auto.on) scheduleAuto(); }
+  };
 
   // ---------- start ----------
-  // With a presenter view: send "hello" first, then take over its state (it owns the session).
-  // Without an answer within 1.5 s (or in solo mode) the stored state or the initial state applies.
-  var prev = DF.ss.get("df-audience-state");
-  var started = false, presenterState = null;
-  function begin() {
-    if (started) return;
-    started = true;
-    if (generic) return;
-    var init = presenterState || (prev && prev.state) || DF.model.first();
-    st = { slide: 0, step: 0 };
-    go(init, { jump: true });
-    if ((prev && prev.auto) || (!prev && cfg.auto.enabled)) startAuto();
-  }
-  DF.audienceInit = function (state) { if (!started) { presenterState = state; begin(); return true; } return false; };
-  adapter.ready().then(function () {
-    if (!opener) return begin();
-    send({ type: "hello" });
-    setTimeout(begin, 1500);
-  });
-  DF.audience = { act: act, state: function () { return st; } };
-};
-
-// --- 45-dialogs.js ---
-// Dialogs: settings (E4) and screen choice (E3).
-
-function dialog(title, body, buttons) {
-  var box = DF.el("div", { "data-df-ui": "", class: "df-dialog-backdrop" });
-  var dlg = DF.el("div", { class: "df-dialog", role: "dialog", "aria-modal": "true", "aria-label": title }, [
-    DF.el("h2", { text: title }), body,
-    DF.el("div", { class: "df-dialog-buttons" }, buttons)
-  ]);
-  box.appendChild(dlg);
-  document.body.appendChild(box);
-  var first = dlg.querySelector("input,select,button");
-  if (first) first.focus();
-  return { close: function () { if (box.parentNode) box.parentNode.removeChild(box); }, root: dlg };
-}
-
-DF.openSettings = function (onSave) {
-  var s = DF.settings();
-  var generic = DF.format() === "generic";
-  var checks = DF.el("fieldset", { class: "df-checks" }, [DF.el("legend", { text: DF.t("elements") })]);
-  ["current", "next", "notes", "time", "overview"].forEach(function (k) {
-    var id = "df-el-" + k;
-    checks.appendChild(DF.el("label", { for: id }, [
-      DF.el("input", { type: "checkbox", id: id, "data-k": k, checked: s.presenter.elements.indexOf(k) >= 0 }), " " + DF.t(k)
-    ]));
-  });
-  function num(id, label, val, min, max, step) {
-    return DF.el("label", { class: "df-row", for: id }, [DF.el("span", { text: label }),
-      DF.el("input", { type: "number", id: id, value: String(val), min: String(min), max: String(max), step: String(step || 1) })]);
-  }
-  function chk(id, label, val) {
-    return DF.el("label", { class: "df-row", for: id }, [DF.el("span", { text: label }), DF.el("input", { type: "checkbox", id: id, checked: !!val })]);
-  }
-  var body = DF.el("div", { class: "df-settings" }, generic ? [DF.el("p", { text: DF.t("generic") })] : [
-    checks,
-    num("df-notes-size", DF.t("notesSize"), s.presenter.notesFontSize, 8, 96),
-    num("df-target", DF.t("target"), s.presenter.targetMinutes, 0, 600),
-    num("df-interval", DF.t("autoInterval"), s.auto.intervalSeconds, 1, 3600, 0.5),
-    chk("df-autostart", DF.t("autoStart"), s.auto.enabled),
-    chk("df-loop", DF.t("autoLoop"), s.auto.loop),
-    chk("df-remember", DF.t("remember") + " (" + DF.t("screens") + ")", s.screens.rememberChoice)
-  ]);
-  var d;
-  function clamp(v, lo, hi, dflt) { v = parseFloat(v); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt; }
-  var save = DF.el("button", { type: "button", class: "df-primary", text: DF.t("save"), onclick: function () {
+  return adapter.ready().then(function () {
     if (!generic) {
-      var r = d.root;
-      s.presenter.elements = [].slice.call(r.querySelectorAll(".df-checks input")).filter(function (i) { return i.checked; }).map(function (i) { return i.getAttribute("data-k"); });
-      s.presenter.notesFontSize = Math.round(clamp(r.querySelector("#df-notes-size").value, 8, 96, 22));
-      s.presenter.targetMinutes = Math.round(clamp(r.querySelector("#df-target").value, 0, 600, 0));
-      s.auto.intervalSeconds = clamp(r.querySelector("#df-interval").value, 1, 3600, 8);
-      s.auto.enabled = r.querySelector("#df-autostart").checked;
-      s.auto.loop = r.querySelector("#df-loop").checked;
-      s.screens.rememberChoice = r.querySelector("#df-remember").checked;
-      if (!s.screens.rememberChoice) DF.ls.del("deckfold:screens");
+      go(opts.start || DF.model.first(), { jump: true });
+      if (cfg.auto.enabled) startAuto();
     }
-    DF.saveSettings(s);
-    d.close();
-    if (onSave) onSave(DF.settings());
-  } });
-  var reset = DF.el("button", { type: "button", text: DF.t("reset"), onclick: function () {
-    DF.saveSettings(DF.clone(DF.cfg.defaults));
-    d.close();
-    if (onSave) onSave(DF.settings());
-  } });
-  var cancel = DF.el("button", { type: "button", text: DF.t("cancel"), onclick: function () { d.close(); } });
-  d = dialog(DF.t("settings"), body, [reset, cancel, save]);
-  return d;
-};
-
-function screenKey(s) { return { label: s.label || "", w: s.width, h: s.height, l: s.left, t: s.top }; }
-function matchScreen(list, k) {
-  if (!k) return -1;
-  for (var i = 0; i < list.length; i++) if (list[i].label === k.label && list[i].width === k.w && list[i].height === k.h) return i;
-  for (var j = 0; j < list.length; j++) if (list[j].width === k.w && list[j].height === k.h && list[j].left === k.l) return j;
-  return -1;
-}
-
-// chooseScreens(onStart): Chromium with the Window Management API shows a dialog; otherwise onStart(null).
-// onStart(choice) must run synchronously inside the click (user gesture): choice = {audience, presenter, presenterFs, granted}.
-DF.chooseScreens = function (onStart) {
-  if (!("getScreenDetails" in window)) { onStart(null); return; }
-  window.getScreenDetails().then(function (det) {
-    DF.screenDetails = det;
-    var list = det.screens;
-    var saved = DF.settings().screens.rememberChoice ? DF.ls.get("deckfold:screens") : null;
-    var ai = matchScreen(list, saved && saved.aud), pi = matchScreen(list, saved && saved.pre);
-    if (ai < 0) ai = list.length > 1 ? list.indexOf(list.filter(function (s) { return s !== det.currentScreen; })[0]) : 0;
-    if (pi < 0) pi = Math.max(0, list.indexOf(det.currentScreen));
-    function sel(id, idx) {
-      var s = DF.el("select", { id: id });
-      list.forEach(function (sc, i) {
-        var label = (sc.label || ("Screen " + (i + 1))) + " \u2013 " + sc.width + "\u00d7" + sc.height + (sc.isPrimary ? " \u2605" : "");
-        s.appendChild(DF.el("option", { value: String(i), text: label, selected: i === idx }));
-      });
-      return s;
-    }
-    var fs = DF.el("input", { type: "checkbox", id: "df-prefs", checked: saved ? !!saved.fs : true });
-    var hint = DF.el("p", { class: "df-hint", text: DF.t("presenterStays") });
-    var body = DF.el("div", { class: "df-settings" }, [
-      DF.el("label", { class: "df-row", for: "df-aud" }, [DF.el("span", { text: DF.t("audienceScreen") }), sel("df-aud", ai)]),
-      DF.el("label", { class: "df-row", for: "df-pre" }, [DF.el("span", { text: DF.t("presenterScreen") }), sel("df-pre", pi)]),
-      DF.el("label", { class: "df-row", for: "df-prefs" }, [DF.el("span", { text: DF.t("presenterFs") }), fs]),
-      hint
-    ]);
-    var d;
-    function upd() { hint.style.display = fs.checked ? "none" : ""; }
-    fs.addEventListener("change", upd); upd();
-    var startBtn = DF.el("button", { type: "button", class: "df-primary", text: DF.t("start"), onclick: function () {
-      var a = list[parseInt(d.root.querySelector("#df-aud").value, 10)], p = list[parseInt(d.root.querySelector("#df-pre").value, 10)];
-      if (DF.settings().screens.rememberChoice) DF.ls.set("deckfold:screens", { aud: screenKey(a), pre: screenKey(p), fs: fs.checked });
-      d.close();
-      onStart({ audience: a, presenter: p, presenterFs: fs.checked, granted: true });
-    } });
-    d = dialog(DF.t("screens"), body, [DF.el("button", { type: "button", text: DF.t("cancel"), onclick: function () { d.close(); } }), startBtn]);
-  }, function () {
-    // permission denied: default position
-    var d = dialog(DF.t("screens"), DF.el("p", { text: DF.t("screensDenied") }), [
-      DF.el("button", { type: "button", class: "df-primary", text: DF.t("start"), onclick: function () { d.close(); onStart(null); } })
-    ]);
+    return driving;
   });
 };
 
 // --- 50-presenter.js ---
-// Start screen and presenter view (E5): current slide and preview as muted srcdoc iframes,
-// notes, time, slide overview; window management with heartbeat and recovery.
+// Presenter view (role "presenter", E5): a window the show window opens. Current and next slide,
+// each after all its steps, as muted srcdoc previews, notes, time, slide overview; its settings are changed here while
+// it runs (elements, notes size, target duration, size of the panes). It sends commands to the
+// show window (window.opener), which owns the state, and gets the state and heartbeat back.
 
 DF.startPresenter = function (snapshotHTML) {
-  var generic = DF.format() === "generic";
   var slides = DF.slides();
   var meta = DF.meta.deck || {};
-  var session = DF.ss.get("df-session");
-  var popup = null, token = session ? session.token : "";
-  var st = session && session.state ? session.state : DF.model.first();
+  var show = null;
+  try { show = window.opener; } catch (e) { show = null; }
+  var send = DF.channel(function () { return show; }, function () { return DF.token; }, onMsg);
+  var phase = "start", sel = 0, st = DF.model.first();
   var remote = { blank: null, auto: { on: false, due: 0 }, ended: false };
-  var lastBeat = 0, active = !!(session && session.active);
-  var cfg = DF.settings();
-  var timer = (session && session.timer) || { start: 0, accum: 0, paused: false };
-  var send = DF.channel(function () { return popup; }, function () { return token; }, onMsg);
+  var lastBeat = 0, cfg = DF.settings();
+  var timer = { start: 0, accum: 0, paused: false };
+  document.documentElement.classList.add("df-presenter-mode");
 
-  function saveSession() { DF.ss.set("df-session", { token: token, state: st, active: active, timer: timer }); }
-
-  // ---------- start screen ----------
-  var start = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
-    DF.el("div", { class: "df-start-box" }, [
-      DF.el("h1", { text: meta.title || document.title || "deckfold" }),
-      DF.el("p", { class: "df-sub", text: generic ? DF.t("generic") : (slides.length + " " + DF.t("slides")) }),
-      DF.el("div", { class: "df-start-buttons" }, [
-        DF.el("button", { type: "button", class: "df-primary", text: DF.t("present"), onclick: present }),
-        DF.el("button", { type: "button", text: DF.t("audienceOnly"), onclick: soloAudience }),
-        DF.el("button", { type: "button", text: DF.t("settings"), onclick: function () { DF.openSettings(applySettings); } })
-      ]),
-      DF.el("p", { class: "df-keys", text: DF.t("keysHelp") }),
-      DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })
-    ])
+  // ---------- layout ----------
+  var ui = DF.el("div", { "data-df-ui": "", class: "df-presenter" });
+  var bannerEl = DF.el("div", { class: "df-banner", "data-df-banner": "" });
+  var counterEl = DF.el("span", { class: "df-counter" });
+  var clockEl = DF.el("span", { class: "df-clock", title: DF.t("clock") });
+  var elapsedEl = DF.el("span", { class: "df-elapsed", title: DF.t("elapsed") });
+  var remainEl = DF.el("span", { class: "df-remain", title: DF.t("remaining") });
+  var pauseBtn = DF.el("button", { type: "button", onclick: togglePause });
+  // target duration as minutes:seconds; the input is completed ("20" -> 20:00, "1:75" -> 02:15),
+  // input that cannot be read brings back the value before
+  var targetIn = DF.el("input", { type: "text", inputmode: "numeric", "data-df-target": "", placeholder: "mm:ss", size: "6", title: DF.t("target") });
+  function targetSecs() {
+    var p = cfg.presenter;
+    return p.targetSeconds || (p.targetMinutes ? p.targetMinutes * 60 : 0); // targetMinutes: older settings
+  }
+  function showTarget() { var t = targetSecs(); targetIn.value = t ? DF.fmtMinSec(t) : ""; }
+  function takeTarget() {
+    var t = DF.parseMinSec(targetIn.value);
+    if (t !== null) {
+      cfg.presenter.targetSeconds = t;
+      delete cfg.presenter.targetMinutes;
+      DF.saveSettings(cfg);
+    }
+    showTarget(); tickClock();
+  }
+  targetIn.addEventListener("change", takeTarget);
+  targetIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); takeTarget(); targetIn.blur(); } });
+  showTarget();
+  // the full-screen button names what a click does: "Full screen" in a window, "Window" in full screen
+  var fsBtn = DF.el("button", { type: "button", "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
+  function fsLabel() { fsBtn.textContent = DF.t(document.fullscreenElement || document.webkitFullscreenElement ? "window" : "fullscreen"); }
+  document.addEventListener("fullscreenchange", fsLabel);
+  document.addEventListener("webkitfullscreenchange", fsLabel);
+  fsLabel();
+  var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
+  var autoInfo = DF.el("span", { class: "df-autoinfo" });
+  var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
+  var toggles = DF.el("span", { class: "df-toggles" }, ["current", "next", "notes", "time", "overview"].map(function (k) {
+    return DF.el("button", { type: "button", "data-df-el": k, text: DF.t(k), onclick: function () { toggleElement(k); } });
+  }));
+  var bar = DF.el("header", { class: "df-bar" }, [
+    DF.el("strong", { class: "df-title", text: meta.title || document.title || "" }), counterEl,
+    DF.el("span", { class: "df-time-group", "data-k": "time" }, [clockEl, elapsedEl, remainEl, pauseBtn,
+      DF.el("button", { type: "button", text: "\u21ba", title: DF.t("reset"), onclick: resetTimer }),
+      DF.el("label", { class: "df-target" }, [DF.t("target") + " ", targetIn])]),
+    DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
+    DF.el("button", { type: "button", "data-df-font": "-", text: "A\u2212", title: DF.t("smaller"), onclick: function () { fontBy(-2); } }),
+    DF.el("button", { type: "button", "data-df-font": "+", text: "A+", title: DF.t("larger"), onclick: function () { fontBy(2); } }),
+    fsBtn,
+    endBtn
   ]);
-  document.body.appendChild(start);
-
-  function soloAudience() {
-    DF.setSolo(DF.randomToken());
-    DF.ss.del("df-audience-state");
-    location.reload();
-  }
-
-  // ---------- present ----------
-  function present() {
-    DF.chooseScreens(function (choice) { launch(choice); });
-  }
-  function launch(choice) {
-    if (!token) token = DF.randomToken();
-    var url = location.href.split("#")[0];
-    var feat = "popup";
-    if (choice && choice.presenterFs) DF.requestFs(document.documentElement, choice.presenter).catch(function () { });
-    if (choice && choice.audience) {
-      var a = choice.audience;
-      feat += ",left=" + a.availLeft + ",top=" + a.availTop + ",width=" + a.availWidth + ",height=" + a.availHeight;
-      if (choice.granted) feat += ",fullscreen";
-    } else {
-      feat += ",width=1280,height=720";
-    }
-    DF.ss.del("df-audience-state");
-    popup = window.open(url, "df-audience:" + token, feat);
-    active = true;
-    if (!timer.start) timer = { start: Date.now(), accum: 0, paused: false };
-    saveSession();
-    enterPresenter();
-    if (!popup) banner("popupBlocked", "openAudience", function () { reopen(); });
-    else if (!choice && !("getScreenDetails" in window)) banner("screensHint");
-    lastBeat = Date.now();
-  }
-  function reopen() {
-    var url = location.href.split("#")[0];
-    DF.ss.del("df-audience-state");
-    popup = window.open(url, "df-audience:" + token, "popup,width=1280,height=720");
-    lastBeat = Date.now();
-    hideBanner();
-    if (!popup) banner("popupBlocked", "openAudience", reopen);
-  }
-
-  // ---------- presenter view ----------
-  var ui = null, frames = {}, notesEl, counterEl, clockEl, elapsedEl, remainEl, autoBtn, autoInfo, pauseBtn, bannerEl, overviewEl;
-  function enterPresenter() {
-    start.style.display = "none";
-    document.documentElement.classList.add("df-presenter-mode");
-    if (ui) return render();
-    ui = DF.el("div", { "data-df-ui": "", class: "df-presenter" });
-    bannerEl = DF.el("div", { class: "df-banner" });
-    counterEl = DF.el("span", { class: "df-counter" });
-    clockEl = DF.el("span", { class: "df-clock", title: DF.t("clock") });
-    elapsedEl = DF.el("span", { class: "df-elapsed", title: DF.t("elapsed") });
-    remainEl = DF.el("span", { class: "df-remain", title: DF.t("remaining") });
-    pauseBtn = DF.el("button", { type: "button", onclick: togglePause });
-    autoBtn = DF.el("button", { type: "button", onclick: function () { command("auto"); } });
-    autoInfo = DF.el("span", { class: "df-autoinfo" });
-    var bar = DF.el("header", { class: "df-bar" }, [
-      DF.el("strong", { class: "df-title", text: meta.title || document.title || "" }), counterEl,
-      DF.el("span", { class: "df-time-group", "data-k": "time" }, [clockEl, elapsedEl, remainEl, pauseBtn,
-        DF.el("button", { type: "button", text: "\u21ba", title: DF.t("reset"), onclick: resetTimer })]),
-      generic ? null : DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
-      generic ? null : DF.el("button", { type: "button", "data-k": "overview", text: DF.t("overview"), onclick: toggleOverview }),
-      DF.el("button", { type: "button", text: DF.t("settings"), onclick: function () { DF.openSettings(applySettings); } }),
-      "getScreenDetails" in window ? DF.el("button", { type: "button", text: DF.t("screens"), onclick: function () { DF.chooseScreens(function (c) { relaunch(c); }); } }) : null,
-      DF.el("button", { type: "button", class: "df-danger", text: DF.t("endShow"), onclick: endShow })
-    ]);
-    ui.appendChild(bar);
-    ui.appendChild(bannerEl);
-    if (generic) {
-      ui.appendChild(DF.el("main", { class: "df-generic" }, [DF.el("p", { text: DF.t("noPresenter") })]));
-    } else {
-      var cur = pane("current", DF.t("current"));
-      var nxt = pane("next", DF.t("next"));
-      notesEl = DF.el("div", { class: "df-notes-text" });
-      var notes = DF.el("section", { class: "df-pane df-notes", "data-k": "notes" }, [DF.el("h3", { text: DF.t("notes") }), notesEl]);
-      ui.appendChild(DF.el("main", { class: "df-grid" }, [cur, DF.el("div", { class: "df-side" }, [nxt, notes])]));
-      frames.current = makeFrame(cur.querySelector(".df-stage"));
-      frames.next = makeFrame(nxt.querySelector(".df-stage"));
-      overviewEl = DF.el("div", { class: "df-overview" });
-      ui.appendChild(overviewEl);
-    }
-    document.body.appendChild(ui);
-    if (DF.screenDetails) DF.screenDetails.addEventListener("screenschange", function () { banner("screensChanged", "chooseAgain", function () { DF.chooseScreens(relaunch); }); });
-    render();
-    setInterval(tickClock, 500);
-    setInterval(watch, 1000);
-    // take the focus back if it still ends up in a preview
-    var refocus = function () {
-      var a = document.activeElement;
-      if (a && a.tagName === "IFRAME" && a.hasAttribute("data-df-preview")) { a.blur(); document.body.focus && document.body.focus(); }
-    };
-    window.addEventListener("blur", function () { setTimeout(refocus, 0); });
-    setInterval(refocus, 500);
-  }
+  var cur = pane("current", DF.t("current"));
+  var nxt = pane("next", DF.t("next"));
+  var notesEl = DF.el("div", { class: "df-notes-text" });
+  var notes = DF.el("section", { class: "df-pane df-notes", "data-k": "notes" }, [DF.el("h3", { text: DF.t("notes") }), notesEl]);
+  var splitV = DF.el("div", { class: "df-split df-split-v", "data-df-split": "main" });
+  var splitH = DF.el("div", { class: "df-split df-split-h", "data-df-split": "side" });
+  var side = DF.el("div", { class: "df-side" }, [nxt, splitH, notes]);
+  var grid = DF.el("main", { class: "df-grid" }, [cur, splitV, side]);
+  // overview: a band of all slides above the status bar; a click jumps there (before the start it
+  // chooses the start slide); the arrows choose the start slide before the start and only scroll
+  // the band during the show, so that a click never moves the audience on by accident
+  var strip = DF.slideStrip({
+    pick: function (i) { command("goto", i); },
+    step: function (d) { if (phase === "show") strip.scroll(d); else command(d < 0 ? "prev" : "next"); }
+  });
+  var overviewEl = DF.el("div", { class: "df-overview", "data-k": "overview" }, [strip.el]);
+  var status = DF.el("footer", { class: "df-status" }, [bannerEl, toggles]);
+  ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(overviewEl); ui.appendChild(status);
+  document.body.appendChild(ui);
+  var frames = { current: DF.previewFrame(cur.querySelector(".df-stage"), snapshotHTML), next: DF.previewFrame(nxt.querySelector(".df-stage"), snapshotHTML) };
   function pane(k, title) {
     return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", { text: title }),
       DF.el("div", { class: "df-stage" }), DF.el("div", { class: "df-endlabel", text: DF.t("end") })]);
   }
-  function makeFrame(host) {
-    var f = DF.el("iframe", { "data-df-preview": "", tabindex: "-1", inert: true, title: "preview", "aria-hidden": "true" });
-    f.srcdoc = snapshotHTML;
-    var shield = DF.el("div", { class: "df-shield" });
-    host.appendChild(f);
-    host.appendChild(shield);
-    var rec = { el: f, want: null, ready: false };
-    f.addEventListener("load", function () {
-      var w = f.contentWindow;
-      var waitReady = function () {
-        if (w.__deckfold && w.__deckfold.previewReady) {
-          w.__deckfold.previewReady.then(function () { rec.ready = true; push(rec); });
-        } else setTimeout(waitReady, 50);
+
+  // ---------- settings while running ----------
+  function toggleElement(k) {
+    var els = cfg.presenter.elements.slice(), i = els.indexOf(k);
+    if (i >= 0) els.splice(i, 1); else els.push(k);
+    cfg.presenter.elements = els;
+    DF.saveSettings(cfg); render();
+  }
+  function fontBy(d) {
+    cfg.presenter.notesFontSize = Math.max(8, Math.min(96, cfg.presenter.notesFontSize + d));
+    DF.saveSettings(cfg); render();
+  }
+  // panes: the divider between the current slide and the side column, and the one between the next
+  // step and the notes, can be dragged; the shares are stored in presenter.layout
+  function layout() { return cfg.presenter.layout || { main: 0.6, side: 0.45 }; }
+  function drag(el, key) {
+    el.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      var move = function (ev) {
+        var r = (key === "main" ? grid : side).getBoundingClientRect();
+        var f = key === "main" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+        var l = layout();
+        l[key] = Math.max(0.2, Math.min(0.8, f));
+        cfg.presenter.layout = l;
+        applyLayout();
       };
-      waitReady();
+      var up = function () {
+        el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up);
+        DF.saveSettings(cfg);
+      };
+      el.addEventListener("pointermove", move); el.addEventListener("pointerup", up);
     });
-    return rec;
   }
-  function push(rec) {
-    if (!rec.ready || !rec.want) return;
-    try { rec.el.contentWindow.__deckfold.setPreviewState(rec.want); } catch (e) { }
+  drag(splitV, "main"); drag(splitH, "side");
+  function applyLayout() {
+    var l = layout(), els = cfg.presenter.elements;
+    var showCur = els.indexOf("current") >= 0, showNext = els.indexOf("next") >= 0, showNotes = els.indexOf("notes") >= 0 && hasNotes;
+    var showSide = showNext || showNotes;
+    splitV.classList.toggle("df-hidden", !(showCur && showSide));
+    side.classList.toggle("df-hidden", !showSide);
+    grid.style.gridTemplateColumns = showCur && showSide ? "minmax(0," + l.main + "fr) 8px minmax(0," + (1 - l.main) + "fr)" : "minmax(0,1fr)";
+    splitH.classList.toggle("df-hidden", !(showNext && showNotes));
+    nxt.style.flex = showNext && showNotes ? "0 0 calc(" + (l.side * 100) + "% - 4px)" : (showNext ? "1 1 auto" : "");
   }
+  var hasNotes = slides.some(function (s) { return s.notes; });
+
+  // ---------- rendering ----------
+  function shown() { return phase === "show" ? st : DF.model.goto(sel); }
   function render() {
-    if (!ui) return;
     cfg = DF.settings();
     var els = cfg.presenter.elements;
     [].slice.call(ui.querySelectorAll("[data-k]")).forEach(function (n) { n.classList.toggle("df-hidden", els.indexOf(n.getAttribute("data-k")) < 0); });
-    ui.classList.toggle("df-no-next", els.indexOf("next") < 0);
-    if (generic) return;
-    var n = slides.length;
-    counterEl.textContent = (st.slide + 1) + " / " + n + (slides[st.slide] && slides[st.slide].steps > 1 ? "  \u00b7  " + DF.t("step") + " " + (st.step + 1) + "/" + slides[st.slide].steps : "");
-    var hasNotes = slides.some(function (s) { return s.notes; });
-    var notesPane = ui.querySelector(".df-notes");
-    if (!hasNotes) notesPane.classList.add("df-hidden");
-    var note = slides[st.slide] && slides[st.slide].notes;
-    notesEl.textContent = note || DF.t("noNotes");
+    [].slice.call(toggles.querySelectorAll("[data-df-el]")).forEach(function (b) {
+      var on = els.indexOf(b.getAttribute("data-df-el")) >= 0;
+      b.classList.toggle("df-active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (!hasNotes) notes.classList.add("df-hidden");
+    applyLayout();
+    var s = shown(), n = slides.length;
+    counterEl.textContent = (s.slide + 1) + " / " + n +
+      (phase === "show" && slides[s.slide] && slides[s.slide].steps > 1 ? "  \u00b7  " + DF.t("step") + " " + (s.step + 1) + "/" + slides[s.slide].steps : "");
+    notesEl.textContent = (slides[s.slide] && slides[s.slide].notes) || DF.t("noNotes");
     notesEl.style.fontSize = cfg.presenter.notesFontSize + "px";
-    frames.current.want = st; push(frames.current);
-    var nx = DF.model.next(st);
-    ui.querySelector(".df-next").classList.toggle("df-at-end", !nx);
-    if (nx) { frames.next.want = nx; push(frames.next); }
+    // both previews show a whole slide after all its steps: the slide the audience sees and the
+    // one after it
+    frames.current.show(DF.model.end(s.slide));
+    var nx = s.slide + 1 < n ? DF.model.end(s.slide + 1) : null;
+    nxt.classList.toggle("df-at-end", !nx);
+    if (nx) frames.next.show(nx);
     autoBtn.textContent = remote.auto.on ? DF.t("autoOn") : DF.t("autoOff");
     autoBtn.classList.toggle("df-active", !!remote.auto.on);
-    if (overviewEl && overviewEl.classList.contains("df-on")) markOverview();
-    saveSession();
+    ui.classList.toggle("df-before", phase !== "show");
+    if (s.slide !== marked) { marked = s.slide; strip.mark(s.slide); }
+    strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
+    banners();
   }
   function tickClock() {
     var d = new Date();
@@ -1247,183 +1521,92 @@ DF.startPresenter = function (snapshotHTML) {
     elapsedEl.textContent = DF.fmtTime(el);
     pauseBtn.textContent = timer.paused ? "\u25b6" : "\u275a\u275a";
     pauseBtn.title = timer.paused ? DF.t("resume") : DF.t("pause");
-    var target = cfg.presenter.targetMinutes * 60000;
+    var target = targetSecs() * 1000;
     remainEl.style.display = target ? "" : "none";
     if (target) {
       var left = target - el;
       remainEl.textContent = DF.fmtTime(left);
       remainEl.className = "df-remain" + (left < 0 ? " df-over" : left < 120000 ? " df-warn" : "");
     }
-    if (autoInfo) autoInfo.textContent = remote.auto.on ? (remote.auto.waiting ? "\u25b6 " + DF.t("media") : remote.auto.due ? Math.max(0, Math.ceil((remote.auto.due - Date.now()) / 1000)) + " s" : "") : "";
+    autoInfo.textContent = remote.auto.on ? (remote.auto.waiting ? "\u25b6 " + DF.t("media") : remote.auto.due ? Math.max(0, Math.ceil((remote.auto.due - Date.now()) / 1000)) + " s" : "") : "";
   }
   function elapsed() {
     if (!timer.start) return 0;
     return timer.accum + (timer.paused ? 0 : Date.now() - timer.start);
   }
   function togglePause() {
+    if (!timer.start) return;
     if (timer.paused) { timer.start = Date.now(); timer.paused = false; }
     else { timer.accum = elapsed(); timer.paused = true; }
-    saveSession(); tickClock();
+    tickClock();
   }
-  function resetTimer() { timer = { start: Date.now(), accum: 0, paused: false }; saveSession(); tickClock(); }
+  function resetTimer() { timer = { start: phase === "show" ? Date.now() : 0, accum: 0, paused: false }; tickClock(); }
 
-  // ---------- overview ----------
-  function toggleOverview() {
-    if (!overviewEl) return;
-    var on = !overviewEl.classList.contains("df-on");
-    overviewEl.classList.toggle("df-on", on);
-    if (on && !overviewEl.firstChild) buildOverview();
-    if (on) markOverview();
+  // ---------- banner: lost connection, start hint ----------
+  var flash = null, flashUntil = 0;
+  function banners() {
+    var key = null;
+    if (Date.now() - lastBeat > 4000) key = "showLost";
+    else if (flash && Date.now() < flashUntil) key = flash;
+    bannerEl.textContent = key ? DF.t(key) : "";
+    bannerEl.setAttribute("data-df-banner", key || "");
+    bannerEl.classList.toggle("df-on", !!key);
   }
-  function buildOverview() {
-    var srcSlides = document.querySelectorAll(meta.slideSelector || ".deck-slide");
-    var w = meta.width || 1920, h = meta.height || 1080;
-    slides.forEach(function (s, i) {
-      var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: function () { command("goto", i); toggleOverview(); } });
-      var box = DF.el("div", { class: "df-thumb" });
-      box.style.aspectRatio = w + " / " + h;
-      if (s.thumb) {
-        box.appendChild(DF.el("img", { src: DF.assets.url(s.thumb), alt: "" }));
-      } else if (srcSlides[i]) {
-        var canvas = srcSlides[i].querySelector(".deck-scaler > *") || srcSlides[i];
-        var c = canvas.cloneNode(true);
-        [].slice.call(c.querySelectorAll("script,iframe,video,audio")).forEach(function (x) { x.parentNode.removeChild(x); });
-        c.removeAttribute("id");
-        var holder = DF.el("div", { class: "df-clone" });
-        holder.style.width = w + "px"; holder.style.height = h + "px";
-        holder.appendChild(c);
-        box.appendChild(holder);
-      }
-      tile.appendChild(box);
-      tile.appendChild(DF.el("span", { text: (i + 1) + (s.label ? " \u00b7 " + s.label : "") }));
-      overviewEl.appendChild(tile);
-    });
-    scaleClones();
-    window.addEventListener("resize", scaleClones);
-  }
-  function scaleClones() {
-    var w = meta.width || 1920;
-    [].slice.call(overviewEl.querySelectorAll(".df-clone")).forEach(function (c) {
-      var bw = c.parentNode.clientWidth;
-      c.style.transform = "scale(" + (bw / w) + ")";
-    });
-  }
-  function markOverview() {
-    [].slice.call(overviewEl.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-cur", +t.getAttribute("data-i") === st.slide); });
-  }
+  function flashBanner(k) { flash = k; flashUntil = Date.now() + 4000; banners(); }
 
-  // ---------- Banner ----------
-  function banner(textKey, btnKey, fn) {
-    bannerEl.innerHTML = "";
-    bannerEl.appendChild(DF.el("span", { text: DF.t(textKey) }));
-    if (btnKey) bannerEl.appendChild(DF.el("button", { type: "button", text: DF.t(btnKey), onclick: fn }));
-    bannerEl.classList.add("df-on");
-  }
-  function hideBanner() { bannerEl.classList.remove("df-on"); }
+  var marked = -1;
 
-  // ---------- commands ----------
-  var pending = [], bootAt = Date.now();
+  // ---------- commands and messages ----------
+  var pending = [];
   function command(cmd, arg) {
-    if (popup && !popup.closed && send({ type: "cmd", cmd: cmd, arg: arg })) return;
-    if (active && !popup && Date.now() - bootAt < 5000) { pending.push([cmd, arg]); return; } // wait for the reconnect
-    // without an audience window: advance locally (rehearsal)
-    if (generic) return;
-    var nx = null;
-    switch (cmd) {
-      case "next": nx = DF.model.next(st); break;
-      case "prev": nx = DF.model.prev(st); break;
-      case "first": nx = DF.model.first(); break;
-      case "last": nx = DF.model.last(); break;
-      case "goto": nx = DF.model.goto(arg); break;
-    }
-    if (nx) { st = nx; render(); }
+    if (Date.now() - lastBeat > 1500) { pending.push([cmd, arg]); return; } // the show window reloads
+    send({ type: "cmd", cmd: cmd, arg: arg });
   }
-  function onMsg(d, source) {
-    if (!popup && source) {
-      popup = source; // after a reload of the presenter view
-      var q = pending; pending = [];
-      setTimeout(function () { q.forEach(function (c) { command(c[0], c[1]); }); }, 0);
-    }
+  function onMsg(d) {
     lastBeat = Date.now();
-    hideBannerIfLost();
-    if (d.type === "hello") {
-      // new or reloaded audience window: send the session state and the auto settings
-      send({ type: "init", state: generic ? null : st, settings: { auto: cfg.auto } });
-      return;
+    if (pending.length) { var q = pending; pending = []; setTimeout(function () { q.forEach(function (c) { command(c[0], c[1]); }); }, 0); }
+    if (d.type === "ended") { phase = "start"; render(); return; }
+    var was = phase, before = JSON.stringify([phase, sel, st, remote.auto.on]);
+    if (d.phase) phase = d.phase;
+    if (typeof d.sel === "number") sel = d.sel;
+    if (d.state) {
+      st = { slide: d.state.slide, step: d.state.step };
+      remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended };
     }
-    if (d.type === "state" || d.type === "hb") {
-      if (d.state && !generic) {
-        var changed = !DF.model.same(d.state, st) || remote.auto.on !== (d.auto && d.auto.on);
-        st = { slide: d.state.slide, step: d.state.step };
-        remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended };
-        if (changed || d.type === "state") render();
-      }
-      return;
-    }
-    if (d.type === "action" && d.action === "timerReset") resetTimer();
-    if (d.type === "ended" && !d.reload) { popup = null; leave(); }
+    if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
+    if (phase !== "show") remote.auto = { on: false, due: 0 };
+    if (d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
   }
-  function hideBannerIfLost() { if (bannerEl && bannerEl.getAttribute("data-lost")) { bannerEl.removeAttribute("data-lost"); hideBanner(); } }
-  function watch() {
-    if (!active) return;
-    var lost = (popup && popup.closed) || (!popup && Date.now() - lastBeat > 3000) || (popup && Date.now() - lastBeat > 4000);
-    if (lost && bannerEl && !bannerEl.getAttribute("data-lost")) {
-      banner(popup ? "audienceLost" : "searching", "reopen", reopen);
-      bannerEl.setAttribute("data-lost", "1");
-    }
-  }
-  function relaunch(choice) {
-    if (popup && !popup.closed) { try { popup.close(); } catch (e) { } }
-    popup = null;
-    launch(choice);
-  }
-  function endShow() {
-    send({ type: "end" });
-    if (popup && !popup.closed) { try { popup.close(); } catch (e) { } }
-    leave();
-  }
-  function leave() {
-    active = false; popup = null;
-    DF.ss.del("df-session"); DF.ss.del("df-audience-state");
-    token = ""; timer = { start: 0, accum: 0, paused: false };
-    if (document.fullscreenElement) document.exitFullscreen().catch(function () { });
-    document.documentElement.classList.remove("df-presenter-mode");
-    if (ui) ui.style.display = "none";
-    start.style.display = "";
-    location.reload();
-  }
-  function applySettings(s) {
-    cfg = s;
-    send({ type: "settings", settings: { auto: s.auto } });
-    render();
-  }
+  function beat() { send({ type: "hb" }); banners(); }
+  setInterval(beat, 1000);
+  setInterval(tickClock, 500);
 
-  // ---------- keys in the presenter view ----------
+  // ---------- keys ----------
   DF.installKeys(function (a, e) {
-    if (!active) {
-      if (a === "fullscreen") { DF.toggleFs(); return true; }
-      return false;
+    if (a === "digits") return true;
+    if (a === "fullscreen") { DF.toggleFs(); return true; }
+    if (a === "timerReset") { resetTimer(); return true; }
+    if (phase !== "show") {
+      // before the start: choose the slide; Enter cannot start from here (full screen needs a click there)
+      if (e && e.key === "Enter" && a !== "goto") { flashBanner("startInShow"); return true; }
+      if (a === "end") return true;
     }
-    switch (a) {
-      case "digits": return true;
-      case "timerReset": resetTimer(); return true;
-      case "fullscreen": DF.toggleFs(); return true;
-      case "end": if (!document.fullscreenElement) endShow(); return true;
-      case "goto": command("goto", e.slide); return true;
-      default: command(a); return true;
-    }
-  }, generic ? { passthrough: true, forward: function (e) {
-    if (active && popup && !popup.closed) {
-      send({ type: "key", key: e.key, code: e.code, keyCode: e.keyCode, shift: e.shiftKey });
-      e.preventDefault();
-    }
-  } } : null);
+    if (a === "goto") { command("goto", e.slide); return true; }
+    command(a);
+    return true;
+  }, null);
 
-  // recovery after a reload of the presenter view
-  if (active) {
-    enterPresenter();
-    lastBeat = Date.now();
-  }
+  // keep the keyboard focus out of the previews (the clicker would stop working)
+  var refocus = function () {
+    var a = document.activeElement;
+    if (a && a.tagName === "IFRAME" && a.hasAttribute("data-df-preview")) { a.blur(); if (document.body.focus) document.body.focus(); }
+  };
+  window.addEventListener("blur", function () { setTimeout(refocus, 0); });
+  setInterval(refocus, 500);
+
+  render();
+  tickClock();
+  send({ type: "hello" });
 };
 
 // --- 90-main.js ---
@@ -1437,6 +1620,22 @@ function bootPreview() {
   window.focus = function () { };
   var origPlay = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function () { this.muted = true; this.volume = 0; return origPlay.apply(this, arguments); };
+  // A preview shows the end state of its slide without playing it: Web Animations (the claude.ai
+  // player shows its builds with element.animate) are finished as soon as they are created, and
+  // whatever still runs after a jump is finished too. finish() fires the usual finish events, so a
+  // player that waits for them carries on. CSS animations and transitions get a duration of 0
+  // (class df-still) in the claude.ai and Keynote players, which use no end events of their own.
+  var origAnimate = Element.prototype.animate;
+  if (origAnimate) Element.prototype.animate = function () {
+    var an = origAnimate.apply(this, arguments);
+    try { an.finish(); } catch (e) { } // an endless animation cannot finish and keeps running
+    return an;
+  };
+  function finishAll() {
+    if (!document.getAnimations) return;
+    document.getAnimations().forEach(function (an) { try { an.finish(); } catch (e) { } });
+  }
+  if (DF.format() !== "pptx") document.documentElement.classList.add("df-still");
   var cur = { slide: 0, step: 0 }, queue = Promise.resolve(), ready;
   DF.previewReady = new Promise(function (res) { ready = res; });
   DF.setPreviewState = function (s) {
@@ -1444,7 +1643,7 @@ function bootPreview() {
       if (DF.model.same(cur, s)) return;
       var from = cur;
       cur = { slide: s.slide, step: s.step };
-      return DF.drive(from, cur).then(function () { return DF.wait(30); });
+      return DF.drive(from, cur).then(function () { finishAll(); return DF.wait(30); }).then(finishAll);
     });
   };
   DF.activate({ runScripts: true }).then(function () {
@@ -1454,14 +1653,16 @@ function bootPreview() {
   }).then(function () { ready(); });
 }
 
-function bootAudience() {
-  DF.activate({ runScripts: true }).then(function () {
+function bootShow() {
+  // the start screen needs only styles and fonts; the source player runs after "Start"
+  var snap = DF.snapshot();
+  DF.activate({ cssOnly: true }).then(function () {
     document.documentElement.classList.remove("df-loading");
-    DF.startAudience();
+    DF.startShow(snap);
   });
 }
 
-function bootStart() {
+function bootPresenter() {
   var snap = DF.snapshot();
   DF.activate({ runScripts: false }).then(function () {
     document.documentElement.classList.remove("df-loading");
@@ -1472,8 +1673,8 @@ function bootStart() {
 function boot() {
   try {
     if (DF.role === "preview") bootPreview();
-    else if (DF.role === "audience") bootAudience();
-    else bootStart();
+    else if (DF.role === "presenter") bootPresenter();
+    else bootShow();
   } catch (e) {
     console.error("deckfold:", e);
     document.documentElement.classList.remove("df-loading");

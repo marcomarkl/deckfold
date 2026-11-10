@@ -1,14 +1,14 @@
 # Design decisions
 
-Code comments and the spike notes refer to these decisions by their IDs: E1 to E13 for the first version, P1 to P8 for the PowerPoint converter.
+Code comments and the spike notes refer to these decisions by their IDs: E1 to E14 for the control layer (E1 to E13 from the first version), P1 to P17 for the PowerPoint converter.
 
 | ID | Decision | Choice | Reason |
 |---|---|---|---|
 | E1 | Input formats | Keynote HTML export and claude.ai decks; PowerPoint and Google Slides go through PPTX, then Keynote. **Revised by P1:** PowerPoint files are read directly | current PowerPoint versions have no HTML export |
 | E2 | Google Slides | PPTX download, opened and exported in Keynote. **Revised by P1:** the PPTX download goes to deckfold directly | Google Slides exports no HTML; no adapter of its own needed |
-| E3 | Target browsers | full support in Chromium (Chrome, Edge); Firefox and Safari without screen placement | only Chromium has the Window Management API |
+| E3 | Target browsers (revised by E14) | the same presenting in every browser; Chrome and Edge add Keyboard Lock (one Escape in full screen) | no browser reports reliably which screen a window is on, so deckfold does not check it in any browser (E14) |
 | E4 | Where the presenter view is configured | defaults from CLI flags or a JSON file, changeable at runtime and stored per deck in the browser | fixed starting point, adjustable on site |
-| E5 | Presenter view elements | current slide and next step, notes, time, slide overview | matches Keynote and PowerPoint, plus an overview for jumping |
+| E5 | Presenter view elements | current slide and next step, notes, time, slide overview; shown or hidden, notes size, target duration and pane sizes are changed while the view runs | matches Keynote and PowerPoint, plus an overview for jumping |
 | E6 | Notes for Keynote decks | none | the Keynote HTML export contains no presenter notes |
 | E7 | Auto mode timing | timings from the source first, otherwise a global interval; waits for playing media; optional loop | keeps the intent of the source and never cuts off a video |
 | E8 | Media size | embedded unchanged, decoded on demand, warning above a threshold | no quality loss, no dependency on a transcoder |
@@ -17,6 +17,7 @@ Code comments and the spike notes refer to these decisions by their IDs: E1 to E
 | E11 | Extent of the clean-up | safe changes only; CSS and JS content stays unchanged | animations must not break |
 | E12 | Code signing | binaries are unsigned; the README describes how to allow them | no cost, can be added later |
 | E13 | Unknown format | abort; `--generic` embeds it without presenter view, overview and auto mode | the presenter view never goes missing silently |
+| E14 | Presenting (v0.4.0) | the window the file is opened in is the presentation, with a start screen (preview, slide strip, settings); the presenter view is a second window the user switches on and drags to a screen; deckfold places no window and does not check where the windows are, so full screen can always be chosen; the previews show whole slides after all their steps; the source player runs only after "Start", and the end reloads the window back to the start screen; one Escape ends the presentation (Keyboard Lock in Chrome and Edge) | without the window management permission Chrome puts every popup on the opener's screen, Safari and Firefox never place windows. Without the permission no browser reports reliably which screen a window is on (Wayland reports no positions; macOS with separate Spaces shows a dragged window on the screen under the mouse, while browsers report the screen with the larger part of it). A draft of v0.4.0 asked for the permission in Chrome and Edge and blocked full screen while both windows were on the same screen; in the maintainer's test this did not work reliably, so it was removed and placing the windows is left to the user, see `docs/spikes/S2-file-protocol.md` |
 
 ## PowerPoint converter
 

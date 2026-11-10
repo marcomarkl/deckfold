@@ -42,13 +42,13 @@ test('Keynote solo: one-shot URLs are released, DOM-bound URLs stay', async ({ p
 test('Keynote presenter view: previews keep rendering with released URLs', async ({ page, context }) => {
   await countBlobs(context);
   const w = watch(context);
-  const aud = await present(page, context, 'keynote.html');
-  const canvases = () => page.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => f.contentDocument.querySelectorAll('#stage canvas').length));
+  const pres = await present(page, context, 'keynote.html');
+  const canvases = () => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => f.contentDocument.querySelectorAll('#stage canvas').length));
   await expect.poll(async () => (await canvases()).every((c) => c > 0), { timeout: 20000 }).toBe(true);
-  for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(800); }
-  await expect.poll(() => audState(aud)).toEqual(await expected(page, ['next', 'next', 'next']));
-  await page.waitForTimeout(1500);
+  for (let i = 0; i < 3; i++) { await pres.keyboard.press('ArrowRight'); await pres.waitForTimeout(800); }
+  await expect.poll(() => audState(page)).toEqual(await expected(pres, ['next', 'next', 'next']));
+  await pres.waitForTimeout(1500);
   expect((await canvases()).every((c) => c > 0)).toBe(true);
-  expect(await page.evaluate(() => window.__blobs.revoked.length)).toBeGreaterThan(0);
+  expect(await pres.evaluate(() => window.__blobs.revoked.length)).toBeGreaterThan(0);
   expect(realErrors(w)).toEqual([]);
 });

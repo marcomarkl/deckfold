@@ -3,7 +3,7 @@
 # Usage: scripts/release.sh [version]
 set -eu
 cd "$(dirname "$0")/.."
-VERSION="${1:-$(git describe --tags --always 2>/dev/null || echo 0.1.0-dev)}"
+VERSION="${1:-$(git describe --tags --always 2>/dev/null || echo dev)}"
 go generate ./runtime
 go test ./... >/dev/null
 rm -rf dist

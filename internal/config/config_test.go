@@ -16,6 +16,7 @@ func TestMergeAndValidate(t *testing.T) {
 		`{"auto":{"intervalSeconds":0}}`,
 		`{"keys":{"jump":["j"]}}`,
 		`{"warnSize":"lots"}`,
+		`{"presenter":{"layout":{"main":0.95}}}`,
 		`{"unknown":1}`,
 	}
 	for _, b := range bad {
@@ -36,5 +37,41 @@ func TestParseSize(t *testing.T) {
 func TestDefaultValid(t *testing.T) {
 	if err := Default().Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLayoutAndOldScreens(t *testing.T) {
+	c, err := Merge([]byte(`{"presenter":{"layout":{"side":0.3}},"screens":{"rememberChoice":false},"keys":{"diagnostics":["D"]}}`), Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.Keys["diagnostics"]; ok {
+		t.Error("the retired diagnostics key was kept")
+	}
+	if c.Presenter.Layout.Side != 0.3 || c.Presenter.Layout.Main != 0.6 {
+		t.Fatalf("layout %+v", c.Presenter.Layout)
+	}
+}
+
+// targetMinutes of older configuration files becomes targetSeconds; targetSeconds wins when both are given.
+func TestTargetMinutesBecomeSeconds(t *testing.T) {
+	c, err := Merge([]byte(`{"presenter":{"targetMinutes":20}}`), Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Presenter.TargetSeconds != 1200 || c.Presenter.TargetMinutes != 0 {
+		t.Errorf("targetSeconds %d, targetMinutes %d", c.Presenter.TargetSeconds, c.Presenter.TargetMinutes)
+	}
+	c, err = Merge([]byte(`{"presenter":{"targetMinutes":20,"targetSeconds":95}}`), Default())
+	if err != nil || c.Presenter.TargetSeconds != 95 {
+		t.Errorf("targetSeconds %d, %v", c.Presenter.TargetSeconds, err)
+	}
+	if _, err := Merge([]byte(`{"presenter":{"targetSeconds":36001}}`), Default()); err == nil {
+		t.Error("a target over 600 minutes was accepted")
+	}
+	p := Presenter{TargetMinutes: 5}
+	p.Upgrade()
+	if p.TargetSeconds != 300 || p.TargetMinutes != 0 {
+		t.Errorf("upgrade %+v", p)
 	}
 }

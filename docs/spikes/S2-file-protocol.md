@@ -46,3 +46,53 @@ not even outside the shell sandbox. Firefox is not installed on the test machine
 
 The runtime handles each of these failing (full-screen fallback, "Open audience window" button).
 The manual check is part of the verification step "manual test with two screens".
+
+## Two screens in headed Chrome (2026-11-08)
+
+Reported from a manual test with v0.3.0 and Chrome 156 on two screens: after "Start" the presenter view went into full screen, but no audience window opened ("Looking for the audience window"); "Reopen" opened it on the presenter's screen.
+
+Reproduction with Playwright and Google Chrome 156.0.8078.75 in headed mode on the same machine (an external 5K screen and the built-in display). Playwright starts Chrome with `--disable-popup-blocking`, so the script removed that switch (`ignoreDefaultArgs`) and granted the window management permission through CDP (`Browser.grantPermissions` with `windowManagement`), because Playwright's own permission list does not know it. Clicks came from Playwright input events.
+
+| Case | `window.open` | Audience window | Presenter view |
+|---|---|---|---|
+| (a) `requestFullscreen({screen})`, then `window.open` with `fullscreen` in the features | window | on the built-in display, at the chosen position, not in full screen | full screen |
+| (b) without full screen for the presenter view | window | the same | window |
+| (c) as (b), without `fullscreen` in the features | window | the same | window |
+
+- The reproduction did not show the reported failure: in all three cases the audience window opened on the chosen screen. What differed in the manual test (the browser profile, the permission granted through the prompt in the same session) is not known.
+- `fullscreen` in the window features neither blocks the popup nor opens it in full screen in Chrome 156; the feature was an origin trial (Chrome 119 to 122). deckfold no longer passes it.
+- `navigator.keyboard.lock(["Escape"])` resolves on `file://` in element full screen. With it, one real Escape ended the presentation in the maintainer's test.
+- A second manual test with the presenter view kept as a window still put the audience window on the laptop, at "Start" and at "Reopen", although deckfold passed the coordinates of the external screen. A reproduction with the opener on the laptop placed the window correctly. Note for reproductions: `--window-position` and `--window-size` apply to every new window of Chrome and override the position of a popup; move the opener through CDP (`Browser.setWindowBounds`) instead. Clicks must come from input events, because Chrome ignores the position of a popup opened without a user gesture.
+
+## Why deckfold does not place windows (2026-11-08)
+
+A research pass over the W3C Window Management specification, the Chrome documentation and the Chromium tests found:
+
+- Without the `window-management` permission, Chrome opens a popup and moves it with `moveTo` only on the opener's screen, and clamps the coordinates to that screen. With the permission, `left`/`top` count from the origin of all screens, but the window always stays inside its target screen.
+- The permission prompt appears only during a user gesture. Whether and how Chrome stores the permission for `file://` pages was not documented in any source found.
+- `requestFullscreen({screen})` and the "fullscreen companion window" (full screen on one screen plus a popup on another in one click) need the screen object from `getScreenDetails()`, so the same permission.
+- Full screen without a gesture ("Automatic Fullscreen") needs an enterprise policy.
+- Safari and Firefox have no Window Management API.
+
+So placement can only work on some machines and depends on a state the page cannot see or fix. Since v0.4.0 (decision E14) the window the file is opened in is the presentation, the presenter view is a popup on the same screen, and the user drags the windows where they belong.
+
+## Moving the presenter view by hand (2026-11-08)
+
+In the maintainer's test on macOS (Chrome 156, "Displays have separate Spaces" on), the hint that both windows are on the same screen stayed after the presenter view was dragged to the other screen, until the window was resized. Resizing also made the window jump or shrink; deckfold does not resize windows. A diagnostics panel (Shift+D, removed again with the check) showed the values both windows reported. It then showed what happened (2026-11-09): the presenter view had been dragged to the external screen (x 0 to 2560), but its frame (x 2043, width 1200) still reached 683 px onto the laptop screen (x 2560 to 4288), and the screen Chrome reported was the laptop.
+
+## Which screen a browser reports for a window (research, 2026-11-09)
+
+Sources: vendor documentation, Chromium, WebKit and Firefox source at `main`, the W3C specification. Everything below is documented or in the source; what is not is listed at the end.
+
+- **Specification:** "Operating systems and user agents are assumed to define a canonical screen for a given Window, for example the screen with the largest area intersecting the window." `ScreenDetails.currentScreen` corresponds to `window.screen` (W3C Window Management, https://w3c.github.io/window-management/, §2.10 and §3.3).
+- **macOS:** `NSWindow.screen` is "the screen where most of the window is on" (https://developer.apple.com/documentation/appkit/nswindow/screen); Chrome (`ui/display/mac/screen_mac.mm`) and Safari (`Source/WebKit/UIProcess/mac/WebViewImpl.mm`) take `window.screen` from it. With "Displays have separate Spaces", windows "may not visibly span displays", and "A window will get assigned to the display containing the mouse if the window is moved by the user"; it is clipped at the edge of that display (AppKit release notes for 10.9, https://developer.apple.com/library/archive/releasenotes/AppKit/RN-AppKitOlderNotes/index.html). So the screen a user sees and the screen the browser reports can differ, and no web API tells which display shows the window. That explains the measurement above.
+- **Windows:** `MonitorFromWindow` returns "the display monitor that has the largest area of intersection with the window" (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-monitorfromwindow); Chrome uses it (`ui/display/win/screen_win.cc`) and updates on every `WM_MOVING`/`WM_MOVE` (`ui/views/win/hwnd_message_handler.cc`). Firefox picks the screen with the greatest intersection itself (`widget/ScreenManager.cpp`). A window may span monitors.
+- **Linux:** X11 behaves like Windows (largest overlap). Under Wayland a client does not know its position: Chrome assumes windows at (0, 0) (commit b439ff33, `ui/ozone/platform/wayland`), and Firefox reports `availLeft`/`availTop` as 0 (https://bugzilla.mozilla.org/show_bug.cgi?id=1795066).
+- **Permission:** `getScreenDetails()`, `currentScreen` and `currentscreenchange` need the `window-management` permission; `screen.isExtended` and the `change` event of `window.screen` do not, but Firefox and Safari have neither (MDN browser-compat-data, `api/Screen.json`).
+- **Other tools:** Google Slides requires Chrome and the screen permission for presenter view on several screens (https://support.google.com/docs/answer/1696787); reveal.js opens its speaker view as a plain window and leaves the placement to the user (`plugin/notes/plugin.js`). No documented permission-free method to compare the screens of two windows was found.
+
+First decision (E14, maintainer, 2026-11-09): Chrome and Edge use the permission and compare `currentScreen` of both windows, which blocks full screen while they share a screen; without the API (Safari, Firefox) or without the permission, deckfold does not check where the windows are, as in reveal.js.
+
+Revised the same day after the maintainer's next test, in which this check did not work reliably: deckfold no longer asks for the permission and checks in no browser where the windows are, as in reveal.js. Full screen can always be chosen, and placing the windows is left to the user. The diagnostics panel (Shift+D) went with the check.
+
+Not documented: when macOS moves a clipped window fully onto one display; whether `NSWindow.screen` uses the Space assignment or the geometry first; how Chrome and Firefox treat `file://` as a secure context for these interfaces; Chrome's `screenX` under Wayland in a test.

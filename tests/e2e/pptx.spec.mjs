@@ -41,30 +41,29 @@ test('PowerPoint solo: hidden slide skipped, keys, no network', async ({ page, c
 
 test('PowerPoint presenter view: previews, notes, overview', async ({ page, context }) => {
   const w = watch(context);
-  const aud = await present(page, context, 'pptx-basic.html');
-  await expect(page.locator('.df-presenter')).toBeVisible();
-  await expect(page.locator('iframe[data-df-preview]')).toHaveCount(2);
-  const n = await slideCount(page);
-  await page.keyboard.press('ArrowRight');
-  const s1 = await expected(page, ['next']);
-  await expect.poll(() => audState(aud)).toEqual(s1);
-  await expect.poll(() => shown(aud)).toBe(s1.slide);
-  await expect.poll(() => counter(page)).toContain(`${s1.slide + 1} / ${n}`);
-  const previews = () => page.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) =>
+  const pres = await present(page, context, 'pptx-basic.html');
+  await expect(pres.locator('.df-presenter')).toBeVisible();
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2);
+  const n = await slideCount(pres);
+  await pres.keyboard.press('ArrowRight');
+  const s1 = await expected(pres, ['next']);
+  await expect.poll(() => audState(page)).toEqual(s1);
+  await expect.poll(() => shown(page)).toBe(s1.slide);
+  await expect.poll(() => counter(pres)).toContain(`${s1.slide + 1} / ${n}`);
+  const previews = () => pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) =>
     [...f.contentDocument.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on'))));
-  const nx = await expected(page, ['next'], s1);
-  await expect.poll(previews, { timeout: 10000 }).toEqual([s1.slide, nx.slide]);
+  // the current slide and the slide after it
+  await expect.poll(previews, { timeout: 10000 }).toEqual([s1.slide, s1.slide + 1]);
   // notes come from the notes slides of the PowerPoint file
-  const note = await page.evaluate((i) => window.__deckfold.slides()[i].notes, s1.slide);
+  const note = await pres.evaluate((i) => window.__deckfold.slides()[i].notes, s1.slide);
   expect(note).toBeTruthy();
-  await expect(page.locator('.df-notes-text')).toHaveText(note);
-  // overview: one tile per visible slide, each a clone of the rendered slide
-  await page.click('.df-bar button[data-k="overview"]');
-  await expect(page.locator('.df-tile')).toHaveCount(n);
-  expect(await page.locator('.df-tile .df-clone svg').count()).toBe(n);
-  await page.click('.df-tile[data-i="2"]');
-  await expect.poll(() => audState(aud)).toEqual(await expected(page, [['goto', 2]]));
-  await expect.poll(() => shown(aud)).toBe(2);
+  await expect(pres.locator('.df-notes-text')).toHaveText(note);
+  // overview band: one tile per visible slide, each a clone of the rendered slide
+  await expect(pres.locator('.df-overview .df-tile')).toHaveCount(n);
+  await expect.poll(() => pres.locator('.df-overview .df-tile .df-clone svg').count()).toBe(n);
+  await pres.click('.df-overview .df-tile[data-i="2"]');
+  await expect.poll(() => audState(page)).toEqual(await expected(pres, [['goto', 2]]));
+  await expect.poll(() => shown(page)).toBe(2);
   expect(w.net).toEqual([]);
   expect(realErrors(w)).toEqual([]);
 });
@@ -81,9 +80,35 @@ test('PowerPoint --refresh replaces the player', async ({ page }) => {
 });
 
 test('PowerPoint media: audio starts with its slide, stops on the next', async ({ page }) => {
+  // record what play() returned and which media errors occurred, so that a failure names its cause
+  await page.addInitScript(() => {
+    window.__media = [];
+    const top = window === window.top;
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      const p = play.apply(this, arguments);
+      const rec = { top, tag: this.tagName, at: Math.round(performance.now()) };
+      window.__media.push(rec);
+      if (p && p.then) p.then(() => { rec.result = 'ok'; }, (e) => { rec.result = e.name + ': ' + e.message; });
+      return p;
+    };
+    document.addEventListener('error', (e) => {
+      const m = e.target;
+      if (m instanceof HTMLMediaElement) window.__media.push({ top, error: m.error ? m.error.code + ' ' + m.error.message : '?' });
+    }, true);
+  });
   await solo(page, 'pptx-media.html');
-  const audio = () => page.evaluate(() => { const a = document.querySelector('.df-pptx-slide audio'); return { paused: a.paused, t: a.currentTime }; });
-  await expect.poll(async () => (await audio()).paused === false && (await audio()).t > 0, { timeout: 5000 }).toBe(true);
+  const audio = () => page.evaluate(() => {
+    const a = document.querySelector('.df-pptx-slide audio');
+    return { paused: a.paused, t: a.currentTime, readyState: a.readyState, networkState: a.networkState,
+      error: a.error ? a.error.code + ' ' + a.error.message : null, src: (a.currentSrc || a.getAttribute('src') || '').slice(0, 5), plays: window.__media };
+  });
+  let st;
+  for (const end = Date.now() + 5000; Date.now() < end; await page.waitForTimeout(100)) {
+    st = await audio();
+    if (!st.paused && st.t > 0) break;
+  }
+  expect(!st.paused && st.t > 0, JSON.stringify(st)).toBe(true);
   await page.keyboard.press('ArrowRight');
   await expect.poll(async () => (await audio()).paused).toBe(true);
 });
@@ -137,17 +162,23 @@ test('PowerPoint animations: a fade is in progress halfway through', async ({ pa
   expect(op).toBeLessThan(0.95);
 });
 
-test('PowerPoint presenter view: previews show the next step without animating', async ({ page, context }) => {
-  const aud = await present(page, context, 'pptx-animations.html');
+test('PowerPoint presenter view: previews show the current and the next slide after all their steps', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-animations.html');
+  const ends = animSpec.slice(0, 2).map((sp) => sp.steps.length - 1);
   const id = Object.keys(animSpec[0].steps[0])[0];
-  const prevState = () => page.evaluate((id) => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => {
-    const el = f.contentDocument.querySelector(`.df-pptx-slide g[data-sid="${id}"]`);
-    return el ? getComputedStyle(el).visibility : 'none';
+  const prevState = () => pres.evaluate((id) => [...document.querySelectorAll('iframe[data-df-preview]')].map((f) => {
+    const p = f.contentWindow.__dfPptx, el = f.contentDocument.querySelector(`.df-pptx-slide.df-on g[data-sid="${id}"]`);
+    return [p ? p.state() : null, el ? getComputedStyle(el).visibility : 'none'];
   }), id);
-  // current preview: step 0 (hidden), next preview: step 1 (visible)
-  await expect.poll(prevState, { timeout: 10000 }).toEqual(['hidden', 'visible']);
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(() => audState(aud)).toEqual({ slide: 0, step: 1 });
+  // the audience is at step 0 of slide 1; both previews show their slide after its last step
+  await expect.poll(prevState, { timeout: 10000 }).toEqual([
+    [{ slide: 0, step: ends[0] }, animSpec[0].steps[ends[0]][id]],
+    [{ slide: 1, step: ends[1] }, animSpec[1].steps[ends[1]][id]]]);
+  // a step within the slide does not change them
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => audState(page)).toEqual({ slide: 0, step: 1 });
+  await pres.waitForTimeout(500);
+  expect((await prevState()).map((p) => p[0])).toEqual([{ slide: 0, step: ends[0] }, { slide: 1, step: ends[1] }]);
 });
 
 test('PowerPoint auto mode: source timing (advTm) after the last step', async ({ page }) => {
@@ -254,12 +285,12 @@ test('PowerPoint 3D: without WebGL and in previews the SVG approximation stays',
 });
 
 test('PowerPoint 3D: previews in the presenter view keep the approximation', async ({ page, context }) => {
-  const aud = await present(page, context, 'pptx-shapes3d.html');
-  test.skip(!(await hasWebGL(aud)), NO_WEBGL);
-  await expect(page.locator('iframe[data-df-preview]')).toHaveCount(2);
-  await expect.poll(() => aud.evaluate(() => document.querySelectorAll('image[data-df-pptx-3d-image]').length)).toBeGreaterThan(0);
-  await page.waitForTimeout(500);
-  const inPreviews = await page.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')]
+  const pres = await present(page, context, 'pptx-shapes3d.html');
+  test.skip(!(await hasWebGL(page)), NO_WEBGL);
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2);
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('image[data-df-pptx-3d-image]').length)).toBeGreaterThan(0);
+  await pres.waitForTimeout(500);
+  const inPreviews = await pres.evaluate(() => [...document.querySelectorAll('iframe[data-df-preview]')]
     .map((f) => f.contentDocument.querySelectorAll('image[data-df-pptx-3d-image]').length));
   expect(inPreviews).toEqual([0, 0]);
 });
@@ -311,18 +342,27 @@ test('PowerPoint transitions: every 2D, 3D and tile transition plays and ends on
   await solo(page, 'pptx-transitions3d.html');
   const types = await page.evaluate(() => window.__dfPptx.deck.slides.map((s) => (s.anim.transition || {}).type));
   expect(types.slice(1).every((t) => t && t !== 'fade')).toBe(true);
+  const starts = [];
   for (let i = 1; i < types.length; i++) {
     await page.evaluate((i) => window.__dfPptx.goTo(i - 1, 0), i);
-    await page.evaluate(() => window.__dfPptx.next());
-    // something moves while the transition runs (1.5 s)
-    await expect.poll(() => page.evaluate(() => {
-      if (document.querySelector('#df-pptx-stage > canvas')) return true;
-      return [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
-    }), { timeout: 6000, intervals: [20], message: types[i] }).toBe(true);
+    // something moves while the transition runs (1.5 s); the time until it starts is measured in
+    // the page, so that a failure tells a late start from none (tile transitions first draw both
+    // slides into pictures)
+    const ms = await page.evaluate(async () => {
+      const moving = () => !!document.querySelector('#df-pptx-stage > canvas') ||
+        [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
+      const t0 = performance.now();
+      window.__dfPptx.next();
+      while (!moving() && performance.now() - t0 < 20000) await new Promise((r) => setTimeout(r, 10));
+      return moving() ? Math.round(performance.now() - t0) : -1;
+    });
+    starts.push(`${types[i]} ${ms} ms`);
+    expect(ms >= 0 && ms < 6000, `${types[i]}: moving after ${ms} ms (-1: not within 20 s); all: ${starts.join(', ')}`).toBe(true);
     await expect.poll(() => shown(page), { timeout: 10000, message: types[i] }).toBe(i);
     await expect.poll(() => page.evaluate(() => !document.querySelector('#df-pptx-stage > canvas') &&
       [...document.querySelectorAll('.df-pptx-slide')].every((s) => !s.style.transform && !s.style.clipPath && !s.style.opacity)), { timeout: 10000, message: types[i] }).toBe(true);
   }
+  console.log('transitions start moving after:', starts.join(', '));
   expect(realErrors(w)).toEqual([]);
 });
 

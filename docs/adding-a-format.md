@@ -4,7 +4,7 @@ This is the order in which the Keynote adapter was built. Most of its problems o
 
 1. **Get a real export.** Create one with the source application and put it into the local corpus under `testdata/<format>/`. Never commit it; `testdata/` is ignored. Descriptions of the format on the web can be out of date (the Keynote export no longer has a `kpf.json`).
 
-2. **Find out how the player loads files.** Search the player code for `location.protocol`, `XMLHttpRequest`, `fetch(`, `createElement("script")` and `Worker(`. Players often load differently on `file:` than on `http(s):` or `about:`. The audience window runs on `file:`, the presenter previews run in `srcdoc` iframes with the protocol `about:`, so both paths must work. Every file the player loads through a computed path has to come out of `Collect` so the shim can map it.
+2. **Find out how the player loads files.** Search the player code for `location.protocol`, `XMLHttpRequest`, `fetch(`, `createElement("script")` and `Worker(`. Players often load differently on `file:` than on `http(s):` or `about:`. The presentation runs on `file:`, the previews run in `srcdoc` iframes with the protocol `about:`, so both paths must work. Every file the player loads through a computed path has to come out of `Collect` so the shim can map it.
 
 3. **Find out how the player starts and is controlled.** Note the start event (`load`, `DOMContentLoaded` or a `readyState` check), where it listens for keys (`window` or `document`) and whether it reads `key` or `keyCode`, which custom events it dispatches, and whether it calls `focus()` itself. A player that leaves the show on Escape, or that pulls the focus into a preview, needs handling in the runtime.
 
@@ -13,8 +13,8 @@ This is the order in which the Keynote adapter was built. Most of its problems o
 5. **Write the JS adapter** in `runtime/src/20-model.js` with `ready`, `forward`, `back`, `jump` and `mediaRoot`. Drive the player only through synthetic keys or its public navigation (for example `#n`), and keep the state in the runtime. Run `go generate ./runtime` afterwards.
 
 6. **Test the places where Keynote broke:**
-   - solo audience view on `file:`
-   - presenter view with both `srcdoc` previews rendering and following the state
+   - the start screen on `file:` (preview, slide strip) and the presentation after "Start"
+   - the presenter view window with both `srcdoc` previews rendering and following the state
    - Escape in full screen (the key must never reach the player)
    - no network requests
    - pixel comparison with the original export

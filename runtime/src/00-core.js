@@ -10,67 +10,69 @@ function readJSON(id) {
 DF.cfg = readJSON("df-config") || { defaults: {} };
 DF.version = DF.cfg.version;
 
-// Role: "preview" (srcdoc iframe of the presenter view), "audience" (audience window),
-// "start" (the window the file was opened in; it becomes the presenter view, or the solo
-// audience view after a reload). The solo role is also kept in sessionStorage because WebKit
-// drops window.name when a file:// page reloads.
-function soloFlag() { try { return sessionStorage.getItem("df-solo"); } catch (e) { return null; } }
+// Roles:
+// "show": the window the file was opened in. It shows the start screen first and runs the source
+//   player only after "Start"; it owns the state.
+// "presenter": the presenter view, a popup the show window opens (window.name "df-presenter:<token>",
+//   kept in sessionStorage too, because WebKit drops window.name when a file:// page reloads).
+// "preview": srcdoc iframes in the start screen and the presenter view.
 DF.role = (function () {
   try {
     if (window.frameElement && window.frameElement.hasAttribute("data-df-preview")) return "preview";
   } catch (e) { /* cross-origin */ }
-  var n = window.name || "";
-  if (n.indexOf("df-audience:") === 0 || n.indexOf("df-solo:") === 0 || soloFlag()) return "audience";
-  return "start";
+  var n = window.name || "", saved = null;
+  try { saved = sessionStorage.getItem("df-presenter"); } catch (e) { }
+  if (n.indexOf("df-presenter:") === 0 || saved) return "presenter";
+  return "show";
 })();
-DF.solo = DF.role === "audience" && ((window.name || "").indexOf("df-solo:") === 0 || (!!soloFlag() && (window.name || "").indexOf("df-audience:") !== 0));
-DF.token = DF.role === "audience" ? ((window.name || "").split(":")[1] || soloFlag() || "") : "";
-DF.setSolo = function (token) {
-  try { if (token) sessionStorage.setItem("df-solo", token); else sessionStorage.removeItem("df-solo"); } catch (e) { }
-  window.name = token ? "df-solo:" + token : "";
-};
+// Token of the session; both windows use the same one. The show window keeps it across reloads.
+DF.token = (function () {
+  if (DF.role === "preview") return "";
+  try {
+    if (DF.role === "presenter") {
+      var t = (window.name || "").indexOf("df-presenter:") === 0 ? window.name.split(":")[1] : sessionStorage.getItem("df-presenter");
+      sessionStorage.setItem("df-presenter", t);
+      return t;
+    }
+    var have = sessionStorage.getItem("df-token");
+    if (have) return have;
+  } catch (e) { }
+  return null; // set by the show window once randomToken exists
+})();
 
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    present: "Präsentieren", audienceOnly: "Nur Publikumsansicht", settings: "Einstellungen",
     slides: "Folien", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
-    screens: "Bildschirme", audienceScreen: "Publikum", presenterScreen: "Referent", presenterFs: "Referentenansicht im Vollbild",
-    remember: "Auswahl merken", start: "Start", cancel: "Abbrechen", close: "Schließen", save: "Speichern",
-    reset: "Zurücksetzen", screensHint: "Dieser Browser kann Fenster nicht selbst auf einen Bildschirm legen. Zieh das Publikumsfenster auf den Beamer und klick dort auf „Vollbild“.",
-    screensDenied: "Kein Zugriff auf die Bildschirme. Das Publikumsfenster öffnet sich am Standardplatz; zieh es auf den Beamer.",
-    presenterStays: "Die Referentenansicht bleibt, wo dieses Fenster liegt.",
-    clickFs: "Klicken für Vollbild", fullscreen: "Vollbild", popupBlocked: "Das Publikumsfenster wurde blockiert.",
-    openAudience: "Publikumsfenster öffnen", audienceLost: "Publikumsfenster nicht erreichbar.", reopen: "Neu öffnen",
-    searching: "Suche Publikumsfenster …", screensChanged: "Die Bildschirme haben sich geändert.", chooseAgain: "Neu wählen",
+    start: "Start", presenterView: "Referentenansicht",
+    fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
+    slide: "Folie", previous: "Zurück", following: "Weiter",
+    popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups für diese Datei und schalte die Referentenansicht noch einmal ein.",
+    startInShow: "Gestartet wird im Präsentationsfenster: Klick dort auf „Start“.", showLost: "Das Präsentationsfenster ist nicht erreichbar.",
+    loading: "Wird geladen …",
+    clickFs: "Klicken für Vollbild",
     current: "Aktuell", next: "Als Nächstes", notes: "Notizen", time: "Zeit", overview: "Übersicht",
     end: "Ende", endShow: "Beenden", noNotes: "Keine Notizen", elapsed: "Verstrichen", remaining: "Rest",
-    clock: "Uhr", pause: "Pause", resume: "Weiter", auto: "Auto", autoOn: "Auto an", autoOff: "Auto aus",
-    elements: "Elemente der Referentenansicht", notesSize: "Schriftgröße Notizen (px)", target: "Zieldauer (Minuten, 0 = keine)",
-    autoInterval: "Auto-Intervall (Sekunden)", autoLoop: "Auto-Modus in Schleife", autoStart: "Im Auto-Modus starten",
-    endOfShow: "Ende der Präsentation", step: "Schritt", noPresenter: "Für dieses Format gibt es keine Referentenansicht. Tasten werden an das Publikumsfenster weitergegeben.",
+    clock: "Uhr", pause: "Pause", resume: "Weiter", autoOn: "Auto an", autoOff: "Auto aus", reset: "Zurücksetzen",
+    target: "Ziel", smaller: "Notizen kleiner", larger: "Notizen größer",
+    endOfShow: "Ende der Präsentation", step: "Schritt",
     offline: "Live-Inhalt – ohne Netz nicht verfügbar", media: "Medien laufen",
-    keysHelp: "Weiter: → ↓ Bild↓ Leertaste · Zurück: ← ↑ Bild↑ · Folie: Ziffern + Enter · B schwarz · W weiß · A Auto · F Vollbild"
   },
   en: {
-    present: "Present", audienceOnly: "Audience view only", settings: "Settings",
     slides: "slides", generic: "Unknown format: no presenter view, overview or auto mode.",
-    screens: "Screens", audienceScreen: "Audience", presenterScreen: "Presenter", presenterFs: "Presenter view in full screen",
-    remember: "Remember choice", start: "Start", cancel: "Cancel", close: "Close", save: "Save",
-    reset: "Reset", screensHint: "This browser cannot place windows on a screen. Drag the audience window to the projector and click “Full screen” there.",
-    screensDenied: "No access to the screens. The audience window opens at the default position; drag it to the projector.",
-    presenterStays: "The presenter view stays where this window is.",
-    clickFs: "Click for full screen", fullscreen: "Full screen", popupBlocked: "The audience window was blocked.",
-    openAudience: "Open audience window", audienceLost: "Audience window not reachable.", reopen: "Reopen",
-    searching: "Looking for the audience window …", screensChanged: "The screen setup changed.", chooseAgain: "Choose again",
+    start: "Start", presenterView: "Presenter view",
+    fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
+    slide: "Slide", previous: "Back", following: "Forward",
+    popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
+    startInShow: "The presentation starts in the presentation window: click “Start” there.", showLost: "The presentation window is not reachable.",
+    loading: "Loading …",
+    clickFs: "Click for full screen",
     current: "Current", next: "Next", notes: "Notes", time: "Time", overview: "Overview",
     end: "End", endShow: "End show", noNotes: "No notes", elapsed: "Elapsed", remaining: "Left",
-    clock: "Clock", pause: "Pause", resume: "Resume", auto: "Auto", autoOn: "Auto on", autoOff: "Auto off",
-    elements: "Presenter view elements", notesSize: "Notes font size (px)", target: "Target duration (minutes, 0 = none)",
-    autoInterval: "Auto interval (seconds)", autoLoop: "Loop auto mode", autoStart: "Start in auto mode",
-    endOfShow: "End of presentation", step: "Step", noPresenter: "This format has no presenter view. Keys are passed to the audience window.",
+    clock: "Clock", pause: "Pause", resume: "Resume", autoOn: "Auto on", autoOff: "Auto off", reset: "Reset",
+    target: "Target", smaller: "Smaller notes", larger: "Larger notes",
+    endOfShow: "End of presentation", step: "Step",
     offline: "Live content – not available offline", media: "media playing",
-    keysHelp: "Next: → ↓ PgDn Space · Back: ← ↑ PgUp · Slide: digits + Enter · B black · W white · A auto · F full screen"
   }
 };
 function t(k) { return (TEXT[LANG] && TEXT[LANG][k]) || TEXT.en[k] || k; }
@@ -136,3 +138,19 @@ function fmtTime(ms) {
   return (neg ? "−" : "") + (h ? h + ":" + p(m) : p(m)) + ":" + p(s);
 }
 DF.fmtTime = fmtTime;
+
+// Target duration typed as minutes:seconds. parseMinSec returns seconds (0 = no target), or null
+// for input it cannot read: "20" is 20:00, "5:3" is 05:03, "1:75" is 02:15, ":30" is 00:30;
+// at most 600:00.
+DF.parseMinSec = function (v) {
+  v = String(v == null ? "" : v).trim();
+  if (v === "") return 0;
+  var m = /^(\d*)(?::(\d*))?$/.exec(v);
+  if (!m || (m[1] === "" && !m[2])) return null;
+  return Math.min(parseInt(m[1] || "0", 10) * 60 + parseInt(m[2] || "0", 10), 36000);
+};
+DF.fmtMinSec = function (t) {
+  var m = Math.floor(t / 60), s = t % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+};
+

@@ -32,25 +32,37 @@ export function watch(context) {
 }
 export const realErrors = (w) => w.errors.filter((e) => !/requestFullscreen|user gesture/i.test(e));
 
-// Starts the solo audience view (second button on the start screen).
-export async function solo(page, name) {
+// Opens the start screen of the show window (the window the file is opened in).
+export async function startScreen(page, name) {
   await page.goto(fileURL(name));
-  await page.waitForSelector('.df-start');
-  await page.click('.df-start-buttons button:nth-child(2)');
+  await page.waitForSelector('.df-start [data-df-start]');
+}
+
+// Starts the presentation without the presenter view; the page is the show window.
+export async function solo(page, name) {
+  await startScreen(page, name);
+  await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
 }
 
-// Starts the presenter view with the audience window; returns the popup.
+// Switches the presenter view on and starts; the page is the show window, the returned popup the
+// presenter view.
 export async function present(page, context, name) {
-  await page.goto(fileURL(name));
-  await page.waitForSelector('.df-start');
+  await startScreen(page, name);
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  return pres;
+}
+
+// Switches the presenter view on from the start screen; returns its window.
+export async function openPresenter(page, context) {
   const popupP = context.waitForEvent('page');
-  await page.click('.df-start-buttons button:nth-child(1)');
-  const dlg = page.locator('.df-dialog .df-primary');
-  await dlg.waitFor({ timeout: 3000 }).then(() => dlg.click()).catch(() => {});
-  const aud = await popupP;
-  await aud.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
-  return aud;
+  await page.check('[data-df-presenter]');
+  const pres = await popupP;
+  await pres.waitForSelector('.df-presenter');
+  return pres;
 }
 
 // Whether the page's browser can create a WebGL context (the Firefox of the Linux CI cannot).
@@ -60,7 +72,7 @@ export const hasWebGL = (page) => page.evaluate(() => {
 });
 export const NO_WEBGL = 'no WebGL in this browser; the fallback is checked by the transitions test';
 
-export const audState = (aud) => aud.evaluate(() => window.__deckfold.audience.state());
+export const audState = (show) => show.evaluate(() => window.__deckfold.audience.state());
 export const counter = (page) => page.textContent('.df-counter');
 export const slideCount = (page) => page.evaluate(() => window.__deckfold.slides().length);
 

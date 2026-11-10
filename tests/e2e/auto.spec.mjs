@@ -3,15 +3,15 @@ import { solo, present, audState, expected, need } from './helpers.mjs';
 
 test.beforeEach(() => need('claude'));
 
-test('auto mode keeps running in the audience window, even without the presenter view', async ({ page, context }) => {
-  const aud = await present(page, context, 'claude-auto.html');
-  await expect.poll(() => aud.evaluate(() => window.__deckfold.audience.state().slide), { timeout: 8000 }).toBeGreaterThanOrEqual(1);
-  await expect(page.locator('.df-auto-group button')).toHaveClass(/df-active/);
+test('auto mode keeps running in the show window, even without the presenter view', async ({ page, context }) => {
+  const pres = await present(page, context, 'claude-auto.html');
+  await expect.poll(() => page.evaluate(() => window.__deckfold.audience.state().slide), { timeout: 8000 }).toBeGreaterThanOrEqual(1);
+  await expect(pres.locator('.df-auto-group button')).toHaveClass(/df-active/);
   // close the presenter view: the timer does not depend on it
-  const before = await audState(aud);
-  await page.close();
-  await aud.waitForTimeout(3500);
-  expect(await audState(aud)).not.toEqual(before);
+  const before = await audState(page);
+  await pres.close();
+  await page.waitForTimeout(3500);
+  expect(await audState(page)).not.toEqual(before);
 });
 
 test('auto mode with loop: back to the first slide after the last one', async ({ page }) => {
