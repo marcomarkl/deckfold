@@ -119,3 +119,37 @@ test('Keynote links to other slides: followed through deckfold, the presenter vi
     await page.waitForSelector('.df-start [data-df-start]');
   }
 });
+
+// deckfold jumps in the Keynote player by typing the slide number and Enter. The player shows its
+// own slide number display while it takes the digits; the audience never sees it.
+test('Keynote: the player\'s slide number display stays hidden in the presentation', async ({ page }) => {
+  await solo(page, 'keynote.html');
+  await expect(page.locator('#stage canvas').first()).toBeAttached({ timeout: 15000 });
+  const n = await slideCount(page);
+  // watch the display while deckfold jumps: once per animation frame, whether it can be seen
+  await page.evaluate(() => {
+    window.__hud = { frames: 0, seen: 0, found: false };
+    const tick = () => {
+      window.__hud.frames++;
+      for (const id of ['slideNumberControl', 'slideNumberDisplay']) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        window.__hud.found = true;
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        if (cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0.01 && r.width > 0 && r.height > 0) window.__hud.seen++;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  for (const k of [Math.min(2, n - 1), 0, n - 1]) {
+    await page.evaluate((k) => window.__deckfold.audience.act('state', { slide: k, step: 0 }), k);
+    await expect.poll(() => audState(page)).toEqual({ slide: k, step: 0 });
+    await page.waitForTimeout(900);
+  }
+  const hud = await page.evaluate(() => window.__hud);
+  expect(hud.frames).toBeGreaterThan(20);
+  // the player has the display (otherwise this test checks nothing), and no frame showed it
+  expect(hud.found).toBe(true);
+  expect(hud.seen).toBe(0);
+});

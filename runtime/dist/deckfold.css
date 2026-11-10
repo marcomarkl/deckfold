@@ -193,9 +193,11 @@ html.df-still *, html.df-still *::before, html.df-still *::after {
   animation-duration: 0s !important; animation-delay: 0s !important;
   transition-duration: 0s !important; transition-delay: 0s !important;
 }
-/* previews of Keynote decks: the player shows its slide number display while deckfold jumps by
-   digits and Enter (its only way to jump); it is the player's control, not part of a slide */
-html.df-preview #slideNumberControl, html.df-preview #slideNumberDisplay { display: none !important; }
+/* Keynote decks: the player shows its slide number display while deckfold jumps by digits and
+   Enter (its only way to jump, also for a link to another slide); it is the player's control,
+   not part of a slide, so neither the previews nor the presentation show it */
+html.df-preview #slideNumberControl, html.df-preview #slideNumberDisplay,
+html.df-audience #slideNumberControl, html.df-audience #slideNumberDisplay { display: none !important; }
 /* claude.ai decks: the player shows its own slide counter for a moment after each change; deckfold
    hides it in the presentation and in the previews (the presenter view shows the position) */
 .deck-pager { display: none !important; }
