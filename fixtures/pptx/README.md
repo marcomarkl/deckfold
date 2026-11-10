@@ -21,6 +21,7 @@ The tests prefer the PowerPoint-saved copy, because that is the XML PowerPoint i
 2. Close all open presentations in PowerPoint and dismiss any start dialogs (sign-in, what's new).
    PowerPoint's sandbox shows a "Grant Access" dialog for files it has not opened before. Granting the work folder in that dialog did not stop it in a test, so expect to confirm the dialogs during a run.
 3. Run `scripts/pptxref/pptxref.sh` (it works in `tests/.out/pptxref`, which git ignores) with the names of the decks whose source in `fixtures/pptx/src` changed, for example `scripts/pptxref/pptxref.sh basic`; `git status fixtures/pptx/src` shows them. Without arguments the script runs over every deck, which costs a round of access dialogs per deck and rewrites the metadata of every saved copy; avoid it.
+4. Before committing a new reference, read the SSIM of its slides (`tests/e2e/pptx-fidelity.spec.mjs` prints one line per slide). The Windows runner measured up to 0.009 lower than the Mac, so a value within 0.01 of the threshold needs its cause found first; start with the fonts of the PDF (`pdffonts tests/.out/pptxref/<name>.pdf`).
 
 PowerPoint writes new metadata every time it saves, so a run over an unchanged deck changes its saved copy, `source.sha256` and sometimes a reference image, although nothing in the content changed. Discard such changes with `git checkout -- fixtures/pptx/<name>.pptx fixtures/pptx/ref/<name>`.
 

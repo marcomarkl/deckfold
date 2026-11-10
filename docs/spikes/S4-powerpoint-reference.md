@@ -82,6 +82,8 @@ Two things this showed about text:
 - PowerPoint does not kern Carlito. Carlito has its kerning in GPOS only (no `kern` table), and deckfold's unkerned text matches PowerPoint's to SSIM 0.997 on a text slide. Kerning deckfold's text with the GPOS pairs made 19 of 87 slides worse and was taken back.
 - PowerPoint does kern Calibri (the shorter lines of the wrong reference). deckfold measures and draws every font without kerning, so a deck in Calibri, converted on a machine that has Calibri, has lines up to 0.7 % longer than PowerPoint's. That is not measured against a reference yet.
 
+**The Windows runner measures lower.** The 85 slides that the Windows runner (Chrome, CI run 42807437229) and the Mac both compared on 2026-11-10 are 0.001 lower on the runner on average, and list slides up to 0.009 lower (slide 2 of `basic`: 0.969 on the Mac, 0.960 on the runner). A reference that passes on the Mac within 0.01 of the threshold can fail in CI, as the 0.954 above did.
+
 ## Still open
 
 - A comparison of the 3D shapes with WebGL in a browser with a GPU: the tests draw WebGL with SwiftShader.

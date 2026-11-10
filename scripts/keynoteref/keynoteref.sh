@@ -8,9 +8,17 @@
 # (Keynote crashes); at the end Keynote is quit, but only when every open document is one this
 # script opened.
 #
-# Keynote 15.4 on macOS 27.2 does not open files in tests/.out through AppleScript: open returns
-# nothing and no access dialog appears (checked on 2026-11-07). Then export by hand: open
-# fixtures/pptx/<name>.pptx in Keynote, File > Export To > HTML, into tests/.out/keynote/<name>.
+# Opening through AppleScript has worked and failed with Keynote 15.4 on macOS 27.2. On 2026-11-07
+# open returned nothing for a file in tests/.out and no access dialog appeared. On 2026-11-10 the
+# content deck opened from another git-ignored folder of the project, and the export through
+# AppleScript into tests/.out/keynote/content worked. Whether the folder makes the difference is
+# not measured. While Keynote shows a dialog (for example that a file could not be imported), open
+# does not return, so when this script stops at its timeout, look at Keynote. If the script cannot
+# open a deck, open fixtures/pptx/<name>.pptx in Keynote yourself and export it with File >
+# Export To > HTML into tests/.out/keynote/<name>.
+#
+# The export of the content deck (name "content") has the links to other slides and the builds
+# that the Keynote link test reads (keynoteLinks in tests/e2e/setup.mjs).
 #
 # Usage: scripts/keynoteref/keynoteref.sh [name ...]   (default: basic animations)
 set -eu
