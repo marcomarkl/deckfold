@@ -25,7 +25,9 @@ DF.role = (function () {
   if (n.indexOf("df-presenter:") === 0 || saved) return "presenter";
   return "show";
 })();
-// Token of the session; both windows use the same one. The show window keeps it across reloads.
+// Token of the session; both windows use the same one. The presenter view has it from the name
+// its window was opened with. The show window keeps its token across reloads, per deck, and reads
+// it once the deck metadata is there (35-start.js).
 DF.token = (function () {
   if (DF.role === "preview") return "";
   try {
@@ -34,10 +36,8 @@ DF.token = (function () {
       sessionStorage.setItem("df-presenter", t);
       return t;
     }
-    var have = sessionStorage.getItem("df-token");
-    if (have) return have;
   } catch (e) { }
-  return null; // set by the show window once randomToken exists
+  return null;
 })();
 
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
@@ -111,6 +111,10 @@ function store(kind) {
 }
 DF.ls = store("localStorage");
 DF.ss = store("sessionStorage");
+// deckKey: the name under which this deck keeps a value of the running session. A tab keeps its
+// sessionStorage when it opens another file, and every file:// page shares it, so a value that
+// belongs to one deck (the token of the session, the slide chosen last) has the deck in its name.
+DF.deckKey = function (name) { return name + ":" + ((DF.meta && DF.meta.deckHash) || "deck"); };
 
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function isObj(o) { return o && typeof o === "object" && !Array.isArray(o); }

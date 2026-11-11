@@ -9,10 +9,11 @@ DF.startShow = function (snapshotHTML) {
   var generic = DF.format() === "generic";
   var slides = DF.slides();
   var meta = DF.meta.deck || {};
-  if (!DF.token) {
-    DF.token = DF.randomToken();
-    try { sessionStorage.setItem("df-token", DF.token); } catch (e) { }
-  }
+  // the token of this deck's session: the one from before a reload of this window, otherwise a
+  // new one. Another deck opened in the same tab has its own, so it does not answer the presenter
+  // view of this one.
+  DF.token = DF.ss.get(DF.deckKey("df-token")) || DF.randomToken();
+  DF.ss.set(DF.deckKey("df-token"), DF.token);
   // A source player can read its position from the address (the claude.ai player reads #n). After
   // the reload at the end the address still holds the last slide, which would override the chosen
   // start slide, so the hash goes before the player runs.
@@ -24,7 +25,7 @@ DF.startShow = function (snapshotHTML) {
   var cfg = DF.settings();
   var phase = "start"; // start, loading, show
   var rWin = null;
-  var last = DF.ss.get("df-last");
+  var last = DF.ss.get(DF.deckKey("df-last"));
   var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
   document.documentElement.classList.add("df-start-mode");
@@ -141,7 +142,7 @@ DF.startShow = function (snapshotHTML) {
     if (generic || !slides.length) return;
     sel = Math.max(0, Math.min(slides.length - 1, i));
     // the choice survives a reload; the show writes the same key, so the later of the two counts
-    DF.ss.set("df-last", { slide: sel, step: 0 });
+    DF.ss.set(DF.deckKey("df-last"), { slide: sel, step: 0 });
     if (frame) frame.show(finalState(sel));
     strip.mark(sel);
     strip.nav(sel > 0, sel < slides.length - 1);
@@ -256,7 +257,7 @@ DF.startShow = function (snapshotHTML) {
   // end: back to the start screen with the last slide chosen, by reloading this window; the source
   // player stops with the reload, the presenter view stays open and reconnects
   function end(lastState) {
-    if (lastState) DF.ss.set("df-last", lastState);
+    if (lastState) DF.ss.set(DF.deckKey("df-last"), lastState);
     send({ type: "ended" });
     phase = "start";
     location.reload();

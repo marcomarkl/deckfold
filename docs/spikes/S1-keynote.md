@@ -120,3 +120,19 @@ What is visible is in the layer tree of each event: every texture has `initialSt
   jump to a slide with digits followed by Enter. Escape and Q (leave the show) never reach the player.
 - Self-playing mode: `showMode` 1 = self-playing, 2 = links only.
 - In a window the stage is shown at 720x405 and only scales up in full screen; the original behaves the same.
+
+## A key during a build is lost (2026-11-11)
+
+Measured on the export of the content deck, Chrome 157 on macOS 27.2. The slide with three paragraph builds has `buildIn` events of 0.5 s each (`events[].effects[].duration`; an effect can start later, `beginTime`).
+
+- One key: the build is drawn from about 100 ms to about 500 ms after it.
+- Three keys in a row, counted by the lines drawn afterwards:
+
+| Time between the keys | Builds that arrived |
+|---|---|
+| 60, 150, 250 ms | 2 of 3 |
+| 400, 600, 900, 1300 ms | 3 of 3 |
+
+The player dispatches one event to the document, `ShowController:SlideIndexDidChangeEvent`; it has none for the end of a build. deckfold pressed the keys of a jump 250 ms apart, so a jump to the last step of this slide ended one build short. That is what the previews do to show a slide after all its builds: the start screen and the "Current" pane showed three of the four list entries. The metadata now has the duration of every build (`deck.extra.builds`), and the jump waits that long plus 100 ms after each key, 250 ms at least.
+
+What this does not show: builds of other durations, and effects that take their time from more than `beginTime` and `duration`. The only export with builds at hand is this one.

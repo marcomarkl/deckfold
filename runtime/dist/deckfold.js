@@ -28,7 +28,9 @@ DF.role = (function () {
   if (n.indexOf("df-presenter:") === 0 || saved) return "presenter";
   return "show";
 })();
-// Token of the session; both windows use the same one. The show window keeps it across reloads.
+// Token of the session; both windows use the same one. The presenter view has it from the name
+// its window was opened with. The show window keeps its token across reloads, per deck, and reads
+// it once the deck metadata is there (35-start.js).
 DF.token = (function () {
   if (DF.role === "preview") return "";
   try {
@@ -37,10 +39,8 @@ DF.token = (function () {
       sessionStorage.setItem("df-presenter", t);
       return t;
     }
-    var have = sessionStorage.getItem("df-token");
-    if (have) return have;
   } catch (e) { }
-  return null; // set by the show window once randomToken exists
+  return null;
 })();
 
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
@@ -114,6 +114,10 @@ function store(kind) {
 }
 DF.ls = store("localStorage");
 DF.ss = store("sessionStorage");
+// deckKey: the name under which this deck keeps a value of the running session. A tab keeps its
+// sessionStorage when it opens another file, and every file:// page shares it, so a value that
+// belongs to one deck (the token of the session, the slide chosen last) has the deck in its name.
+DF.deckKey = function (name) { return name + ":" + ((DF.meta && DF.meta.deckHash) || "deck"); };
 
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function isObj(o) { return o && typeof o === "object" && !Array.isArray(o); }
@@ -674,6 +678,19 @@ DF.adapters = {
     },
     forward: function () { synthKey("ArrowRight", 39); },
     back: function () { synthKey("[", 219); },
+    // buildWait: how long to wait after the key of a build before the next key, in ms. The player
+    // draws every build itself and loses a key that comes while one is still drawn (measured on
+    // builds of 0.5 s: with keys 250 ms apart two of three builds arrived, from 400 ms on all
+    // three), and it has no event for the end of a build. deck.extra.builds has the duration of
+    // every build of a slide; a file converted before it had them waits for a build of 0.5 s.
+    buildWait: function (slide, build) {
+      var times = (((DF.meta.deck || {}).extra || {}).builds || [])[slide];
+      var s = times && typeof times[build] === "number" ? times[build] : 0.5;
+      return Math.max(250, Math.round(s * 1000) + 100);
+    },
+    // jump: the slide by its number (digits and Enter), then one key per build, each after the
+    // build before it has been drawn. A preview reaches the end of a slide the same way, so it
+    // shows the builds of the slide one after the other before it rests.
     jump: function (target, current) {
       var self = this, cur = current;
       var p = Promise.resolve();
@@ -687,9 +704,10 @@ DF.adapters = {
       }
       return p.then(function loop() {
         if (!cur || cur.step >= target.step) return;
+        var ms = self.buildWait(target.slide, cur.step);
         self.forward();
         cur = { slide: target.slide, step: cur.step + 1 };
-        return wait(250).then(loop);
+        return wait(ms).then(loop);
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; },
@@ -1339,10 +1357,11 @@ DF.startShow = function (snapshotHTML) {
   var generic = DF.format() === "generic";
   var slides = DF.slides();
   var meta = DF.meta.deck || {};
-  if (!DF.token) {
-    DF.token = DF.randomToken();
-    try { sessionStorage.setItem("df-token", DF.token); } catch (e) { }
-  }
+  // the token of this deck's session: the one from before a reload of this window, otherwise a
+  // new one. Another deck opened in the same tab has its own, so it does not answer the presenter
+  // view of this one.
+  DF.token = DF.ss.get(DF.deckKey("df-token")) || DF.randomToken();
+  DF.ss.set(DF.deckKey("df-token"), DF.token);
   // A source player can read its position from the address (the claude.ai player reads #n). After
   // the reload at the end the address still holds the last slide, which would override the chosen
   // start slide, so the hash goes before the player runs.
@@ -1354,7 +1373,7 @@ DF.startShow = function (snapshotHTML) {
   var cfg = DF.settings();
   var phase = "start"; // start, loading, show
   var rWin = null;
-  var last = DF.ss.get("df-last");
+  var last = DF.ss.get(DF.deckKey("df-last"));
   var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
   document.documentElement.classList.add("df-start-mode");
@@ -1471,7 +1490,7 @@ DF.startShow = function (snapshotHTML) {
     if (generic || !slides.length) return;
     sel = Math.max(0, Math.min(slides.length - 1, i));
     // the choice survives a reload; the show writes the same key, so the later of the two counts
-    DF.ss.set("df-last", { slide: sel, step: 0 });
+    DF.ss.set(DF.deckKey("df-last"), { slide: sel, step: 0 });
     if (frame) frame.show(finalState(sel));
     strip.mark(sel);
     strip.nav(sel > 0, sel < slides.length - 1);
@@ -1586,7 +1605,7 @@ DF.startShow = function (snapshotHTML) {
   // end: back to the start screen with the last slide chosen, by reloading this window; the source
   // player stops with the reload, the presenter view stays open and reconnects
   function end(lastState) {
-    if (lastState) DF.ss.set("df-last", lastState);
+    if (lastState) DF.ss.set(DF.deckKey("df-last"), lastState);
     send({ type: "ended" });
     phase = "start";
     location.reload();
@@ -1689,7 +1708,7 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
-    if (lastShown) DF.ss.set("df-last", lastShown);
+    if (lastShown) DF.ss.set(DF.deckKey("df-last"), lastShown);
   }
   function go(target, o) {
     if (generic) return;

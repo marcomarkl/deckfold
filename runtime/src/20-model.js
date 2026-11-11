@@ -168,6 +168,19 @@ DF.adapters = {
     },
     forward: function () { synthKey("ArrowRight", 39); },
     back: function () { synthKey("[", 219); },
+    // buildWait: how long to wait after the key of a build before the next key, in ms. The player
+    // draws every build itself and loses a key that comes while one is still drawn (measured on
+    // builds of 0.5 s: with keys 250 ms apart two of three builds arrived, from 400 ms on all
+    // three), and it has no event for the end of a build. deck.extra.builds has the duration of
+    // every build of a slide; a file converted before it had them waits for a build of 0.5 s.
+    buildWait: function (slide, build) {
+      var times = (((DF.meta.deck || {}).extra || {}).builds || [])[slide];
+      var s = times && typeof times[build] === "number" ? times[build] : 0.5;
+      return Math.max(250, Math.round(s * 1000) + 100);
+    },
+    // jump: the slide by its number (digits and Enter), then one key per build, each after the
+    // build before it has been drawn. A preview reaches the end of a slide the same way, so it
+    // shows the builds of the slide one after the other before it rests.
     jump: function (target, current) {
       var self = this, cur = current;
       var p = Promise.resolve();
@@ -181,9 +194,10 @@ DF.adapters = {
       }
       return p.then(function loop() {
         if (!cur || cur.step >= target.step) return;
+        var ms = self.buildWait(target.slide, cur.step);
         self.forward();
         cur = { slide: target.slide, step: cur.step + 1 };
-        return wait(250).then(loop);
+        return wait(ms).then(loop);
       });
     },
     mediaRoot: function () { return document.getElementById("stage") || document.body; },

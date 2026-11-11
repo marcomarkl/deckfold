@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { watch, realErrors, solo, present, audState, counter, slideCount, expected, need } from './helpers.mjs';
 
 test.beforeEach(() => need('keynote'));
@@ -122,6 +123,51 @@ test('Keynote links to other slides: followed through deckfold, the presenter vi
 
 // deckfold jumps in the Keynote player by typing the slide number and Enter. The player shows its
 // own slide number display while it takes the digits; the audience never sees it.
+// A jump to a later step of a slide presses one key per build. The Keynote player draws every
+// build itself and loses a key that comes while a build is still drawn (measured on this export,
+// whose builds take 0.5 s: with keys 250 ms apart two of three builds arrived, from 400 ms on all
+// three). The previews jump like this to show a slide after all its builds, so they were one
+// build short. The picture after the jump has to be the one that single, slow steps give.
+test('Keynote: a jump to the last step of a slide with builds shows every build', async ({ page }) => {
+  need('keynoteLinks');
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await solo(page, 'keynote-links.html');
+  await expect(page.locator('#stage canvas').first()).toBeAttached({ timeout: 15000 });
+  const B = await page.evaluate(() => window.__deckfold.slides().findIndex((s) => s.steps >= 4));
+  expect(B, 'a slide with three builds or more').toBeGreaterThanOrEqual(0);
+  const last = await page.evaluate((B) => window.__deckfold.slides()[B].steps - 1, B);
+  const to = (step) => page.evaluate(([B, step]) => window.__deckfold.audience.act('state', { slide: B, step }), [B, step]);
+  // how much of the slide is drawn: the dark pixels inside the player's stage (the slide is white,
+  // its text black)
+  const ink = async () => {
+    const r = await page.evaluate(() => { const b = document.getElementById('stage').getBoundingClientRect(); return { x: Math.ceil(b.left) + 2, y: Math.ceil(b.top) + 2, width: Math.floor(b.width) - 4, height: Math.floor(b.height) - 4 }; });
+    const img = PNG.sync.read(await page.screenshot({ clip: r }));
+    let n = 0;
+    for (let i = 0; i < img.data.length; i += 4) if (img.data[i] < 90) n++;
+    return n;
+  };
+  // the reference: step by step, with time for every build
+  await to(0);
+  await page.waitForTimeout(2500);
+  const steps = [await ink()];
+  for (let k = 1; k <= last; k++) {
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(2500);
+    steps.push(await ink());
+  }
+  expect(await audState(page)).toEqual({ slide: B, step: last });
+  // every build adds something that is drawn
+  for (let k = 1; k <= last; k++) expect(steps[k] - steps[k - 1], `step ${k} of ${JSON.stringify(steps)}`).toBeGreaterThan(50);
+  // the jump: away from the slide, then to its last step at once
+  await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 0, step: 0 }));
+  await page.waitForTimeout(2000);
+  await to(last);
+  await page.waitForTimeout(1000 + last * 1500);
+  const jumped = await ink();
+  expect(Math.abs(jumped - steps[last]), `after the jump ${jumped}, step by step ${JSON.stringify(steps)}`).toBeLessThanOrEqual(Math.abs(steps[last] - steps[last - 1]) * 0.2);
+});
+
 test('Keynote: the player\'s slide number display stays hidden in the presentation', async ({ page }) => {
   await solo(page, 'keynote.html');
   await expect(page.locator('#stage canvas').first()).toBeAttached({ timeout: 15000 });
