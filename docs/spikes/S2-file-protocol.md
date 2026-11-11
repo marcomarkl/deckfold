@@ -106,3 +106,14 @@ First decision (E14, maintainer, 2026-11-09): Chrome and Edge use the permission
 Revised the same day after the maintainer's next test, in which this check did not work reliably: deckfold no longer asks for the permission and checks in no browser where the windows are, as in reveal.js. Full screen can always be chosen, and placing the windows is left to the user. The diagnostics panel (Shift+D) went with the check.
 
 Not documented: when macOS moves a clipped window fully onto one display; whether `NSWindow.screen` uses the Space assignment or the geometry first; how Chrome and Firefox treat `file://` as a secure context for these interfaces; Chrome's `screenX` under Wayland in a test.
+
+## The highlight under a resting mouse (2026-11-11)
+
+Seen twice with the presenter view on a second screen: the highlight of a slide tile or a button went away while the mouse rested on it. Measured on the maintainer's Mac (macOS 27.2, Chrome 157, a 5K display and the built-in one), with real mouse movements.
+
+- A page logged its own events in a presenter view opened by a script. When the highlight went, the page had received `mouseout` to nothing and `mouseleave` on the document, at a place in the middle of the window where the pointer had rested for eleven seconds. With every timer of the page stopped, the pointer did not come back. So the updates the presenter view makes twice a second are not the cause.
+- A page without deckfold, opened as a popup in the maintainer's own Chrome and dragged to the second screen, logged focus as well. While its window was active, the highlight stayed for the 48 s the pointer rested. While it was not, every entry of the pointer was followed by a leave within a tenth of a second, in the middle of the window.
+
+Chrome on macOS shows hover only in the active window. That is the platform's convention for inactive windows (WebKit bug 187545 names it, and says Chrome and Firefox follow it), and a page cannot change it. The runtime sets the focus only on elements of its own window (`grep "\.focus("`), never on another window, so deckfold does not take the active state from the presenter view. What does is a click anywhere else: in the presentation window, for example on "Start", or in another app.
+
+What this does not show: the 48 s were measured on the page without deckfold, not in the presenter view itself. The script-driven window emulates focus, so it could not say whether its window was active.

@@ -109,6 +109,36 @@ func TestMetaLinks(t *testing.T) {
 	}
 }
 
+// The metadata names how long every build of a slide takes: the runtime waits that long after
+// the key of a build, because the player loses a key that comes while a build is still drawn.
+func TestMetaBuildTimes(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, s string) {
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		if err := os.WriteFile(p, []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("assets/header.json", `{"slideList":["A","B"],"slideCount":2,"slideWidth":960,"slideHeight":540,"majorVersion":1,"minorVersion":2}`)
+	// two builds: one effect of half a second; two effects, the later one starting after the first
+	write("assets/A/A.json", `{"events":[{"effects":[{"type":"buildIn","beginTime":0,"duration":0.5}]},`+
+		`{"effects":[{"type":"buildIn","beginTime":0,"duration":1},{"type":"buildIn","beginTime":0.75,"duration":0.5}]},`+
+		`{"effects":[{"type":"transition","beginTime":0,"duration":2}]}]}`)
+	write("assets/B/B.json", `{"events":[{"effects":[{"type":"transition","beginTime":0,"duration":0.001}]}]}`)
+	m, _, err := Adapter{}.Meta(&adapter.Input{HTMLDir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]float64{{0.5, 1.25}, nil}
+	if !reflect.DeepEqual(m.Extra["builds"], want) {
+		t.Errorf("builds %+v, want %+v", m.Extra["builds"], want)
+	}
+	if m.Slides[0].Steps != 3 || m.Slides[1].Steps != 1 {
+		t.Errorf("steps %d and %d, want 3 and 1", m.Slides[0].Steps, m.Slides[1].Steps)
+	}
+}
+
 // A slide whose JSON is missing is an error, not a slide without text.
 func TestContentMissingSlide(t *testing.T) {
 	files := map[string]string{"assets/header.json": `{"slideList":["A"]}`}

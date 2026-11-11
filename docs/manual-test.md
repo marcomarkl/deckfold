@@ -18,7 +18,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Previews on a slide with builds, in a narrow presenter view | "Current" shows only this slide, "Next" only the next one, each with all builds shown and nothing playing; no step appears on the way | |
 | Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | The audience pane shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
 | Make the presenter view narrow (about 300 px) and wide again | Narrow: the panes one below the other, the bar one line that scrolls sideways; every control can be reached | |
-| Mouse over a slide tile and over a button of the presenter view, on the second screen, then keep the mouse still | The highlight stays while the mouse rests | |
+| Click once into the presenter view on the second screen, then put the mouse on a slide tile and on a button and keep it still | The highlight stays while the mouse rests. Chrome on macOS shows it only in the active window: after a click in the presentation window it is gone, also under the mouse, until the presenter view is clicked again | |
 | Note where the presenter view is, then click "Start" (with and without "Full screen") | The presenter view keeps its place and size | |
 | Close the presentation window | The presenter view closes too; reloading the presentation window does not close it | |
 | Click "Start" with "Full screen" on | The presentation fills its screen at the chosen slide; the presenter view follows | |

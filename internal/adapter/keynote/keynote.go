@@ -53,7 +53,9 @@ type header struct {
 type slideJSON struct {
 	Events []struct {
 		Effects []struct {
-			Type string `json:"type"`
+			Type      string  `json:"type"`
+			BeginTime float64 `json:"beginTime"` // seconds after the click
+			Duration  float64 `json:"duration"`  // seconds
 		} `json:"effects"`
 		Automatic  bool        `json:"automatic"`
 		Hyperlinks []hyperlink `json:"hyperlinks"`
@@ -159,6 +161,11 @@ func (a Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 			"autoplayBuildDelay": h.AutoplayBuildDelay, "loop": h.LoopSlideshow != 0, "creator": h.Creator}}
 	var links [][]Link
 	anyLink, lost := false, 0
+	// builds: per slide, how long each of its builds takes, in seconds. The player draws a build
+	// itself and loses a key that comes while it is still drawing one, so the runtime waits this
+	// long after the key of a build before it sends the next (keynote.jump in 20-model.js).
+	var buildTimes [][]float64
+	anyBuild := false
 	for _, id := range h.SlideList {
 		b, err := readJSONOrP(filepath.Join(in.HTMLDir, "assets", id, id+".json"))
 		if err != nil {
@@ -178,14 +185,24 @@ func (a Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 		// Every event is one click; the last event of a slide is the transition to the next one.
 		// Steps = states of the slide = number of builds + 1.
 		builds := 0
-		var delays []float64
+		var delays, times []float64
 		for _, e := range sj.Events {
 			isTransition := len(e.Effects) > 0 && e.Effects[0].Type == "transition"
 			if !isTransition {
 				builds++
 				delays = append(delays, h.AutoplayBuildDelay)
+				// a build ends when the last of its effects does
+				end := 0.0
+				for _, ef := range e.Effects {
+					if t := ef.BeginTime + ef.Duration; t > end {
+						end = t
+					}
+				}
+				times = append(times, end)
 			}
 		}
+		buildTimes = append(buildTimes, times)
+		anyBuild = anyBuild || len(times) > 0
 		sl := adapter.Slide{Steps: builds + 1}
 		// links to other slides: an event is one step; the event of the transition is the last
 		var ls []Link
@@ -215,6 +232,9 @@ func (a Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 	}
 	if anyLink {
 		m.Extra["links"] = links
+	}
+	if anyBuild {
+		m.Extra["builds"] = buildTimes
 	}
 	if lost > 0 {
 		warns = append(warns, fmt.Sprintf("%d link(s) lead to a slide that is not in the export (skipped in Keynote); a click on them moves on like any click", lost))

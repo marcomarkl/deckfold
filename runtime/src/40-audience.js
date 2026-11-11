@@ -93,7 +93,7 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
-    if (lastShown) DF.ss.set("df-last", lastShown);
+    if (lastShown) DF.ss.set(DF.deckKey("df-last"), lastShown);
   }
   function go(target, o) {
     if (generic) return;

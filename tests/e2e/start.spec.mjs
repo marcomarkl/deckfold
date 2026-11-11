@@ -292,3 +292,52 @@ test('start screen: a title of two lines and decks of other shapes fit as well',
     expect(m.footBottom, at).toBeLessThanOrEqual(800);
   }
 });
+
+// A browser without container units ignores the @supports block of the start screen and applies
+// the rules before it. No test browser is that old, and none lets the units be switched off, so
+// the test takes the block out of the loaded style sheet: what is left is what such a browser
+// applies. It does not show what else such a browser lacks.
+test('start screen without container units: the preview keeps its share of the window height and stays in the column', async ({ page }) => {
+  for (const [w, h] of [[1280, 800], [1920, 1080], [800, 500], [360, 700]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await startScreen(page, 'pptx-basic.html');
+    await page.waitForSelector('.df-start-stage iframe[data-df-preview]');
+    const removed = await page.evaluate(() => {
+      const sheet = document.getElementById('df-style').sheet;
+      let n = 0;
+      for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+        const r = sheet.cssRules[i];
+        if (r instanceof CSSSupportsRule && /cqh/.test(r.conditionText)) { sheet.deleteRule(i); n++; }
+      }
+      return n;
+    });
+    expect(removed, 'the @supports block for container units').toBe(1);
+    await page.waitForTimeout(300);
+    const m = await page.evaluate(() => {
+      const ui = document.querySelector('.df-start');
+      const box = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
+      const f = document.querySelector('.df-start-stage iframe');
+      const top = document.querySelector('.df-start h1').getBoundingClientRect().top;
+      const out = { stage: box(document.querySelector('.df-start-stage')), col: box(document.querySelector('.df-start-box')), strip: box(document.querySelector('.df-strip-wrap')),
+        over: ui.scrollHeight - ui.clientHeight, wide: ui.scrollWidth - ui.clientWidth, top, ratio: parseFloat(f.style.width) / parseFloat(f.style.height) };
+      ui.scrollTop = ui.scrollHeight;
+      out.footBottom = document.querySelector('.df-start-foot').getBoundingClientRect().bottom;
+      ui.scrollTop = 0;
+      return out;
+    });
+    const at = `${w}x${h}: ${JSON.stringify(m)}`;
+    // the fixed share of the window height, inside the column and above the strip of slides
+    expect(Math.abs(m.stage.h - Math.min(0.42 * h, 520)), at).toBeLessThanOrEqual(1);
+    expect(m.stage.l, at).toBeGreaterThanOrEqual(m.col.l - 0.5);
+    expect(m.stage.r, at).toBeLessThanOrEqual(m.col.r + 0.5);
+    expect(m.stage.b, at).toBeLessThanOrEqual(m.strip.t + 0.5);
+    expect(m.wide, at).toBeLessThanOrEqual(0);
+    expect(m.top, at).toBeGreaterThanOrEqual(0);
+    expect(m.footBottom, at).toBeLessThanOrEqual(h);
+    // where the column is wide enough the preview has the shape of the slide; in a narrow window it
+    // is as wide as the column, and the scaled player stands in its middle
+    if (m.stage.h * m.ratio <= m.col.w) expect(Math.abs(m.stage.w - m.stage.h * m.ratio), at).toBeLessThanOrEqual(1.5);
+    else expect(Math.abs(m.stage.w - m.col.w), at).toBeLessThanOrEqual(1);
+    if (w >= 1280) expect(m.over, at).toBeLessThanOrEqual(0);
+  }
+});

@@ -166,6 +166,38 @@ test('start screen: arrows at the strip, auto fields only with auto mode, no has
   await expect(page.locator('[data-df-keyhelp] kbd')).not.toHaveCount(0);
 });
 
+// A tab keeps its session storage when it opens another file. The token of the session and the
+// slide chosen last were stored there under fixed names, so a second deck in the same tab took
+// over the presenter view of the first (its switch was on without a click, while that window
+// still showed the first deck) and started at the slide chosen in the first.
+test('another deck in the same tab does not take over the presenter view or the chosen slide of the first', async ({ page, context }) => {
+  await startScreen(page, 'pptx-animations.html');
+  const first = await openPresenter(page, context);
+  await page.click('.df-strip .df-tile[data-i="2"]');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  // the second deck, with the presenter view of the first still open
+  await page.goto(fileURL('pptx-content.html'));
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.waitForTimeout(2500); // longer than the heartbeat of a presenter view
+  expect(first.isClosed()).toBe(false);
+  expect(await page.isChecked('[data-df-presenter]'), 'the presenter view of the other deck is not this deck\'s').toBe(false);
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '0');
+  // its own presenter view is a window of its own and shows this deck
+  const second = await openPresenter(page, context);
+  expect(second).not.toBe(first);
+  expect(await second.textContent('.df-title')).toBe(await page.textContent('.df-start h1'));
+  expect(await first.textContent('.df-title')).not.toBe(await page.textContent('.df-start h1'));
+  await page.uncheck('[data-df-presenter]');
+  await expect.poll(() => second.isClosed()).toBe(true);
+  // back in the first deck: its presenter view connects again, and its slide is still chosen
+  await page.goto(fileURL('pptx-animations.html'));
+  await page.waitForSelector('.df-start [data-df-start]');
+  await expect.poll(() => page.isChecked('[data-df-presenter]'), { timeout: 8000 }).toBe(true);
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  await page.uncheck('[data-df-presenter]');
+  await expect.poll(() => first.isClosed()).toBe(true);
+});
+
 test('Escape in full screen ends the presentation (Keyboard Lock)', async ({ page }) => {
   await page.addInitScript(() => {
     window.__fs = false;
