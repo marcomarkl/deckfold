@@ -119,12 +119,13 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 		}
 	}
 	res := &Result{Width: float64(pres.Width) / emuPx, Height: float64(pres.Height) / emuPx, Assets: rd.assets}
-	num := pres.FirstSlideNum
 	for _, s := range pres.Slides {
 		if s.Hidden {
 			continue
 		}
-		sr := &slideRenderer{Renderer: rd, slide: s, slideNum: num, idp: fmt.Sprintf("s%d", s.Number)}
+		// the number a slide number field shows is the place of the slide in the deck: PowerPoint
+		// counts the hidden slides too
+		sr := &slideRenderer{Renderer: rd, slide: s, slideNum: pres.FirstSlideNum + s.Number - 1, idp: fmt.Sprintf("s%d", s.Number)}
 		out, err := sr.render()
 		if err != nil {
 			return nil, fmt.Errorf("slide %d: %w", s.Number, err)
@@ -134,7 +135,6 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 			rd.webGL = true // tile transitions are drawn with three.js
 		}
 		res.Slides = append(res.Slides, out)
-		num++
 	}
 	res.Faces = rd.faces
 	res.WebGL = rd.webGL
@@ -1025,8 +1025,11 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 		r.warnOnce("picture %s cannot be read: %v", rel.Target, err)
 		return "", false
 	}
-	ext := strings.TrimPrefix(path.Ext(rel.Target), ".")
-	switch strings.ToLower(ext) {
+	format := pictureFormat(rel.Target, r.pres.Pkg.ContentType(rel.Target), data)
+	switch format {
+	case "":
+		r.warnOnce("a picture on slide %d is in a format deckfold does not know (%s) and is left out", r.slide.Number, r.pres.Pkg.ContentType(rel.Target))
+		return "", false
 	case "emf":
 		res, err := emf.Convert(data)
 		if err != nil {
@@ -1047,14 +1050,53 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 			r.warnOnce("a WMF picture on slide %d uses drawing commands deckfold does not convert; it may be incomplete", r.slide.Number)
 		}
 		return r.asset(res.SVG, "svg"), true
-	case "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp":
-	default:
-		ct := r.pres.Pkg.ContentType(rel.Target)
-		if i := strings.LastIndex(ct, "/"); i >= 0 {
-			ext = ct[i+1:]
-		}
 	}
-	return r.asset(data, ext), true
+	return r.asset(data, format), true
+}
+
+// pictureTypes maps the content types of pictures to the format names used for assets.
+var pictureTypes = map[string]string{
+	"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg", "image/gif": "gif", "image/svg+xml": "svg", "image/webp": "webp",
+	"image/bmp": "bmp", "image/x-ms-bmp": "bmp", "image/tiff": "tiff", "image/x-emf": "emf", "image/emf": "emf", "image/x-wmf": "wmf", "image/wmf": "wmf",
+}
+
+// pictureFormat names the format of a picture part: by the extension of its file where that is
+// the one of a picture, otherwise by its content type, otherwise by its first bytes. PowerPoint
+// for Mac stores some pictures as .bin files and names their format only in [Content_Types].xml
+// (seen with SVG and EMF pictures). Returns "" for a part that is no picture deckfold knows.
+func pictureFormat(target, contentType string, data []byte) string {
+	switch ext := strings.ToLower(strings.TrimPrefix(path.Ext(target), ".")); ext {
+	case "jpg", "jpeg", "png", "gif", "svg", "webp", "bmp", "emf", "wmf", "tif", "tiff":
+		return ext
+	}
+	if f := pictureTypes[strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))]; f != "" {
+		return f
+	}
+	has := func(at int, magic string) bool {
+		return len(data) >= at+len(magic) && string(data[at:at+len(magic)]) == magic
+	}
+	switch {
+	case has(0, "\x89PNG\r\n\x1a\n"):
+		return "png"
+	case has(0, "\xff\xd8\xff"):
+		return "jpg"
+	case has(0, "GIF8"):
+		return "gif"
+	case has(0, "RIFF") && has(8, "WEBP"):
+		return "webp"
+	case has(0, "\x01\x00\x00\x00") && has(40, " EMF"):
+		return "emf"
+	case has(0, "\xd7\xcd\xc6\x9a"):
+		return "wmf"
+	}
+	head := data
+	if len(head) > 2048 {
+		head = head[:2048]
+	}
+	if text := strings.TrimLeft(strings.TrimPrefix(string(head), "\xef\xbb\xbf"), " \t\r\n"); strings.HasPrefix(text, "<") && strings.Contains(text, "<svg") {
+		return "svg"
+	}
+	return ""
 }
 
 func (r *slideRenderer) group(b *strings.Builder, g *xmltree.Node, owner ownerKind, part model.Part, t xf) {

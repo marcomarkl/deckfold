@@ -197,6 +197,89 @@ func TestLinkedOutside(t *testing.T) {
 	}
 }
 
+// A slide number field shows the place of the slide in the deck, as PowerPoint does: a hidden
+// slide is counted, although it is not shown. (Seen on a deck whose first slide is hidden:
+// PowerPoint printed 9 on its ninth slide, deckfold 8.)
+func TestSlideNumberCountsHiddenSlides(t *testing.T) {
+	d := pptxgen.New("Slide numbers")
+	number := func(s *pptxgen.Slide) {
+		s.Raw(fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="Slide number"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>`+
+			`<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Slide </a:t></a:r><a:fld id="{B6F15528-21DE-4FAA-801E-634DDDAF4B2B}" type="slidenum"><a:rPr lang="en-US"/><a:t>99</a:t></a:fld></a:p></p:txBody></p:sp>`,
+			s.ID(), pptxgen.Px(60), pptxgen.Px(620), pptxgen.Px(300), pptxgen.Px(40)))
+	}
+	number(d.Add(pptxgen.LayoutBlank))
+	hidden := d.Add(pptxgen.LayoutBlank)
+	hidden.Hidden = true
+	number(hidden)
+	number(d.Add(pptxgen.LayoutBlank))
+	number(d.Add(pptxgen.LayoutBlank))
+	html, _, data := convert(t, d)
+	if len(data.Slides) != 3 {
+		t.Fatalf("want 3 shown slides, got %d", len(data.Slides))
+	}
+	for _, want := range []string{">Slide 1</text>", ">Slide 3</text>", ">Slide 4</text>"} {
+		if n := strings.Count(html, want); n != 1 {
+			t.Errorf("%s is drawn %d times, want once", want, n)
+		}
+	}
+	if strings.Contains(html, ">Slide 2</text>") {
+		t.Error("the number of the hidden slide is drawn")
+	}
+	// with a first slide number the count starts there
+	d.FirstSlideNum = 7
+	html, _, _ = convert(t, d)
+	for _, want := range []string{">Slide 7</text>", ">Slide 9</text>", ">Slide 10</text>"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("first slide number 7: no %s", want)
+		}
+	}
+}
+
+// PowerPoint for Mac stores some pictures as .bin files and names their format only in
+// [Content_Types].xml (seen with SVG and EMF pictures; the icons on such a slide were missing).
+// The format comes from the content type then, and from the first bytes where that says nothing.
+func TestPictureFormatFromContentType(t *testing.T) {
+	const relImage = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+	d := pptxgen.New("Pictures in .bin files")
+	s := d.Add(pptxgen.LayoutBlank)
+	d.Part("ppt/media/icon.bin", "image/svg+xml", `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><circle cx="50" cy="50" r="40" fill="green"/></svg>`)
+	d.Part("ppt/media/drawing.bin", "image/x-wmf", string(pptxgen.TestWMF()))
+	d.Part("ppt/media/photo.bin", "application/octet-stream", string(pptxgen.TestPNG(40, 40)))
+	d.Part("ppt/media/unknown.bin", "application/octet-stream", "neither a picture nor anything else")
+	pic := func(name, blip string, x float64) {
+		s.Raw(fmt.Sprintf(`<p:pic><p:nvPicPr><p:cNvPr id="%d" name="%s"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill>%s<a:stretch><a:fillRect/></a:stretch></p:blipFill>`+
+			`<p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`,
+			s.ID(), name, blip, pptxgen.Px(x), pptxgen.Px(100), pptxgen.Px(200), pptxgen.Px(200)))
+	}
+	// the SVG as PowerPoint for Mac wrote it: the blip names only the SVG, without a PNG beside it
+	pic("Icon", `<a:blip><a:extLst><a:ext uri="{96DAC541-7B7A-43D3-8B79-37D633B846F1}"><asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="`+s.Rel(relImage, "../media/icon.bin", "")+`"/></a:ext></a:extLst></a:blip>`, 100)
+	pic("Drawing", `<a:blip r:embed="`+s.Rel(relImage, "../media/drawing.bin", "")+`"/>`, 350)
+	pic("Photo", `<a:blip r:embed="`+s.Rel(relImage, "../media/photo.bin", "")+`"/>`, 600)
+	pic("Unknown", `<a:blip r:embed="`+s.Rel(relImage, "../media/unknown.bin", "")+`"/>`, 850)
+	html, res, _ := convert(t, d)
+	// the SVG and the converted WMF are SVG files, the PNG a PNG file
+	if n := len(regexp.MustCompile(`<image href="assets/[0-9a-f]+\.svg"`).FindAllString(html, -1)); n != 2 {
+		t.Errorf("%d pictures are referenced as SVG files, want 2", n)
+	}
+	if n := len(regexp.MustCompile(`<image href="assets/[0-9a-f]+\.png"`).FindAllString(html, -1)); n != 1 {
+		t.Errorf("%d pictures are referenced as PNG files, want 1", n)
+	}
+	// no picture goes out under a name the browser cannot read
+	if m := regexp.MustCompile(`<image href="assets/[0-9a-f]+\.(bin|[a-z0-9]*[+-][a-z0-9+-]*)"`).FindString(html); m != "" {
+		t.Errorf("a picture is referenced as %s", m)
+	}
+	// the one that is no picture is left out, and the report says so
+	warned := false
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "picture") && strings.Contains(w, "slide 1") && strings.Contains(w, "left out") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("no warning about the picture in an unknown format: %v", res.Warnings)
+	}
+}
+
 func TestTextDeck(t *testing.T) {
 	html, _, _ := convert(t, pptxgen.Text())
 	for _, want := range []string{">1.</text>", ">2.</text>", ">3.</text>", ">Slide 5</text>", "rotate(270 ", "text-decoration:underline", "letter-spacing:4px", `fill="#c00000"`} {
