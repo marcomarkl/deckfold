@@ -18,7 +18,10 @@ var ErrNotWMF = errors.New("not a WMF file")
 // output as Convert: paths, polygons, rectangles, ellipses and arcs, pens, brushes, fonts and
 // text, bitmaps (DIB), window and viewport, saved states and clip rectangles. The picture frame
 // is the bounding box of the placeable header, otherwise the window.
-func ConvertWMF(data []byte) (Result, error) {
+func ConvertWMF(data []byte) (Result, error) { return ConvertWMFWith(data, Options{}) }
+
+// ConvertWMFWith converts a Windows Metafile to SVG with options.
+func ConvertWMFWith(data []byte, opt Options) (Result, error) {
 	off := 0
 	var box [4]float64
 	hasBox := false
@@ -35,7 +38,7 @@ func ConvertWMF(data []byte) (Result, error) {
 	if t := binary.LittleEndian.Uint16(data[off:]); t != 1 && t != 2 || binary.LittleEndian.Uint16(data[off+2:]) != 9 {
 		return Result{}, ErrNotWMF
 	}
-	c := &conv{data: data, objs: map[uint32]any{}}
+	c := &conv{data: data, objs: map[uint32]any{}, bitmap: opt.Bitmap}
 	c.st = dc{world: ident, winExt: [2]float64{1, 1}, vpExt: [2]float64{1, 1}, mapMode: 1,
 		pen: pen{width: 1, col: color.RGBA{0, 0, 0, 255}}, brush: brush{col: color.RGBA{255, 255, 255, 255}}, polyFill: 1,
 		textCol: color.RGBA{0, 0, 0, 255}}

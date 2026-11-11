@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -22,6 +23,7 @@ import (
 	"deckfold/internal/csp"
 	"deckfold/internal/htmlscan"
 	"deckfold/internal/inject"
+	"deckfold/internal/media"
 	"deckfold/internal/patch"
 	"deckfold/internal/report"
 )
@@ -34,6 +36,10 @@ type Options struct {
 	Fetcher      *assets.Fetcher
 	Version      string
 	Runtime      inject.Runtime
+	// Media converts pictures and fonts that an element or a stylesheet shows into smaller
+	// formats that show the same (decision E17). nil embeds every asset unchanged; that is
+	// also right for a deck from the PowerPoint converter, which has converted already.
+	Media *media.Optimizer
 }
 
 // ErrMissing reports unresolved assets without --lenient (exit code 1).
@@ -63,6 +69,11 @@ type conv struct {
 	cssLink   bool // CSS as blob link instead of <style> (CSP without inline styles)
 	dropHosts map[string]bool
 	slideAt   []int // start offsets of the slides (for locations in messages)
+	// noMedia is set while a reference is embedded whose content a script or the browser
+	// reads in another way than as a picture or font on the page (an icon, a frame, a plugin).
+	noMedia bool
+	// newMime is the MIME type of the asset the last call of ref converted, "" otherwise.
+	newMime string
 }
 
 // Convert produces the self-contained output.
@@ -145,6 +156,7 @@ func prepare(in *adapter.Input, ad adapter.Adapter, opt Options, rep *report.Rep
 	}
 	c.cssLink = c.cspBlocksInlineStyle()
 
+	c.warmMedia()
 	c.walk()
 
 	// assets loaded at runtime (Keynote: JSONP, PDFP, player files)
@@ -330,10 +342,15 @@ func (c *conv) attrs(t *htmlscan.Tag) {
 			if val == "" {
 				continue
 			}
+			// What an element shows as a picture may be converted. A frame, a plugin and a
+			// text track get their file as it is.
+			c.noMedia = t.Name == "iframe" || t.Name == "embed" || t.Name == "object" || t.Name == "track"
 			if a.Name == "srcset" {
-				if nv, changed := c.srcset(val, c.where(t, a.Name)); changed {
+				nv, changed, mime := c.srcset(val, c.where(t, a.Name))
+				if changed {
 					c.replaceAttr(a, "data-df-srcset", nv)
 				}
+				c.retype(t, mime)
 				continue
 			}
 			if (t.Name == "use" || t.Name == "image") && (a.Name == "href" || a.Name == "xlink:href") && t.Name == "use" {
@@ -342,8 +359,23 @@ func (c *conv) attrs(t *htmlscan.Tag) {
 			}
 			if nv, ok := c.ref(val, c.in.HTMLDir, nil, c.where(t, a.Name)); ok && nv != val {
 				c.replaceAttr(a, "data-df-"+a.Name, nv)
+				if a.Name == "src" {
+					c.retype(t, c.newMime)
+				}
 			}
 		}
+	}
+	c.noMedia = false
+}
+
+// retype sets the type attribute of a <source> whose file was converted to its new MIME type,
+// so that the browser does not skip the source for a type that no longer fits.
+func (c *conv) retype(t *htmlscan.Tag, mime string) {
+	if mime == "" || t.Name != "source" {
+		return
+	}
+	if a, ok := t.Get("type"); ok && a.ValStart >= 0 && strings.TrimSpace(a.Val) != "" {
+		c.replaceAttr(a, "type", mime)
 	}
 }
 
@@ -356,21 +388,31 @@ func escAttr(s string) string {
 	return strings.NewReplacer("&", "&amp;", `"`, "&quot;").Replace(s)
 }
 
-func (c *conv) srcset(val, where string) (string, bool) {
+// srcset embeds the candidates of a srcset. mime is the new MIME type when every candidate was
+// converted to the same one, "" otherwise.
+func (c *conv) srcset(val, where string) (out string, changed bool, mime string) {
 	parts := strings.Split(val, ",")
-	changed := false
+	same := true
 	for i, p := range parts {
 		f := strings.Fields(strings.TrimSpace(p))
 		if len(f) == 0 {
 			continue
 		}
-		if nv, ok := c.ref(f[0], c.in.HTMLDir, nil, where); ok && nv != f[0] {
+		nv, ok := c.ref(f[0], c.in.HTMLDir, nil, where)
+		if ok && nv != f[0] {
 			f[0] = nv
 			changed = true
 		}
+		if c.newMime == "" || (mime != "" && mime != c.newMime) {
+			same = false
+		}
+		mime = c.newMime
 		parts[i] = strings.Join(f, " ")
 	}
-	return strings.Join(parts, ", "), changed
+	if !same {
+		mime = ""
+	}
+	return strings.Join(parts, ", "), changed, mime
 }
 
 // useSprite inlines external SVG sprites and points to #id.
@@ -410,6 +452,7 @@ func (c *conv) useSprite(t *htmlscan.Tag, a htmlscan.Attr) {
 // ref resolves a reference and returns the placeholder (or the unchanged value).
 // ok is false for an unresolved reference (already recorded in the report).
 func (c *conv) ref(val, baseDir string, baseURL *url.URL, where string) (string, bool) {
+	c.newMime = ""
 	v := strings.TrimSpace(val)
 	low := strings.ToLower(v)
 	switch {
@@ -425,7 +468,7 @@ func (c *conv) ref(val, baseDir string, baseURL *url.URL, where string) (string,
 		if !ok {
 			return val, true
 		}
-		return assets.Placeholder(c.store.Add(data, mt, "data: URI ("+mt+")")), true
+		return assets.Placeholder(c.add(data, mt, "data: URI ("+mt+")")), true
 	}
 	// remote (absolute or relative to a remote base)
 	if baseURL != nil || strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://") || strings.HasPrefix(v, "//") {
@@ -444,7 +487,7 @@ func (c *conv) ref(val, baseDir string, baseURL *url.URL, where string) (string,
 			c.rep.Miss(abs.String(), where, err.Error())
 			return val, false
 		}
-		return assets.Placeholder(c.store.Add(data, assets.MimeFor(abs.Path, mt, data), abs.String())) + frag, true
+		return assets.Placeholder(c.add(data, assets.MimeFor(abs.Path, mt, data), abs.String())) + frag, true
 	}
 	if !assets.IsLocalRef(v) {
 		return val, true
@@ -470,8 +513,79 @@ func (c *conv) ref(val, baseDir string, baseURL *url.URL, where string) (string,
 	}
 	c.embedded[r.Path] = true
 	rel, _ := filepath.Rel(c.res.Root, r.Path)
-	return assets.Placeholder(c.store.Add(data, assets.MimeFor(r.Path, "", data), filepath.ToSlash(rel))) + frag, true
+	return assets.Placeholder(c.add(data, assets.MimeFor(r.Path, "", data), filepath.ToSlash(rel))) + frag, true
 }
+
+// warmMedia converts the local pictures that elements of the page show on all cores, before
+// the walk embeds them one after the other; the walk then finds the results. Pictures that
+// only a stylesheet names are converted during the walk.
+func (c *conv) warmMedia() {
+	if c.opt.Media == nil {
+		return
+	}
+	seen := map[string]bool{}
+	var paths []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		low := strings.ToLower(v)
+		if v == "" || strings.HasPrefix(low, "http://") || strings.HasPrefix(low, "https://") || strings.HasPrefix(v, "//") || !assets.IsLocalRef(v) {
+			return
+		}
+		file, _ := assets.StripRef(v)
+		if c.ad.SkipStaticRef(file) {
+			return
+		}
+		r, err := c.res.Resolve(file, c.in.HTMLDir)
+		if err != nil || seen[r.Path] {
+			return
+		}
+		seen[r.Path] = true
+		if fi, err := os.Stat(r.Path); err != nil || fi.Size() > 256<<20 {
+			return
+		}
+		paths = append(paths, r.Path)
+	}
+	for _, t := range c.in.Doc.Tags {
+		for _, a := range t.Attrs {
+			if a.ValStart < 0 || !assetAttr(t.Name, a.Name) {
+				continue
+			}
+			switch {
+			case a.Name == "srcset":
+				for _, p := range strings.Split(a.Val, ",") {
+					if f := strings.Fields(p); len(f) > 0 {
+						add(f[0])
+					}
+				}
+			case t.Name == "img" || t.Name == "input" || t.Name == "image" || t.Name == "feimage" || a.Name == "poster" || a.Name == "background":
+				add(a.Val)
+			}
+		}
+	}
+	c.opt.Media.Prepare(len(paths), func(i int) []byte {
+		data, err := os.ReadFile(paths[i])
+		if err != nil {
+			return nil
+		}
+		return data
+	})
+}
+
+// add stores the content of a reference and returns its hash. A picture or font that the page
+// shows goes through the optimizer first; newMime then tells the caller the new type.
+func (c *conv) add(data []byte, mime, name string) string {
+	if c.opt.Media != nil && !c.noMedia {
+		if r := c.opt.Media.Optimize(data); r.Changed {
+			data, mime = r.Data, r.Mime
+			c.newMime = r.Mime
+		}
+	}
+	return c.store.Add(data, mime, name)
+}
+
+// formatHint matches what follows the value of a url() in a font source: the end of the url()
+// and a format() hint.
+var formatHint = regexp.MustCompile(`(?i)^(["']?\s*\)\s*format\(\s*)("[^"]*"|'[^']*'|[^)\s]*)`)
 
 func (c *conv) warnStage(ref string, r assets.Resolved) {
 	if r.Stage <= 1 {
@@ -534,6 +648,15 @@ func (c *conv) processCSS(css, baseDir string, baseURL *url.URL, where string, d
 			b.WriteString(nv)
 			pos = r.End
 			changed = true
+			// a font that became WOFF2 gets the matching format() hint: a browser may skip
+			// a source whose hint names a format the file no longer has
+			if c.newMime == "font/woff2" {
+				if m := formatHint.FindStringSubmatch(css[pos:]); m != nil {
+					b.WriteString(m[1])
+					b.WriteString(`"woff2"`)
+					pos += len(m[0])
+				}
+			}
 		}
 	}
 	b.WriteString(css[pos:])
@@ -615,7 +738,12 @@ func (c *conv) link(t *htmlscan.Tag) {
 		c.patches = append(c.patches, patch.Patch{Start: t.Start, End: t.End})
 	case hasWord(rel, "icon") || hasWord(rel, "apple-touch-icon") || hasWord(rel, "mask-icon"):
 		if a, ok := t.Get("href"); ok && a.ValStart >= 0 && href != "" {
-			if nv, ok := c.ref(href, c.in.HTMLDir, nil, c.where(t, "href")); ok && nv != href {
+			// an icon stays in its format: browsers take fewer formats for icons than for
+			// pictures on the page
+			c.noMedia = true
+			nv, ok := c.ref(href, c.in.HTMLDir, nil, c.where(t, "href"))
+			c.noMedia = false
+			if ok && nv != href {
 				c.replaceAttr(a, "data-df-href", nv)
 			}
 		}

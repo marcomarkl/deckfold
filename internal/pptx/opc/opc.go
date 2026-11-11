@@ -153,6 +153,16 @@ func (p *Package) Has(name string) bool {
 	return ok
 }
 
+// Parts lists the names of all parts (lower case, without a leading slash) with their
+// uncompressed sizes.
+func (p *Package) Parts() map[string]int64 {
+	out := make(map[string]int64, len(p.files))
+	for n, f := range p.files {
+		out[n] = int64(f.UncompressedSize64)
+	}
+	return out
+}
+
 // Read returns the bytes of a part.
 func (p *Package) Read(name string) ([]byte, error) {
 	f, ok := p.files[strings.ToLower(strings.TrimPrefix(name, "/"))]

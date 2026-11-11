@@ -65,6 +65,9 @@ const BlocksVersion = 2
 type Font struct {
 	Alias string
 	File  string
+	// Format is the CSS format of the file: "truetype", or "woff2" for a converted font; an
+	// empty value means "truetype".
+	Format string
 }
 
 // Write writes the deck into dir (which must exist and be empty). threeJS is the three.js
@@ -98,7 +101,11 @@ func Write(dir string, res *render.Result, data Data, fonts []Font, playerJS, th
 	if len(fonts) > 0 {
 		b.WriteString("<style>\n")
 		for _, f := range fonts {
-			fmt.Fprintf(&b, "@font-face{font-family:%q;src:url(\"assets/%s\") format(\"truetype\");font-display:block}\n", f.Alias, f.File)
+			format := f.Format
+			if format == "" {
+				format = "truetype"
+			}
+			fmt.Fprintf(&b, "@font-face{font-family:%q;src:url(\"assets/%s\") format(%q);font-display:block}\n", f.Alias, f.File, format)
 		}
 		b.WriteString("</style>\n")
 	}

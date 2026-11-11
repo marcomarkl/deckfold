@@ -25,6 +25,7 @@ import (
 	"deckfold/internal/embed"
 	"deckfold/internal/htmlscan"
 	"deckfold/internal/inject"
+	"deckfold/internal/media"
 	"deckfold/internal/pptx"
 	"deckfold/internal/pptx/opc"
 	"deckfold/internal/report"
@@ -89,6 +90,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	lenient := fs.Bool("lenient", false, "write the file even if assets cannot be resolved (with a warning)")
 	generic := fs.Bool("generic", false, "embed an unknown format anyway (no presenter view, overview or auto mode)")
 	warnSize := fs.String("warn-size", "", "warning threshold for the output size, e.g. 250MB")
+	keepAssets := fs.Bool("keep-assets", false, "embed pictures and fonts unchanged instead of converting them to smaller formats")
 	auto := fs.Bool("auto", false, "start in auto mode")
 	autoInterval := fs.Float64("auto-interval", 0, "auto mode interval in seconds (when the source has no timings)")
 	loop := fs.Bool("loop", false, "loop in auto mode")
@@ -167,6 +169,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if set["warn-size"] {
 		cfg.WarnSize = *warnSize
 	}
+	if set["keep-assets"] {
+		cfg.KeepAssets = *keepAssets
+	}
 	if set["auto"] {
 		cfg.Auto.Enabled = *auto
 	}
@@ -202,6 +207,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 3
 	}
 	rep := report.New()
+	// Pictures and fonts are converted to smaller formats that show the same, unless that is
+	// switched off (E17).
+	var opt *media.Optimizer
+	if !cfg.KeepAssets {
+		opt = media.New()
+		opt.Progress = progress(stderr)
+	}
 	loadPath, srcPath, srcIsDir := input, input, false
 	if fi, err := os.Stat(input); err == nil {
 		srcIsDir = fi.IsDir()
@@ -215,7 +227,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		defer os.RemoveAll(tmp)
 		res, err := pptx.Convert(input, tmp, pptx.Options{BundledFontsOnly: os.Getenv("DECKFOLD_BUNDLED_FONTS") == "1",
-			AllowOutside: allow, Fetcher: fetcher, Lenient: *lenient})
+			AllowOutside: allow, Fetcher: fetcher, Lenient: *lenient, Media: opt})
 		if err != nil {
 			var me *pptx.MissingError
 			if errors.As(err, &me) {
@@ -262,11 +274,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %s already exists (overwrite with --force)\n", outPath)
 		return 3
 	}
+	// The PowerPoint converter has converted its assets already; an HTML export is converted
+	// while it is embedded.
+	embedMedia := opt
+	if loadPath != input {
+		embedMedia = nil
+	}
 	var size int64
 	err = writeFileStream(outPath, func(w io.Writer) error {
 		var err error
 		size, _, err = embed.ConvertTo(w, in, ad, embed.Options{Config: cfg, Lenient: *lenient, AllowOutside: allow,
-			Fetcher: fetcher, Version: Version, Runtime: rt}, rep)
+			Fetcher: fetcher, Version: Version, Runtime: rt, Media: embedMedia}, rep)
 		return err
 	})
 	if err != nil {
@@ -283,8 +301,45 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	rep.Output, rep.OutputSize = outPath, int(size)
+	if st := opt.Stats(); st.Pictures+st.Fonts > 0 {
+		var parts []string
+		if st.Pictures > 0 {
+			parts = append(parts, plural(st.Pictures, "picture"))
+		}
+		if st.Fonts > 0 {
+			parts = append(parts, plural(st.Fonts, "font"))
+		}
+		rep.Converted = fmt.Sprintf("%s, %s -> %s", strings.Join(parts, " and "), report.HumanSize(int(st.Before)), report.HumanSize(int(st.After)))
+	}
+	for _, n := range opt.Notes() {
+		rep.Warn("%s", n)
+	}
 	rep.Print(stdout, warnBytes)
 	return 0
+}
+
+// progress returns the function that shows how far the conversion of the pictures is. It
+// writes one line that it keeps overwriting, and only to a terminal: a log file or a test gets
+// nothing.
+func progress(stderr io.Writer) func(done, total int) {
+	f, ok := stderr.(*os.File)
+	if !ok {
+		return nil
+	}
+	if fi, err := f.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return nil
+	}
+	var last time.Time
+	return func(done, total int) {
+		if done < total && time.Since(last) < 200*time.Millisecond {
+			return
+		}
+		last = time.Now()
+		fmt.Fprintf(f, "\rConverting pictures: %d of %d", done, total)
+		if done == total {
+			fmt.Fprintf(f, "\r%*s\r", 40, "")
+		}
+	}
 }
 
 // mergeKnown takes valid defaults from an existing output (missing fields keep the built-in default).
