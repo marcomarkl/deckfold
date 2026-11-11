@@ -81,7 +81,7 @@ export default async function setup() {
   // runtime/pptx-player would make the browser tests run against old code, so check it first
   // (fails with "run go generate ./runtime").
   execFileSync('go', ['test', './runtime/bundle'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync('go', ['build', '-o', BIN, './cmd/deckfold'], { cwd: ROOT, stdio: 'inherit' });
+  execFileSync('go', ['build', '-tags', 'nodynamic', '-o', BIN, './cmd/deckfold'], { cwd: ROOT, stdio: 'inherit' });
   const corpus = findCorpus();
   fs.writeFileSync(path.join(OUT, 'corpus.json'), JSON.stringify(corpus));
 

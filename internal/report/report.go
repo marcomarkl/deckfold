@@ -31,6 +31,7 @@ type Report struct {
 	Assets     []Sized
 	OutputSize int
 	Output     string
+	Converted  string   // one line about the assets that were converted to smaller formats (E17)
 	Summary    string   // one line about the content, e.g. slide counts of a PowerPoint file
 	Fonts      []string // fonts and where they came from (PowerPoint files)
 }
@@ -82,6 +83,9 @@ func (r *Report) Print(w io.Writer, warnSize int) {
 	}
 	if r.Output != "" {
 		fmt.Fprintf(w, "Output: %s (%s)\n", r.Output, HumanSize(r.OutputSize))
+	}
+	if r.Converted != "" {
+		fmt.Fprintf(w, "Converted: %s\n", r.Converted)
 	}
 	if len(r.Hosts) > 0 {
 		hs := make([]string, 0, len(r.Hosts))

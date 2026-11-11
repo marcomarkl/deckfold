@@ -44,6 +44,10 @@ type Config struct {
 	Auto      Auto                `json:"auto"`
 	Keys      map[string][]string `json:"keys"`
 	WarnSize  string              `json:"warnSize"`
+	// KeepAssets embeds pictures and fonts unchanged instead of converting them (E17). It
+	// steers the conversion only and is not written into the output, where the rest of the
+	// configuration becomes the defaults of the presentation.
+	KeepAssets bool `json:"-"`
 }
 
 // Elements are the allowed presenter view elements.
@@ -144,8 +148,9 @@ func Merge(data []byte, base Config) (Config, error) {
 		Screens *struct {
 			RememberChoice *bool `json:"rememberChoice"`
 		} `json:"screens"`
-		WarnSize *string `json:"warnSize"`
-		Schema   string  `json:"$schema"`
+		WarnSize   *string `json:"warnSize"`
+		KeepAssets *bool   `json:"keepAssets"`
+		Schema     string  `json:"$schema"`
 	}
 	if err := dec.Decode(&in); err != nil {
 		return base, fmt.Errorf("configuration: %w", err)
@@ -194,6 +199,9 @@ func Merge(data []byte, base Config) (Config, error) {
 	}
 	if in.WarnSize != nil {
 		c.WarnSize = *in.WarnSize
+	}
+	if in.KeepAssets != nil {
+		c.KeepAssets = *in.KeepAssets
 	}
 	return c, c.Validate()
 }
@@ -302,7 +310,12 @@ func ParseSize(s string) (int, error) {
 
 // Example is the sample configuration printed by --print-config.
 func Example() string {
-	b, _ := json.MarshalIndent(Default(), "", "  ")
+	// keepAssets is read from a configuration file but not stored in an output, so Config
+	// leaves it out of its JSON form; the sample shows it.
+	b, _ := json.MarshalIndent(struct {
+		Config
+		KeepAssets bool `json:"keepAssets"`
+	}{Config: Default()}, "", "  ")
 	return string(b) + "\n"
 }
 

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT } from './helpers.mjs';
+import { watch, realErrors, solo, present, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT, assetState } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -192,10 +192,27 @@ test('PowerPoint auto mode: source timing (advTm) after the last step', async ({
   expect(waited).toBeLessThan(5000);
 });
 
+test('PowerPoint assets: pictures are WebP, fonts WOFF2, and all of them load', async ({ page }) => {
+  await solo(page, 'pptx-basic.html');
+  const st = await assetState(page);
+  const msg = JSON.stringify(st);
+  expect(st.mimes.filter((m) => m === 'image/webp').length, msg).toBeGreaterThan(0);
+  expect(st.mimes.filter((m) => m === 'font/woff2').length, msg).toBeGreaterThan(0);
+  expect(st.mimes.filter((m) => m === 'font/ttf'), msg).toEqual([]);
+  expect(st.pictures.length, msg).toBeGreaterThan(0);
+  expect(st.pictures.filter((p) => !(p.width > 0) || p.error), msg).toEqual([]);
+  expect(st.fonts.length, msg).toBeGreaterThan(0);
+  expect(st.fonts.filter((f) => !f.endsWith(':loaded')), msg).toEqual([]);
+});
+
 test('PowerPoint GIF: starts again from its first frame when its slide is entered', async ({ page }) => {
   await solo(page, 'pptx-gifs.html');
   const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
   await expect(img).toHaveCount(1);
+  // the GIF of the deck is embedded as an animated WebP picture (decision E17)
+  const mimes = (await assetState(page)).mimes;
+  expect(mimes.filter((m) => m === 'image/gif'), JSON.stringify(mimes)).toEqual([]);
+  expect(mimes, JSON.stringify(mimes)).toContain('image/webp');
   // The GIF shows red, green and blue for half a second each.
   const color = async () => {
     const box = await img.boundingBox();

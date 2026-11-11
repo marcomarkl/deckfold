@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"image"
 	"math"
 	"os"
 	"path"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"deckfold/internal/media"
 	"deckfold/internal/pptx/anim"
 	"deckfold/internal/pptx/emf"
 	"deckfold/internal/pptx/fonts"
@@ -50,6 +52,9 @@ type Options struct {
 	// AssetDir, when set, receives every asset file as soon as it is known; Result.Assets then
 	// lists the names with nil content, so media is not held in memory until the end.
 	AssetDir string
+	// Media converts pictures into smaller formats that show the same (decision E17); nil
+	// leaves every asset as it is in the presentation.
+	Media *media.Optimizer
 }
 
 // Slide is one rendered slide.
@@ -93,6 +98,7 @@ type Renderer struct {
 	faces   []FaceUse
 	warned  map[string]bool
 	sizes   map[string][2]float64 // pixel size of image assets
+	moving  map[string]bool       // assets that are animated pictures
 	dir     string                // Options.AssetDir
 	err     error                 // first error writing an asset
 	webGL   bool                  // a slide has content the player draws with three.js
@@ -112,7 +118,7 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 		}
 	}
 	rd := &Renderer{pres: pres, opt: opt, fonts: opt.Fonts, assets: map[string][]byte{}, aliases: map[*fonts.Face]string{}, warned: map[string]bool{},
-		sizes: map[string][2]float64{}, dir: opt.AssetDir}
+		sizes: map[string][2]float64{}, moving: map[string]bool{}, dir: opt.AssetDir}
 	if rd.dir != "" {
 		if err := os.MkdirAll(rd.dir, 0o755); err != nil {
 			return nil, err
@@ -167,6 +173,17 @@ func (rd *Renderer) alias(f *fonts.Face) string {
 // asset stores data and returns its file name (content addressed, so names never come from
 // the archive).
 func (rd *Renderer) asset(data []byte, ext string) string {
+	// The size of a picture is read from the original: a converted picture has the same size,
+	// in a format imageSize does not read.
+	orig := data
+	animated := false
+	if rd.opt.Media != nil {
+		r := rd.opt.Media.Optimize(data)
+		if r.Changed {
+			data, ext = r.Data, r.Ext
+		}
+		animated = r.Animated
+	}
 	sum := sha256.Sum256(data)
 	ext = strings.ToLower(strings.Trim(ext, "."))
 	if ext == "" || len(ext) > 5 || strings.ContainsAny(ext, "/\\") {
@@ -176,7 +193,10 @@ func (rd *Renderer) asset(data []byte, ext string) string {
 	if _, ok := rd.assets[name]; ok {
 		return name
 	}
-	if w, h := imageSize(data); w > 0 {
+	if animated && rd.moving != nil {
+		rd.moving[name] = true
+	}
+	if w, h := imageSize(orig); w > 0 {
 		rd.sizes[name] = [2]float64{w, h}
 	}
 	if rd.dir == "" {
@@ -827,9 +847,10 @@ func (r *slideRenderer) picture(b *strings.Builder, pic *xmltree.Node, owner own
 		if a := blip.Child("alphaModFix"); a != nil {
 			op = ` opacity="` + f(float64(a.Int("amt", 100000))/100000) + `"`
 		}
-		// The player restarts GIF animations when the slide is shown, as PowerPoint does.
+		// The player restarts GIF animations when the slide is shown, as PowerPoint does. A
+		// GIF that was converted is an animated WebP picture and starts again the same way.
 		gif := ""
-		if strings.HasSuffix(strings.ToLower(name), ".gif") {
+		if strings.HasSuffix(strings.ToLower(name), ".gif") || r.moving[name] {
 			gif = ` data-df-pptx-gif=""`
 		}
 		// effects (shadow, bevel) sit on an outer group: a filter on the clipped group itself
@@ -1031,7 +1052,7 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 		r.warnOnce("a picture on slide %d is in a format deckfold does not know (%s) and is left out", r.slide.Number, r.pres.Pkg.ContentType(rel.Target))
 		return "", false
 	case "emf":
-		res, err := emf.Convert(data)
+		res, err := emf.ConvertWith(data, emf.Options{Bitmap: r.bitmap()})
 		if err != nil {
 			r.warnOnce("an EMF picture on slide %d cannot be read (%v) and is left out", r.slide.Number, err)
 			return "", false
@@ -1041,7 +1062,7 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 		}
 		return r.asset(res.SVG, "svg"), true
 	case "wmf":
-		res, err := emf.ConvertWMF(data)
+		res, err := emf.ConvertWMFWith(data, emf.Options{Bitmap: r.bitmap()})
 		if err != nil {
 			r.warnOnce("a WMF picture on slide %d cannot be read (%v) and is left out", r.slide.Number, err)
 			return "", false
@@ -1052,6 +1073,15 @@ func (r *slideRenderer) blipAsset(blip *xmltree.Node, part model.Part) (string, 
 		return r.asset(res.SVG, "svg"), true
 	}
 	return r.asset(data, format), true
+}
+
+// bitmap returns the encoder for the bitmaps inside an EMF or WMF picture: they are written
+// into the SVG as data URIs and so never pass asset.
+func (rd *Renderer) bitmap() func(img *image.NRGBA, pngSize int) ([]byte, string) {
+	if rd.opt.Media == nil {
+		return nil
+	}
+	return rd.opt.Media.Still
 }
 
 // pictureTypes maps the content types of pictures to the format names used for assets.

@@ -82,6 +82,8 @@ func MimeFor(name, given string, data []byte) string {
 		return "font/otf"
 	case ".svg":
 		return "image/svg+xml"
+	case ".webp":
+		return "image/webp"
 	case ".js", ".jsonp", ".pdfp":
 		return "text/javascript"
 	case ".json":

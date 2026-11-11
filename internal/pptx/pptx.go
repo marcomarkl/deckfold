@@ -9,11 +9,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
 	"deckfold/internal/adapter"
 	"deckfold/internal/assets"
+	"deckfold/internal/media"
 	"deckfold/internal/pptx/anim"
 	"deckfold/internal/pptx/deck"
 	"deckfold/internal/pptx/fonts"
@@ -53,6 +55,9 @@ type Options struct {
 	Fetcher *assets.Fetcher
 	// Lenient writes the deck even when linked files are missing (--lenient, E10).
 	Lenient bool
+	// Media converts pictures and fonts into smaller formats that show the same (E17); nil
+	// embeds every asset unchanged.
+	Media *media.Optimizer
 }
 
 // MissingError lists linked files that could not be loaded (exit code 1 unless --lenient).
@@ -68,6 +73,34 @@ type Result struct {
 	Hidden   int
 	Warnings []string
 	Fonts    []string // one line per font: family, source
+}
+
+// prepareMedia converts the pictures of the package on all cores before the slides are drawn.
+// The renderer needs the final name of a picture at once, and that name is the hash of the
+// final data, so it cannot convert in parallel itself; it finds these results instead.
+func prepareMedia(pkg *opc.Package, m *media.Optimizer) {
+	if m == nil {
+		return
+	}
+	var names []string
+	for n, size := range pkg.Parts() {
+		if !strings.HasPrefix(n, "ppt/media/") || size > 256<<20 {
+			continue
+		}
+		switch strings.TrimPrefix(filepath.Ext(n), ".") {
+		case "mp4", "m4v", "mov", "avi", "wmv", "asf", "mpg", "mpeg", "mkv", "webm", "mp3", "m4a", "wav", "wma", "aac", "aiff", "aif", "ogg", "flac":
+			continue // video and sound: nothing in them is converted yet
+		}
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	m.Prepare(len(names), func(i int) []byte {
+		data, err := pkg.Read(names[i])
+		if err != nil {
+			return nil
+		}
+		return data
+	})
 }
 
 // Convert reads the presentation at src and writes the deck into dir.
@@ -114,7 +147,8 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 	if opt.FontDirs != nil {
 		fr.Dirs = opt.FontDirs
 	}
-	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked, AssetDir: filepath.Join(dir, "assets"),
+	prepareMedia(pkg, opt.Media)
+	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked, AssetDir: filepath.Join(dir, "assets"), Media: opt.Media,
 		Missing: func(target, where string, err error) {
 			missing = append(missing, report.Missing{Ref: target, Where: filepath.Base(src) + ": " + where, Reason: err.Error()})
 		}})
@@ -138,11 +172,15 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 			warn("font %s cannot be subset (%v); it is left out", fu.Face.Family, err)
 			continue
 		}
-		name, err := out.AddAsset(data, "ttf", filepath.Join(dir, "assets"))
+		ext, format := "ttf", "truetype"
+		if r := opt.Media.Optimize(data); r.Changed {
+			data, ext, format = r.Data, r.Ext, "woff2"
+		}
+		name, err := out.AddAsset(data, ext, filepath.Join(dir, "assets"))
 		if err != nil {
 			return nil, err
 		}
-		dfonts = append(dfonts, deck.Font{Alias: fu.Alias, File: name})
+		dfonts = append(dfonts, deck.Font{Alias: fu.Alias, File: name, Format: format})
 		line := fmt.Sprintf("%s: %s (%s)", fu.Face.Family, fu.Face.Source, filepath.Base(fu.Face.File))
 		if fu.Face.Subst {
 			line += ", substitute"

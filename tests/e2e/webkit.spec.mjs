@@ -1,6 +1,6 @@
 // Fallback browser (E3): WebKit is close to Safari and has no Window Management API.
 import { test, expect } from '@playwright/test';
-import { solo, startScreen, openPresenter, audState, counter, slideCount, expected, need } from './helpers.mjs';
+import { solo, startScreen, openPresenter, audState, counter, slideCount, expected, need, assetState, middleColor } from './helpers.mjs';
 
 test('WebKit: solo navigation in a claude.ai deck', async ({ page }) => {
   need('claude');
@@ -48,6 +48,32 @@ test('WebKit: PowerPoint solo navigation and fonts', async ({ page }) => {
     return [...fams].every((f) => document.fonts.check('16px ' + f));
   });
   expect(fonts).toBe(true);
+});
+
+test('WebKit: converted pictures and fonts of a PowerPoint deck load', async ({ page }) => {
+  await solo(page, 'pptx-basic.html');
+  const st = await assetState(page);
+  const msg = JSON.stringify(st);
+  expect(st.mimes.filter((m) => m === 'image/webp').length, msg).toBeGreaterThan(0);
+  expect(st.mimes.filter((m) => m === 'font/woff2').length, msg).toBeGreaterThan(0);
+  expect(st.pictures.length, msg).toBeGreaterThan(0);
+  expect(st.pictures.filter((p) => !(p.width > 0) || p.error), msg).toEqual([]);
+  expect(st.fonts.filter((f) => !f.endsWith(':loaded')), msg).toEqual([]);
+});
+
+test('WebKit: an animated WebP picture starts again when its slide is entered', async ({ page }) => {
+  await solo(page, 'pptx-gifs.html');
+  const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
+  await expect(img).toHaveCount(1);
+  expect((await assetState(page)).mimes).toContain('image/webp');
+  // the picture shows red, green and blue for half a second each
+  await expect.poll(() => middleColor(page, img), { timeout: 3000 }).toBe('green');
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => shownSlide(page)).toBe(1);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => shownSlide(page)).toBe(0);
+  expect(await middleColor(page, img)).toBe('red');
 });
 
 test('WebKit: PowerPoint animations reach every step', async ({ page }) => {

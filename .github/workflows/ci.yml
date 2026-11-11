@@ -20,6 +20,12 @@ on:
 permissions:
   contents: read
 
+# The WebP package would encode with a libwebp installed on the runner when it finds one. The
+# tag makes every go command use the bundled encoder, so that the output does not depend on the
+# machine (internal/media has a test that fails without it where such a library exists).
+env:
+  GOFLAGS: -tags=nodynamic
+
 jobs:
   test:
     name: test (${{ matrix.os }})

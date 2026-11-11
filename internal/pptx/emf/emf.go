@@ -84,6 +84,7 @@ type dc struct {
 
 type conv struct {
 	data      []byte
+	bitmap    func(img *image.NRGBA, pngSize int) ([]byte, string) // Options.Bitmap
 	out       strings.Builder
 	defs      strings.Builder
 	objs      map[uint32]any
@@ -99,11 +100,22 @@ type conv struct {
 }
 
 // Convert converts EMF data.
-func Convert(data []byte) (Result, error) {
+func Convert(data []byte) (Result, error) { return ConvertWith(data, Options{}) }
+
+// Options configure the conversion of a metafile.
+type Options struct {
+	// Bitmap, when set, may write a bitmap of the metafile in another format than PNG. It gets
+	// the picture and the size of its PNG file and returns the data and the MIME type to use,
+	// or nil to keep the PNG.
+	Bitmap func(img *image.NRGBA, pngSize int) (data []byte, mime string)
+}
+
+// ConvertWith converts an EMF file to SVG with options.
+func ConvertWith(data []byte, opt Options) (Result, error) {
 	if len(data) < 88 || binary.LittleEndian.Uint32(data) != 1 || string(data[40:44]) != " EMF" {
 		return Result{}, ErrNotEMF
 	}
-	c := &conv{data: data, objs: map[uint32]any{}}
+	c := &conv{data: data, objs: map[uint32]any{}, bitmap: opt.Bitmap}
 	c.st = dc{world: ident, winExt: [2]float64{1, 1}, vpExt: [2]float64{1, 1}, mapMode: 1,
 		pen: pen{width: 1, col: color.RGBA{0, 0, 0, 255}}, brush: brush{col: color.RGBA{255, 255, 255, 255}}, polyFill: 1,
 		textCol: color.RGBA{0, 0, 0, 255}}
@@ -807,6 +819,11 @@ func (c *conv) dibURI(b []byte, offBmi, cbBmi, offBits, cbBits, base int) string
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return ""
+	}
+	if c.bitmap != nil {
+		if data, mime := c.bitmap(img, buf.Len()); data != nil {
+			return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
+		}
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
 }

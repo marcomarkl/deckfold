@@ -4,6 +4,8 @@
 set -eu
 cd "$(dirname "$0")/.."
 VERSION="${1:-$(git describe --tags --always 2>/dev/null || echo dev)}"
+# nodynamic: encode pictures with the bundled WebP encoder, never with a libwebp of the machine
+export GOFLAGS="${GOFLAGS:+$GOFLAGS }-tags=nodynamic"
 go generate ./runtime
 go test ./... >/dev/null
 rm -rf dist
