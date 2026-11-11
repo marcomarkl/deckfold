@@ -37,8 +37,10 @@ test('300 MB file: start screen and first slide within 3 s each', async ({ page 
 // PowerPoint deck with 200 slides: conversion, start screen, presenter view with previews and
 // overview, steps.
 test('PowerPoint deck with 200 slides', async ({ page, context }) => {
-  const { convertMs } = JSON.parse(fs.readFileSync(path.join(OUT, 'pptx-big.json'), 'utf8'));
-  console.log(`conversion of 200 slides: ${convertMs} ms`);
+  // convertMs is the converter alone (--keep-assets); converting the pictures and fonts as well
+  // takes as long as the WebP encoder needs at its slowest setting and has no limit (E17)
+  const { convertMs, convertWithAssetsMs } = JSON.parse(fs.readFileSync(path.join(OUT, 'pptx-big.json'), 'utf8'));
+  console.log(`conversion of 200 slides: ${convertMs} ms with the assets unchanged, ${convertWithAssetsMs} ms with pictures and fonts converted`);
   const t0 = Date.now();
   await page.goto(fileURL('pptx-big.html'));
   await page.waitForSelector('.df-start [data-df-start]');
