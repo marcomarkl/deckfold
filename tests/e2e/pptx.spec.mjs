@@ -550,11 +550,18 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
       area: !!er && er.width > 0 && er.height > 0,
       under: top ? String(top.className || top.tagName) : 'nothing',
       point,
+      // for a failure message only: the size of the iframe, its scale, and whether its document is loaded
+      more: { width: f ? f.offsetWidth : -1, scale: k, ready: doc ? doc.readyState : 'no document', slides: doc ? doc.querySelectorAll('.df-pptx-slide').length : -1 },
     };
   });
-  await expect.poll(async () => { const s = await linkInPreview(); delete s.point; return s; }, { timeout: 10000 })
+  await expect.poll(async () => { const s = await linkInPreview(); delete s.point; delete s.more; return s; }, { timeout: 10000 })
     .toEqual({ frame: 'visible', slide: L, links: links.length, area: true, under: 'df-shield' });
-  const spot = (await linkInPreview()).point;
+  // The place of the link is read once more for the click. On the Firefox runner this second
+  // reading once found no link although the first had just passed, so a failure here says what
+  // the preview showed then.
+  const seen = await linkInPreview();
+  expect(seen.point, `the preview right after it was ready: ${JSON.stringify(seen)}`).not.toBeNull();
+  const spot = seen.point;
   await pres.mouse.click(spot[0], spot[1]);
   await pres.waitForTimeout(500);
   await at(L);

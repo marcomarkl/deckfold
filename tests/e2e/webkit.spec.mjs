@@ -95,3 +95,23 @@ test('WebKit: search and outline: open, search, choose', async ({ page }) => {
   await expect(page.locator('[data-df-finder].df-on')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => +document.querySelector('.df-start .df-strip .df-tile.df-cur').getAttribute('data-i'))).toBe(1);
 });
+
+test('WebKit: the overlays close by their button; the key help opens from the footer', async ({ page }) => {
+  await startScreen(page, 'pptx-content.html');
+  await page.click('[data-df-find]');
+  await expect(page.locator('[data-df-finder].df-on')).toHaveCount(1);
+  await page.click('[data-df-finder] [data-df-close]');
+  await expect(page.locator('[data-df-finder].df-on')).toHaveCount(0);
+  await page.click('.df-start-foot [data-df-help]');
+  await expect(page.locator('[data-df-help-overlay].df-on [data-df-keygroup]').first()).toBeVisible();
+  await page.click('[data-df-help-overlay] [data-df-close]');
+  await expect(page.locator('[data-df-help-overlay].df-on')).toHaveCount(0);
+  // the preview keeps the shape of the slide
+  await page.waitForSelector('.df-start-stage iframe[data-df-preview]');
+  const m = await page.evaluate(() => {
+    const f = document.querySelector('.df-start-stage iframe');
+    const st = document.querySelector('.df-start-stage').getBoundingClientRect();
+    return { stage: [st.width, st.height], ratio: parseFloat(f.style.width) / parseFloat(f.style.height) };
+  });
+  expect(Math.abs(m.stage[0] - m.stage[1] * m.ratio), JSON.stringify(m)).toBeLessThanOrEqual(1.5);
+});
