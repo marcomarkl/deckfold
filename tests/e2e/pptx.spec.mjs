@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT } from './helpers.mjs';
+import { watch, realErrors, solo, present, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT, assetState } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -181,6 +181,45 @@ test('PowerPoint presenter view: previews show the current and the next slide af
   expect((await prevState()).map((p) => p[0])).toEqual([{ slide: 0, step: ends[0] }, { slide: 1, step: ends[1] }]);
 });
 
+// A preview moves to the newest state asked of it (setPreviewState in runtime/src/90-main.js).
+// It used to go through every state it had been asked for, 30 ms each. After a fast run of moves
+// it then showed the current slide from an older state, left it for a slide the show had left
+// long before and came back. The links test below met that: 5 of 200 repeats failed in Chrome.
+test('PowerPoint previews: a state that was replaced before the preview got to it is never shown', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-content.html');
+  const n = await slideCount(page);
+  expect(n).toBeGreaterThan(3);
+  const current = '.df-current iframe[data-df-preview]';
+  // the preview has shown its first state and rests on the first slide
+  await expect.poll(() => pres.evaluate((sel) => {
+    const f = document.querySelector(sel), p = f && f.contentWindow.__dfPptx;
+    return p && getComputedStyle(f).visibility === 'visible' ? p.state().slide : -1;
+  }, current), { timeout: 10000 }).toBe(0);
+  // three states asked for in one task: the preview goes to the last one only, and the promise
+  // of that call settles once it is there
+  const went = await pres.evaluate(async ([sel, last]) => {
+    const w = document.querySelector(sel).contentWindow, went = [];
+    w.addEventListener('df-pptx-change', (e) => went.push(e.detail.slide));
+    w.__deckfold.setPreviewState({ slide: 1, step: 0 });
+    w.__deckfold.setPreviewState({ slide: 2, step: 0 });
+    await w.__deckfold.setPreviewState({ slide: last, step: 0 });
+    return went;
+  }, [current, n - 1]);
+  expect(went).toEqual([n - 1]);
+  // a state asked for while the preview moves waits for that move and is shown after it
+  const then = await pres.evaluate(async (sel) => {
+    const w = document.querySelector(sel).contentWindow, went = [];
+    w.addEventListener('df-pptx-change', (e) => went.push(e.detail.slide));
+    const first = w.__deckfold.setPreviewState({ slide: 1, step: 0 });
+    for (let i = 0; i < 20 && !went.length; i++) await Promise.resolve(); // until that move has begun
+    w.__deckfold.setPreviewState({ slide: 0, step: 0 });
+    await w.__deckfold.setPreviewState({ slide: 2, step: 0 });
+    await first;
+    return went;
+  }, current);
+  expect(then).toEqual([1, 2]);
+});
+
 test('PowerPoint auto mode: source timing (advTm) after the last step', async ({ page }) => {
   await solo(page, 'pptx-animations-auto.html');
   // wait for the last step of slide 3, then the slide advances after its 3 s, not after 1 s
@@ -192,10 +231,27 @@ test('PowerPoint auto mode: source timing (advTm) after the last step', async ({
   expect(waited).toBeLessThan(5000);
 });
 
+test('PowerPoint assets: pictures are WebP, fonts WOFF2, and all of them load', async ({ page }) => {
+  await solo(page, 'pptx-basic.html');
+  const st = await assetState(page);
+  const msg = JSON.stringify(st);
+  expect(st.mimes.filter((m) => m === 'image/webp').length, msg).toBeGreaterThan(0);
+  expect(st.mimes.filter((m) => m === 'font/woff2').length, msg).toBeGreaterThan(0);
+  expect(st.mimes.filter((m) => m === 'font/ttf'), msg).toEqual([]);
+  expect(st.pictures.length, msg).toBeGreaterThan(0);
+  expect(st.pictures.filter((p) => !(p.width > 0) || p.error), msg).toEqual([]);
+  expect(st.fonts.length, msg).toBeGreaterThan(0);
+  expect(st.fonts.filter((f) => !f.endsWith(':loaded')), msg).toEqual([]);
+});
+
 test('PowerPoint GIF: starts again from its first frame when its slide is entered', async ({ page }) => {
   await solo(page, 'pptx-gifs.html');
   const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
   await expect(img).toHaveCount(1);
+  // the GIF of the deck is embedded as an animated WebP picture (decision E17)
+  const mimes = (await assetState(page)).mimes;
+  expect(mimes.filter((m) => m === 'image/gif'), JSON.stringify(mimes)).toEqual([]);
+  expect(mimes, JSON.stringify(mimes)).toContain('image/webp');
   // The GIF shows red, green and blue for half a second each.
   const color = async () => {
     const box = await img.boundingBox();
@@ -504,6 +560,18 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
     await expect.poll(() => shown(page)).toBe(k);
     await expect.poll(() => counter(pres)).toContain(`${k + 1} / ${n}`);
   };
+  // For the failure message of the step with the preview at the end: the states the presenter
+  // view was told and the slides its preview of the current slide went to, in order, with times.
+  await pres.waitForFunction(() => {
+    const f = document.querySelector('.df-current iframe[data-df-preview]');
+    return f && f.style.visibility !== 'hidden' && f.contentWindow.__dfPptx;
+  });
+  await pres.evaluate(() => {
+    const log = window.__dfTestLog = [], t0 = performance.now();
+    const note = (what, slide) => log.push(`${Math.round(performance.now() - t0)} ${what} ${slide + 1}`);
+    window.addEventListener('message', (e) => { const d = e.data; if (d && d.df === 'deckfold' && d.type === 'state' && d.state) note('told', d.state.slide); });
+    document.querySelector('.df-current iframe[data-df-preview]').contentWindow.addEventListener('df-pptx-change', (e) => note('preview', e.detail.slide));
+  });
   // every link the drawing has is one of the model
   await to(L); await at(L);
   expect(await page.evaluate(() => [...document.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]')].map((e) => e.getAttribute('data-df-jump')).sort())).toEqual(links);
@@ -556,11 +624,13 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   });
   await expect.poll(async () => { const s = await linkInPreview(); delete s.point; delete s.more; return s; }, { timeout: 10000 })
     .toEqual({ frame: 'visible', slide: L, links: links.length, area: true, under: 'df-shield' });
-  // The place of the link is read once more for the click. On the Firefox runner this second
-  // reading once found no link although the first had just passed, so a failure here says what
-  // the preview showed then.
+  // The place of the link is read once more for the click. This second reading used to find
+  // another slide now and then (once on the Firefox runner, 5 of 200 repeats in Chrome): the
+  // preview was still going through older states, showed slide L from one of them when the poll
+  // read it, and moved on. A preview now leaves replaced states out (see the test of the previews
+  // above). A failure here says what the preview showed and what happened before.
   const seen = await linkInPreview();
-  expect(seen.point, `the preview right after it was ready: ${JSON.stringify(seen)}`).not.toBeNull();
+  expect(seen.point, `the preview right after it was ready: ${JSON.stringify(seen)}; before that (ms, slide numbers): ${(await pres.evaluate(() => window.__dfTestLog)).slice(-14).join(', ')}`).not.toBeNull();
   const spot = seen.point;
   await pres.mouse.click(spot[0], spot[1]);
   await pres.waitForTimeout(500);

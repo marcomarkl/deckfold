@@ -30,6 +30,7 @@ What deckfold does not show as PowerPoint does:
 - Charts with an automatic layout can differ from PowerPoint by a few pixels in the position of the plot area, and the 3D charts are an approximation.
 - 3D shapes and the tile transitions are close to PowerPoint, not identical; Morph does not change the outline of shapes.
 - Animations started by a bookmark in a video or audio clip are not played.
+- TIFF pictures in CMYK or with 16 bits per channel, and a few TIFF variants deckfold cannot read, stay TIFF, which only Safari shows. The report names them. Other TIFF pictures are converted to WebP.
 - Videos in WMV, AVI or ASF show only their still image, because browsers cannot play them. Media files larger than 1 GB are refused; compress them in PowerPoint first.
 
 ## Usage
@@ -60,6 +61,7 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `--auto-interval 8` | seconds per step when the source has no timings |
 | `--loop` | loop in auto mode |
 | `--warn-size 250MB` | warning threshold for the output size |
+| `--keep-assets` | embed pictures and fonts unchanged instead of converting them to smaller formats |
 | `--lenient` | write the file even if assets cannot be resolved (with a warning) |
 | `--generic` | embed an unknown format anyway |
 | `--allow-outside folder` | allow files outside the input folder (repeatable); for PowerPoint files, the folder of linked pictures and videos |
@@ -84,6 +86,8 @@ deckfold reads the export, downloads remote resources (for example Google Fonts)
 Files outside the input folder are not embedded, not even through symlinks or absolute paths. When downloading, deckfold refuses addresses in the local or private network. The report lists every host it contacted.
 
 Live content such as embedded web pages stays live. Without a network connection the still image of the source or a placeholder appears; the report names the slides concerned.
+
+Pictures and fonts are converted to smaller formats: PNG, GIF, BMP and TIFF pictures become lossless WebP, and TrueType, OpenType and WOFF fonts become WOFF2. A converted file replaces the original only when it is smaller and reads back as the same picture, sample by sample, or as the same font tables. Colour profiles are kept. JPEG pictures, SVG, video and sound are embedded unchanged, and so is every file that a script of the source loads itself. The report says how many files were converted and what that saved. `--keep-assets`, or `"keepAssets": true` in the configuration file, embeds everything as it is. Converting the pictures of a large deck takes minutes, because deckfold uses the slowest and best setting of the encoder.
 
 Large media files are embedded unchanged. Chrome opens a 300 MB file in a little over a second; Safari needs about ten seconds for the same file.
 
@@ -152,8 +156,10 @@ go generate ./runtime
 ```
 
 ```bash
-go test ./...
+go test -tags nodynamic ./...
 ```
+
+The tag `nodynamic` belongs to every build and test. Without it the WebP package loads a libwebp from the system when it finds one, and the output would depend on the machine. A binary built without the tag notices that and leaves pictures unchanged, with a warning. `scripts/release.sh` and the CI set the tag themselves.
 
 ```bash
 cd tests && npm install && npx playwright install chromium webkit && npx playwright test

@@ -2,6 +2,7 @@ package emf
 
 import (
 	"encoding/binary"
+	"image"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,45 @@ func TestPathWithBrush(t *testing.T) {
 func TestNotEMF(t *testing.T) {
 	if _, err := Convert([]byte("nope")); err != ErrNotEMF {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// TestBitmapHook: a bitmap in a metafile goes into the SVG as PNG, unless Options.Bitmap
+// returns another form of it.
+func TestBitmapHook(t *testing.T) {
+	const w, h = 4, 2
+	body := make([]byte, 72)
+	copy(body[16:], ints(10, 10, 0, 0, w, h, 80, 40, 120, 24, 0, 0x00CC0020, 40, 20))
+	bmi := make([]byte, 40)
+	binary.LittleEndian.PutUint32(bmi[0:], 40)
+	binary.LittleEndian.PutUint32(bmi[4:], w)
+	binary.LittleEndian.PutUint32(bmi[8:], h)
+	binary.LittleEndian.PutUint16(bmi[12:], 1)
+	binary.LittleEndian.PutUint16(bmi[14:], 24)
+	bits := make([]byte, 24)
+	for i := range bits {
+		bits[i] = byte(40 * i)
+	}
+	file := build(rec(81, append(append(body, bmi...), bits...)))
+
+	res, err := Convert(file)
+	if err != nil || !strings.Contains(string(res.SVG), `href="data:image/png;base64,`) {
+		t.Fatalf("without a hook the bitmap must be a PNG: %v %s", err, res.SVG)
+	}
+	var got image.Rectangle
+	var pngSize int
+	res, err = ConvertWith(file, Options{Bitmap: func(img *image.NRGBA, size int) ([]byte, string) {
+		got, pngSize = img.Bounds(), size
+		return []byte("X"), "image/webp"
+	}})
+	if err != nil || !strings.Contains(string(res.SVG), `href="data:image/webp;base64,WA=="`) || strings.Contains(string(res.SVG), "image/png") {
+		t.Errorf("the hook's data is not in the SVG: %v %s", err, res.SVG)
+	}
+	if got != image.Rect(0, 0, w, h) || pngSize == 0 {
+		t.Errorf("the hook got a picture of %v and a PNG size of %d", got, pngSize)
+	}
+	res, _ = ConvertWith(file, Options{Bitmap: func(*image.NRGBA, int) ([]byte, string) { return nil, "" }})
+	if !strings.Contains(string(res.SVG), `href="data:image/png;base64,`) {
+		t.Errorf("a hook that returns nothing must leave the PNG: %s", res.SVG)
 	}
 }

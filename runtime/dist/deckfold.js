@@ -2227,14 +2227,20 @@ function bootPreview() {
     document.getAnimations().forEach(function (an) { try { an.finish(); } catch (e) { } });
   }
   if (DF.format() !== "pptx") document.documentElement.classList.add("df-still");
-  var cur = { slide: 0, step: 0 }, queue = Promise.resolve(), ready;
+  var cur = { slide: 0, step: 0 }, want = null, queue = Promise.resolve(), ready;
   DF.previewReady = new Promise(function (res) { ready = res; });
-  // setPreviewState returns a promise that settles once the state is shown
+  // setPreviewState returns a promise that settles once the preview shows the newest state asked
+  // of it. The moves run one after the other, and each goes to the state that is the newest when
+  // it begins: a state that was replaced while the preview was still moving is never shown.
+  // Otherwise a preview that is asked faster than it moves (a move takes 30 ms and more, and a
+  // Keynote preview plays every build of its slide) would go on through slides the show has
+  // left, and would show the newest one, leave it and come back to it.
   DF.setPreviewState = function (s) {
+    want = { slide: s.slide, step: s.step };
     queue = queue.then(function () {
-      if (DF.model.same(cur, s)) return;
+      if (DF.model.same(cur, want)) return;
       var from = cur;
-      cur = { slide: s.slide, step: s.step };
+      cur = want;
       return DF.drive(from, cur).then(function () { finishAll(); return DF.wait(30); }).then(finishAll);
     }).then(null, function (err) { console.error("deckfold:", err); });
     return queue;

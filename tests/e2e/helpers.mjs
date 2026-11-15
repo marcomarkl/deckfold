@@ -93,3 +93,29 @@ export function expected(page, ops, from) {
 
 // Index of the slide the claude.ai player currently shows (non-current slides carry data-off).
 export const visibleSlide = (doc) => doc.evaluate(() => [...document.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off')));
+
+// assetState reads what became of the pictures and fonts of a PowerPoint deck (decision E17):
+// the MIME types of the embedded assets, whether every picture on the slides decodes, and the
+// state of every font face.
+export const assetState = (page) => page.evaluate(async () => {
+  const mimes = [...document.querySelectorAll('script[id^="df-a-"][data-mime]')].map((s) => s.getAttribute('data-mime'));
+  const pictures = await Promise.all([...document.querySelectorAll('.df-pptx-slide image')].map(async (im) => {
+    const probe = new Image();
+    probe.src = (im.getAttribute('href') || '').replace(/#.*$/, '');
+    let error = '';
+    try { await probe.decode(); } catch (e) { error = String(e); }
+    return { width: probe.naturalWidth, error };
+  }));
+  await document.fonts.ready;
+  return { mimes, pictures, fonts: [...document.fonts].map((f) => f.family + ':' + f.status) };
+});
+
+// The colour in the middle of an element, as a name where it is one of the three colours of the
+// animated test picture.
+export async function middleColor(page, locator) {
+  const box = await locator.boundingBox();
+  const { PNG } = await import('pngjs');
+  const shot = PNG.sync.read(await page.screenshot({ clip: { x: box.x + box.width / 2, y: box.y + box.height / 2, width: 1, height: 1 } }));
+  const [r, g, b] = shot.data;
+  return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
+}
