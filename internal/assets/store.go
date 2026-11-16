@@ -74,6 +74,8 @@ func MimeFor(name, given string, data []byte) string {
 	switch ext {
 	case ".woff2":
 		return "font/woff2"
+	case ".flac":
+		return "audio/flac"
 	case ".woff":
 		return "font/woff"
 	case ".ttf":

@@ -3,6 +3,7 @@ package pptx
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,5 +132,83 @@ func TestMediaHostileDeck(t *testing.T) {
 	_, doc, _ := convertMedia(t, pptxgen.Hostile())
 	if len(doc.Tags) == 0 {
 		t.Fatal("no deck was written")
+	}
+}
+
+// wmvClip makes a short Windows Media video with sound with the ffmpeg of the machine.
+func wmvClip(t *testing.T) []byte {
+	t.Helper()
+	ff, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is not installed")
+	}
+	out := filepath.Join(t.TempDir(), "clip.wmv")
+	cmd := exec.Command(ff, "-v", "error", "-nostdin", "-y", "-f", "lavfi", "-i", "testsrc2=size=160x120:rate=10:duration=1",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:v", "wmv2", "-c:a", "wmav2", out)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("this ffmpeg cannot make the test clip: %v %s", err, b)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+// videoDeck has a sound that starts with its slide and a Windows Media video.
+func videoDeck(wmv []byte) *pptxgen.Deck {
+	d := pptxgen.New("Video and sound")
+	s := d.Add(pptxgen.LayoutBlank)
+	id := s.MediaShape(d, "audio", "Tone", pptxgen.Box{X: 600, Y: 300, W: 80, H: 80}, "wav", "audio/wav", pptxgen.WAV(2), pptxgen.TestPNG(80, 80))
+	s.Timing = pptxgen.AutoPlay(id, 2000)
+	s = d.Add(pptxgen.LayoutBlank)
+	s.MediaShape(d, "video", "Old video", pptxgen.Box{X: 340, Y: 200, W: 600, H: 340}, "wmv", "video/x-ms-wmv", wmv, pptxgen.TestPNG(600, 340))
+	return d
+}
+
+// mediaSources returns the src of the video and of the audio element of a deck.
+func mediaSources(doc *htmlscan.Doc) (video, audio string) {
+	for _, tg := range doc.Tags {
+		switch tg.Name {
+		case "video":
+			video = tg.Value("src")
+		case "audio":
+			audio = tg.Value("src")
+		}
+	}
+	return
+}
+
+// TestVideoAndSound: with ffmpeg installed, a Windows Media video becomes an MP4 file that the
+// slide plays, and the PCM sound becomes FLAC (decision E18). Without ffmpeg the deck is what
+// it was before: the video is left out with a warning and the sound stays a WAV file.
+func TestVideoAndSound(t *testing.T) {
+	wmv := wmvClip(t)
+	dir, doc, m := convertMedia(t, videoDeck(wmv))
+	if !m.FFmpeg() {
+		t.Skip("ffmpeg and ffprobe are not both installed")
+	}
+	video, audio := mediaSources(doc)
+	if !strings.HasSuffix(video, ".mp4") || !strings.HasSuffix(audio, ".flac") {
+		t.Fatalf("video %q, audio %q; want an .mp4 and a .flac file", video, audio)
+	}
+	if b := asset(t, dir, video); len(b) < 12 || string(b[4:8]) != "ftyp" {
+		t.Errorf("the video file does not begin like an MP4 file")
+	}
+	if b := asset(t, dir, audio); !bytes.HasPrefix(b, []byte("fLaC")) {
+		t.Errorf("the sound file does not begin like a FLAC file")
+	}
+	if st := m.Stats(); st.Videos != 1 || st.Sounds != 1 {
+		t.Errorf("stats %+v, want one video and one sound", st)
+	}
+
+	t.Setenv(media.NoFFmpegEnv, "1")
+	_, doc, m = convertMedia(t, videoDeck(wmv))
+	video, audio = mediaSources(doc)
+	if video != "" || !strings.HasSuffix(audio, ".wav") {
+		t.Errorf("without ffmpeg: video %q, audio %q; want no video element and the .wav file", video, audio)
+	}
+	if st := m.Stats(); st.Videos != 0 || st.Sounds != 0 {
+		t.Errorf("without ffmpeg: stats %+v", st)
 	}
 }

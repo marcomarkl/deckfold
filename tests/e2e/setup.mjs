@@ -134,6 +134,22 @@ export default async function setup() {
   deckfold([path.join(pgen, 'big.pptx'), '-o', path.join(OUT, 'pptx-big.html'), '--force'], BUNDLED);
   fs.writeFileSync(path.join(OUT, 'pptx-big.json'), JSON.stringify({ convertMs, convertWithAssetsMs: Date.now() - t1 }));
 
+  // A page with a Windows Media video and a WAV sound, for av.spec.mjs. deckfold converts them
+  // with the ffmpeg of the machine (decision E18), and so does this setup make the clips; without
+  // ffmpeg there is no such deck and the test is skipped.
+  const ffmpeg = ['ffmpeg', 'ffprobe'].every((tool) => { try { execFileSync(tool, ['-version'], { stdio: 'ignore' }); return true; } catch { return false; } });
+  if (ffmpeg) {
+    const av = path.join(OUT, 'av');
+    fs.mkdirSync(av, { recursive: true });
+    const lavfi = ['-v', 'error', '-nostdin', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=320x240:rate=10:duration=2', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2'];
+    execFileSync('ffmpeg', [...lavfi, '-c:v', 'wmv2', '-c:a', 'wmav2', path.join(av, 'clip.wmv')], { stdio: 'ignore' });
+    execFileSync('ffmpeg', [...lavfi, '-map', '1:a', '-c:a', 'pcm_s16le', path.join(av, 'tone.wav')], { stdio: 'ignore' });
+    fs.writeFileSync(path.join(av, 'deck.html'), '<!doctype html><html><head><meta charset="utf-8"><title>Video and sound</title></head><body><video id="v" muted playsinline src="clip.wmv"></video><audio id="a" src="tone.wav"></audio></body></html>');
+    deckfold([path.join(av, 'deck.html'), '-o', path.join(OUT, 'av.html'), '--force', '--generic']);
+    corpus.av = 'tests/.out/av/deck.html';
+    fs.writeFileSync(path.join(OUT, 'corpus.json'), JSON.stringify(corpus));
+  }
+
   // The page with GIF animations and their WebP files, for gif-timing.spec.mjs
   execFileSync('go', ['run', './scripts/giftiming', '-out', path.join(OUT, 'giftiming')], { cwd: ROOT, stdio: 'ignore' });
 

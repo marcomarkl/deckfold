@@ -926,7 +926,8 @@ func (r *slideRenderer) media(b *strings.Builder, pic *xmltree.Node, part model.
 		if err != nil {
 			return
 		}
-		r.mediaElement(b, kind, r.asset(data, ext), ext, poster, box, mode)
+		name := r.asset(data, ext)
+		r.mediaElement(b, kind, name, assetExt(name), poster, box, mode)
 		return
 	}
 	data, err := r.pres.Pkg.Read(rel.Target)
@@ -935,11 +936,16 @@ func (r *slideRenderer) media(b *strings.Builder, pic *xmltree.Node, part model.
 		return
 	}
 	ext := strings.ToLower(strings.TrimPrefix(path.Ext(rel.Target), "."))
-	r.mediaElement(b, kind, r.asset(data, ext), ext, poster, box, mode)
+	name := r.asset(data, ext)
+	r.mediaElement(b, kind, name, assetExt(name), poster, box, mode)
 }
 
+// assetExt is the extension of a stored asset. A video or sound may have been converted on its
+// way into the store (decision E18), so the name of the stored file says what it is now.
+func assetExt(name string) string { return strings.TrimPrefix(path.Ext(name), ".") }
+
 // playable lists media formats browsers play.
-var playable = map[string]bool{"mp4": true, "m4v": true, "mov": true, "webm": true, "mp3": true, "m4a": true, "wav": true, "aac": true, "ogg": true, "oga": true}
+var playable = map[string]bool{"mp4": true, "m4v": true, "mov": true, "webm": true, "mp3": true, "m4a": true, "wav": true, "aac": true, "ogg": true, "oga": true, "flac": true}
 
 func (r *slideRenderer) mediaElement(b *strings.Builder, kind, name, ext, poster string, box rect, mode string) {
 	if !playable[ext] {

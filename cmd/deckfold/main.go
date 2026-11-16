@@ -8,13 +8,16 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"deckfold/internal/adapter"
@@ -213,10 +216,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	rep := report.New()
 	// Pictures and fonts are converted to smaller formats that show the same, unless that is
 	// switched off (E17).
+	// Ctrl+C stops a running ffmpeg and ends the conversion without an output; the temporary
+	// folders are removed on the way out.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	var opt *media.Optimizer
 	if !cfg.KeepAssets {
 		opt = media.New()
 		opt.Progress = progress(stderr)
+		opt.Context = ctx
 	}
 	loadPath, srcPath, srcIsDir := input, input, false
 	if fi, err := os.Stat(input); err == nil {
@@ -253,6 +261,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if errors.Is(err, pptx.ErrUnsupported) {
 				return 2
 			}
+			return 1
+		}
+		if ctx.Err() != nil {
+			fmt.Fprintln(stderr, "interrupted: nothing was written")
 			return 1
 		}
 		rep.Summary = plural(res.Slides, "slide")
@@ -294,6 +306,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		var err error
 		size, _, err = embed.ConvertTo(w, in, ad, embed.Options{Config: cfg, Lenient: *lenient, AllowOutside: allow,
 			Fetcher: fetcher, Version: Version, Runtime: rt, Media: embedMedia}, rep)
+		if err == nil && ctx.Err() != nil {
+			err = errInterrupted
+		}
 		return err
 	})
 	if err != nil {
@@ -301,6 +316,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		case errors.Is(err, embed.ErrMissing):
 			rep.PrintMissing(stderr)
 			fmt.Fprintln(stderr, "aborted: the file would not be self-contained. With --lenient it is written anyway (with a warning).")
+			return 1
+		case errors.Is(err, errInterrupted):
+			fmt.Fprintln(stderr, "interrupted: nothing was written")
 			return 1
 		case errors.Is(err, embed.ErrAlreadyConverted):
 			fmt.Fprintln(stderr, "error:", err)
@@ -310,15 +328,21 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	rep.Output, rep.OutputSize = outPath, int(size)
-	if st := opt.Stats(); st.Pictures+st.Fonts > 0 {
+	if st := opt.Stats(); st.Pictures+st.Fonts+st.Videos+st.Sounds > 0 {
 		var parts []string
-		if st.Pictures > 0 {
-			parts = append(parts, plural(st.Pictures, "picture"))
+		for _, p := range []struct {
+			n    int
+			word string
+		}{{st.Pictures, "picture"}, {st.Fonts, "font"}, {st.Videos, "video"}, {st.Sounds, "sound"}} {
+			if p.n > 0 {
+				parts = append(parts, plural(p.n, p.word))
+			}
 		}
-		if st.Fonts > 0 {
-			parts = append(parts, plural(st.Fonts, "font"))
+		list := parts[0]
+		if len(parts) > 1 {
+			list = strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 		}
-		rep.Converted = fmt.Sprintf("%s, %s -> %s", strings.Join(parts, " and "), report.HumanSize(int(st.Before)), report.HumanSize(int(st.After)))
+		rep.Converted = fmt.Sprintf("%s, %s -> %s", list, report.HumanSize(int(st.Before)), report.HumanSize(int(st.After)))
 		if st.Cached > 0 {
 			// not "pictures": the encoder also runs for a picture that stays, because its
 			// WebP file is not smaller
@@ -568,6 +592,8 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+var errInterrupted = errors.New("interrupted")
 
 // cacheFolder is the folder beside the output that keeps what the picture encoder wrote.
 const cacheFolder = ".deckfold-cache"
