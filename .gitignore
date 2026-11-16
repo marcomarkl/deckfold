@@ -14,3 +14,6 @@
 /test-results/
 
 .DS_Store
+
+# The folder deckfold keeps converted pictures in, beside an output
+.deckfold-cache/

@@ -48,6 +48,9 @@ type Config struct {
 	// steers the conversion only and is not written into the output, where the rest of the
 	// configuration becomes the defaults of the presentation.
 	KeepAssets bool `json:"-"`
+	// NoCache switches off the folder beside the output that keeps what the picture encoder
+	// wrote (configuration key "cache", false). Like KeepAssets it steers the conversion only.
+	NoCache bool `json:"-"`
 }
 
 // Elements are the allowed presenter view elements.
@@ -150,6 +153,7 @@ func Merge(data []byte, base Config) (Config, error) {
 		} `json:"screens"`
 		WarnSize   *string `json:"warnSize"`
 		KeepAssets *bool   `json:"keepAssets"`
+		Cache      *bool   `json:"cache"`
 		Schema     string  `json:"$schema"`
 	}
 	if err := dec.Decode(&in); err != nil {
@@ -202,6 +206,9 @@ func Merge(data []byte, base Config) (Config, error) {
 	}
 	if in.KeepAssets != nil {
 		c.KeepAssets = *in.KeepAssets
+	}
+	if in.Cache != nil {
+		c.NoCache = !*in.Cache
 	}
 	return c, c.Validate()
 }
@@ -310,12 +317,13 @@ func ParseSize(s string) (int, error) {
 
 // Example is the sample configuration printed by --print-config.
 func Example() string {
-	// keepAssets is read from a configuration file but not stored in an output, so Config
-	// leaves it out of its JSON form; the sample shows it.
+	// keepAssets and cache are read from a configuration file but not stored in an output, so
+	// Config leaves them out of its JSON form; the sample shows them.
 	b, _ := json.MarshalIndent(struct {
 		Config
 		KeepAssets bool `json:"keepAssets"`
-	}{Config: Default()}, "", "  ")
+		Cache      bool `json:"cache"`
+	}{Config: Default(), Cache: true}, "", "  ")
 	return string(b) + "\n"
 }
 

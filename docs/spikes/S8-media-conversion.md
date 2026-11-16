@@ -124,6 +124,24 @@ Nine of the ten PowerPoint decks convert (the tenth has a video of more than 1 G
 
 The output files shrink much less than the converted assets, because video and JPEG make up most of them and stay unchanged.
 
+## Where the time goes, and the cache
+
+Measured on 2026-11-16 on the same nine decks, on a Mac with twelve cores.
+
+The decks have 1265 media parts. Only the encoder takes time: 464 PNG files took 2947 s of processor time, 10 GIF files 336 s, 43 TIFF files 136 s, one picture stored as a `.bin` part 115 s; JPEG, SVG and EMF files took none. No part has the same content as an earlier part of its deck, so nothing is encoded twice within a deck. The pictures are already converted on all cores before the slides are drawn. A deck with many pictures used 10 to 11 cores. A deck with one large picture used two: the encoder works on one picture with one core, so six of the nine decks took exactly as long as their slowest picture, between 40 and 115 s. Half of the processor time went into the 43 slowest parts. Everything apart from the encoder, fonts included, took at most 2.5 s for a deck. The times of the single parts and the 618 s below were taken while tests ran on the same machine now and then; the two runs with the folder ran alone. So there was no serial or doubled work to remove, and the first conversion stays as slow as the encoder is at its best setting.
+
+What can be saved is the second run. deckfold keeps the bare output of the encoder in a folder beside the output, `.deckfold-cache`, under a key of the encoder version, its settings and the samples of the picture.
+
+| | all nine decks |
+|---|---|
+| without the folder | 618 s |
+| first run, one folder for all nine | 480 s |
+| second run | 8.9 s |
+
+The first run is already shorter with one folder for all decks, because these decks share pictures: 118 encoder runs of later decks were saved by entries that earlier decks had written. After the first run the folder held 243 entries, 104 MB.
+
+Every output of the second run was byte for byte the one of the first. For four of the decks the conversion was repeated with `--no-cache`, and those outputs were the same bytes again. An entry is not trusted: it has to be a plain file as the encoder writes one, deckfold adds the colour profile and the EXIF data of the source itself, reads the result with the other decoder and compares every sample. The tests replace entries with damaged data, with another picture, with a file that carries a foreign colour profile and with an oversized file; each is refused and replaced. Fonts are not kept, their conversion is part of the 2.5 s.
+
 ## The build tag
 
 Without the build tag `nodynamic`, `gen2brain/webp` loads a libwebp from the system when it finds one. On the Mac the measurements ran on it found none, although Homebrew has one installed; on a Linux machine with `libwebp.so` it would. `media.New` asks the package and converts no picture when a system library is active.
