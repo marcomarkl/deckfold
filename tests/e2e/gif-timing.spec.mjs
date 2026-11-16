@@ -82,8 +82,14 @@ test('GIF and WebP: an animation plays at the same speed in both formats', async
   // The method tells two speeds apart: pictures of different speeds are found at every distance.
   // Without this the comparison below would show nothing.
   for (const d of Object.values(control)) expect(Math.min(...d), said).toBeGreaterThan(0.15);
-  // The slow pictures change as often as their files say; screenshots are fast enough for these.
+  // The slow pictures change as often as their files say. Screenshots can show that only where
+  // one takes much less time than a frame lasts: with a screenshot every 150 ms, as on the Windows
+  // runner, changes of a picture with frames of 200 ms are missed and it measures as slower.
+  const step = 8000 / samples.length;
   for (const ms of [500, 200]) {
+    expect(seen[ms].gif, said).toBeGreaterThan(0);
+    expect(seen[ms].webp, said).toBeGreaterThan(0);
+    if (step > ms / 3) continue;
     expect(Math.abs(seen[ms].gif - ms), said).toBeLessThan(ms * 0.1);
     expect(Math.abs(seen[ms].webp - ms), said).toBeLessThan(ms * 0.1);
   }
