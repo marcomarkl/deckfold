@@ -1,0 +1,65 @@
+# Runs browser tests many times in one browser, to find a test that fails only now and then.
+#
+# Started by hand (Actions, "Repeat a browser test", or `gh workflow run repeat.yml`). It is not
+# part of the checks of a pull request. Firefox does not start on the maintainer's Mac, so this
+# is the way to repeat a test there.
+name: Repeat a browser test
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Playwright project
+        type: choice
+        options: [firefox, chrome]
+        default: firefox
+      grep:
+        description: Part of the test title (a regular expression)
+        required: true
+      repeat:
+        description: Number of repeats
+        default: '100'
+      spec:
+        description: Spec file
+        default: e2e/pptx.spec.mjs
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -tags=nodynamic
+
+jobs:
+  repeat:
+    name: ${{ inputs.repeat }} x "${{ inputs.grep }}" in ${{ inputs.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright with ${{ inputs.project }}
+        working-directory: tests
+        run: |
+          npm ci
+          npx playwright install --with-deps ${{ inputs.project }}
+      # as in the CI: without a sound device Firefox stops an audio clip with a media error
+      - name: Audio output for the browser
+        run: |
+          sudo apt-get install -y --no-install-recommends pulseaudio
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=dfnull
+          pactl set-default-sink dfnull
+      # The inputs reach the shell through the environment, never as part of the script.
+      - name: Repeat
+        working-directory: tests
+        env:
+          DF_PROJECT: ${{ inputs.project }}
+          DF_GREP: ${{ inputs.grep }}
+          DF_REPEAT: ${{ inputs.repeat }}
+          DF_SPEC: ${{ inputs.spec }}
+        run: npx playwright test "$DF_SPEC" --project="$DF_PROJECT" -g "$DF_GREP" --repeat-each="$DF_REPEAT"
