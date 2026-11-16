@@ -31,7 +31,7 @@ What deckfold does not show as PowerPoint does:
 - 3D shapes and the tile transitions are close to PowerPoint, not identical; Morph does not change the outline of shapes.
 - Animations started by a bookmark in a video or audio clip are not played.
 - TIFF pictures in CMYK or with 16 bits per channel, and a few TIFF variants deckfold cannot read, stay TIFF, which only Safari shows. The report names them. Other TIFF pictures are converted to WebP.
-- Videos in WMV, AVI or ASF show only their still image, because browsers cannot play them. Media files larger than 1 GB are refused; compress them in PowerPoint first.
+- Videos in WMV, AVI or ASF are converted to MP4 when ffmpeg is installed (see below). Without ffmpeg they show only their still image, because browsers cannot play them. Media files larger than 1 GB are refused; compress them in PowerPoint first.
 
 ## Usage
 
@@ -61,7 +61,7 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `--auto-interval 8` | seconds per step when the source has no timings |
 | `--loop` | loop in auto mode |
 | `--warn-size 250MB` | warning threshold for the output size |
-| `--keep-assets` | embed pictures and fonts unchanged instead of converting them to smaller formats |
+| `--keep-assets` | embed pictures, fonts, video and sound unchanged instead of converting them |
 | `--no-cache` | do not keep converted pictures in the folder `.deckfold-cache` beside the output |
 | `--lenient` | write the file even if assets cannot be resolved (with a warning) |
 | `--generic` | embed an unknown format anyway |
@@ -92,7 +92,9 @@ Pictures and fonts are converted to smaller formats: PNG, GIF, BMP and TIFF pict
 
 So that this time is spent once, deckfold keeps what the encoder wrote in a folder named `.deckfold-cache` beside the output file; without `-o` that is beside the presentation. The next conversion of the same pictures takes them from there and says so in its report. An entry is used only after deckfold has compared it with the picture of the presentation, sample by sample, so a folder that somebody else filled cannot change what the file shows. The folder holds pictures of your slides: leave it out when you pass the output on. You can delete it at any time, and `--no-cache`, or `"cache": false` in the configuration file, switches it off. Fonts are not kept, they convert fast.
 
-Large media files are embedded unchanged. Chrome opens a 300 MB file in a little over a second; Safari needs about ten seconds for the same file.
+Video and sound that not every browser plays are converted when `ffmpeg` and `ffprobe` are installed and on the PATH. deckfold brings no encoder for them. HEVC, AV1, WMV, MPEG-2 and H.264 with 10 bits become H.264 in an MP4 file, at a quality close to the source (`-crf 18`) and with the slowest preset. H.264 in a MOV, MKV or AVI file is packed into an MP4 file without touching the pictures. PCM sound in a WAV file becomes FLAC, which holds the same samples; WMA becomes MP3. What every browser plays already stays as it is: H.264 with AAC in MP4, MP3, AAC, FLAC. Video with HDR, with transparency or interlaced is not converted, and the report names it. Without ffmpeg, video and sound are embedded as they are, and the report says when a file would have been converted. The result for these files depends on the ffmpeg of your machine, so two machines can write different bytes; set `DECKFOLD_NO_FFMPEG=1` to ignore an installed ffmpeg. Converted video and sound are not kept in `.deckfold-cache`.
+
+Large media files that need no conversion are embedded unchanged. Chrome opens a 300 MB file in a little over a second; Safari needs about ten seconds for the same file.
 
 ## Presenting
 

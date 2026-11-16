@@ -17,14 +17,15 @@ export default defineConfig({
       testIgnore: /webkit\.spec\.mjs/,
     },
     // the start screen tests run in every project: its layout rests on CSS the browsers could size
-    // differently; so does the comparison of GIF and WebP animations, which each browser plays itself
-    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /(webkit|start|gif-timing)\.spec\.mjs/ },
+    // differently; so do the comparison of GIF and WebP animations and the converted video and sound,
+    // which each browser plays itself
+    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /(webkit|start|gif-timing|av)\.spec\.mjs/ },
     // Firefox only where its Playwright build starts (not on macOS 27.2): the PowerPoint tests
     // and the start screen
     ...(process.platform === 'darwin' ? [] : [{
       name: 'firefox',
       use: { browserName: 'firefox', launchOptions: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'webgl.force-enabled': true } } },
-      testMatch: /(pptx|start|gif-timing)\.spec\.mjs/,
+      testMatch: /(pptx|start|gif-timing|av)\.spec\.mjs/,
     }]),
   ],
 });

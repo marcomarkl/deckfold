@@ -6,11 +6,13 @@
 package media
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"image"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	gwebp "github.com/gen2brain/webp"
@@ -33,6 +35,8 @@ type Stats struct {
 	Before   int64 // bytes of the converted assets before
 	After    int64 // and after
 	Cached   int   // runs of the picture encoder that the cache saved
+	Videos   int   // videos and sounds converted with the installed ffmpeg
+	Sounds   int
 }
 
 type kind int
@@ -45,6 +49,7 @@ const (
 	kindTIFF
 	kindSFNT
 	kindWOFF
+	kindAV // video or sound in a container that avFormat knows
 )
 
 // Limits for data from a presentation: a picture or font beyond them stays unchanged.
@@ -78,6 +83,10 @@ type Optimizer struct {
 	// Cache, when set, keeps the output of the picture encoder between runs. Set it before
 	// the first call of Optimize or Prepare.
 	Cache *Cache
+	// Context, when set, stops a running ffmpeg when it is cancelled (Ctrl+C).
+	Context context.Context
+	// av is the installed ffmpeg, nil when there is none: video and sound then stay.
+	av *avTool
 }
 
 // ErrSystemLibrary reports a build that would encode with a libwebp installed on the machine.
@@ -91,8 +100,12 @@ func New() *Optimizer {
 	if gwebp.Dynamic() == nil {
 		o.webpOff = ErrSystemLibrary
 	}
+	o.av = findAV()
 	return o
 }
+
+// FFmpeg tells whether video and sound are converted: whether ffmpeg and ffprobe were found.
+func (o *Optimizer) FFmpeg() bool { return o != nil && o.av != nil }
 
 // WebPOff returns why pictures are not converted, or nil.
 func (o *Optimizer) WebPOff() error { return o.webpOff }
@@ -196,9 +209,24 @@ func (o *Optimizer) convert(data []byte, k kind) (res Result) {
 		return convertTIFF(o.Cache, data)
 	case kindSFNT, kindWOFF:
 		return convertFont(data, k)
+	case kindAV:
+		format := avFormat(data)
+		if o.av == nil {
+			if needsFFmpeg(data, format) {
+				return Result{Note: noFFmpeg}
+			}
+			return Result{}
+		}
+		ctx := o.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return o.av.convert(ctx, data, format)
 	}
 	return Result{}
 }
+
+const noFFmpeg = "a video or sound that not every browser plays is embedded as it is: ffmpeg is not installed. With ffmpeg and ffprobe on the PATH, deckfold converts such files to H.264, FLAC or MP3"
 
 // Stats returns the totals of the assets that Optimize handed out converted.
 func (o *Optimizer) Stats() Stats {
@@ -214,9 +242,14 @@ func (o *Optimizer) Stats() Stats {
 		if !e.used || !e.res.Changed {
 			continue
 		}
-		if e.kind == kindSFNT || e.kind == kindWOFF {
+		switch {
+		case e.kind == kindSFNT || e.kind == kindWOFF:
 			s.Fonts++
-		} else {
+		case strings.HasPrefix(e.res.Mime, "video/"):
+			s.Videos++
+		case strings.HasPrefix(e.res.Mime, "audio/"):
+			s.Sounds++
+		default:
 			s.Pictures++
 		}
 		s.Before += int64(e.before)
@@ -268,6 +301,9 @@ func sniff(d []byte) kind {
 		return kindSFNT
 	case has(0, "wOFF"):
 		return kindWOFF
+	}
+	if avFormat(d) != "" {
+		return kindAV
 	}
 	return kindOther
 }

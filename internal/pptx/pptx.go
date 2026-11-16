@@ -89,7 +89,9 @@ func prepareMedia(pkg *opc.Package, m *media.Optimizer) {
 		}
 		switch strings.TrimPrefix(filepath.Ext(n), ".") {
 		case "mp4", "m4v", "mov", "avi", "wmv", "asf", "mpg", "mpeg", "mkv", "webm", "mp3", "m4a", "wav", "wma", "aac", "aiff", "aif", "ogg", "flac":
-			continue // video and sound: nothing in them is converted yet
+			// Video and sound are converted when the slide that plays them is drawn: ffmpeg
+			// uses all cores for one file, and a file no slide plays is then never read.
+			continue
 		}
 		names = append(names, n)
 	}

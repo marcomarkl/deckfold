@@ -41,6 +41,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Video and sound are converted with an installed ffmpeg (E18). The tests for that make
+      # their clips with it and are skipped without it, so one runner gets one.
+      - name: ffmpeg for the tests of video and sound (Linux x64)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Vet and test
         run: |
           go vet ./...
@@ -109,11 +115,13 @@ jobs:
           npm ci
           npx playwright install --with-deps ${{ matrix.browser }}
       # The Linux runners have no sound device: Firefox stops an audio clip with a media error
-      # (OnMediaSinkAudioError) after about two seconds. A null sink gives it an output.
-      - name: Audio output for the browser (Linux)
+      # (OnMediaSinkAudioError) after about two seconds. A null sink gives it an output. ffmpeg
+      # is there so that the setup converts video and sound (E18) and the browsers play the result.
+      - name: Audio output for the browser and ffmpeg (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y --no-install-recommends pulseaudio
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pulseaudio ffmpeg
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=dfnull
           pactl set-default-sink dfnull

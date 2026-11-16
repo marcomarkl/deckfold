@@ -24,6 +24,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Click "Start" with "Full screen" on | The presentation fills its screen at the chosen slide; the presenter view follows | |
 | Click "Full screen" in the presenter view | The presenter view fills its screen; the button now reads "Window" and takes it back | |
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
+| With ffmpeg installed: convert a deck with a video that browsers do not play (HEVC from an iPhone, WMV) and a WAV sound; play both in Chrome, Safari and Firefox | The report names the converted video and sound. The video plays with its sound, in the right colours and at the right speed; the sound plays | |
 | Hide notes, press A+ twice, drag the divider between the panes | The presenter view changes at once; after reloading it, the changes are still there | |
 | Time: before Start, after Start, pause, resume, reset (button and T) | 00:00 before the start; then it runs, stands still while paused, and starts again from 00:00 | |
 | Type 1:30 as the target, Enter | The field shows 01:30; the time left counts down, turns yellow under two minutes and red after it | |
