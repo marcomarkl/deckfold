@@ -102,13 +102,35 @@ func toNRGBA(m image.Image) (*image.NRGBA, bool) {
 
 // encodeStill writes img as lossless WebP and reads the result back with another decoder. It
 // returns nil when the result does not hold exactly the samples of img, the invisible ones
-// included (they show where a picture is used as a texture without premultiplied alpha).
-func encodeStill(img *image.NRGBA, icc, exif []byte) []byte {
+// included (they show where a picture is used as a texture without premultiplied alpha). With a
+// cache it asks there first and encodes only when the entry is missing or fails the same check.
+func encodeStill(c *Cache, img *image.NRGBA, icc, exif []byte) []byte {
+	w, h := img.Bounds().Dx(), img.Bounds().Dy()
+	var key [32]byte
+	if c != nil {
+		key = c.stillKey(img)
+		if raw := c.load(key, w*h*4+4096); raw != nil && plainStill(raw) {
+			if out := finishStill(raw, img, icc, exif); out != nil {
+				c.hit()
+				return out
+			}
+		}
+	}
 	var b bytes.Buffer
 	if err := gwebp.Encode(&b, img, gwebp.Options{Lossless: true, Quality: 100, Method: 6, Exact: true}); err != nil {
 		return nil
 	}
-	out, err := withMetadata(b.Bytes(), icc, exif)
+	out := finishStill(b.Bytes(), img, icc, exif)
+	if out != nil && plainStill(b.Bytes()) {
+		c.store(key, b.Bytes())
+	}
+	return out
+}
+
+// finishStill puts the colour profile and the EXIF data around what the encoder wrote and
+// compares the result with img, sample by sample; nil when it differs or cannot be read.
+func finishStill(raw []byte, img *image.NRGBA, icc, exif []byte) []byte {
+	out, err := withMetadata(raw, icc, exif)
 	if err != nil {
 		return nil
 	}
@@ -212,7 +234,7 @@ func exifOrientation(t []byte) int {
 	return 1
 }
 
-func convertPNG(data []byte) Result {
+func convertPNG(c *Cache, data []byte) Result {
 	p := scanPNG(data)
 	switch {
 	case !p.chunksParsed, p.w <= 0, p.h <= 0, p.w*p.h > maxPixels:
@@ -239,7 +261,7 @@ func convertPNG(data []byte) Result {
 	if !ok || halfTransparent(n) {
 		return Result{}
 	}
-	return webpResult(encodeStill(n, p.icc, p.exif), len(data), false)
+	return webpResult(encodeStill(c, n, p.icc, p.exif), len(data), false)
 }
 
 // halfTransparent tells whether a picture has pixels that are neither opaque nor fully
@@ -257,7 +279,7 @@ func halfTransparent(m *image.NRGBA) bool {
 	return false
 }
 
-func convertBMP(data []byte) Result {
+func convertBMP(c *Cache, data []byte) Result {
 	// With an alpha channel, readers disagree about what a BMP shows; those stay as they are.
 	if len(data) < 30 {
 		return Result{}
@@ -277,7 +299,7 @@ func convertBMP(data []byte) Result {
 	if !ok {
 		return Result{}
 	}
-	return webpResult(encodeStill(n, nil, nil), len(data), false)
+	return webpResult(encodeStill(c, n, nil, nil), len(data), false)
 }
 
 // gifAnimated tells whether a GIF has more than one frame, without decoding the frames fully.
@@ -365,7 +387,7 @@ func sameAnimation(a, b []animFrame) bool {
 	return true
 }
 
-func convertGIF(data []byte) Result {
+func convertGIF(c *Cache, data []byte) Result {
 	cfg, err := gif.DecodeConfig(bytes.NewReader(data))
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > maxPixels {
 		return Result{}
@@ -379,7 +401,7 @@ func convertGIF(data []byte) Result {
 		return Result{Animated: len(g.Image) > 1}
 	}
 	if len(g.Image) == 1 {
-		return webpResult(encodeStill(frames[0].img, nil, nil), len(data), false)
+		return webpResult(encodeStill(c, frames[0].img, nil, nil), len(data), false)
 	}
 	keep := Result{Animated: true}
 	// Browsers play a GIF frame of less than 20 ms slower than written; whether they do the
@@ -405,12 +427,34 @@ func convertGIF(data []byte) Result {
 		anim.Image = append(anim.Image, f.img)
 		anim.Delay = append(anim.Delay, f.ms)
 	}
+	// the encoder's output for these frames may be in the cache; it is checked like a fresh one
+	good := func(out []byte) bool {
+		back, backLoop, err := decodeAnim(out)
+		return err == nil && backLoop == loop && sameAnimation(frames, back)
+	}
+	var key [32]byte
+	if c != nil {
+		key = c.animKey(frames, loop)
+		w, h := g.Config.Width, g.Config.Height
+		if out := c.load(key, len(frames)*w*h*4+4096); out != nil && plainAnim(out) && good(out) {
+			c.hit()
+			if len(out) >= len(data) {
+				return keep
+			}
+			return Result{Data: out, Mime: mimeWebP, Ext: "webp", Changed: true, Animated: true}
+		}
+	}
 	var b bytes.Buffer
 	if err := gwebp.EncodeAll(&b, anim, gwebp.Options{Lossless: true, Quality: 100, Method: 6, Exact: true}); err != nil {
 		return keep
 	}
-	back, backLoop, err := decodeAnim(b.Bytes())
-	if err != nil || backLoop != loop || !sameAnimation(frames, back) || b.Len() >= len(data) {
+	if !good(b.Bytes()) {
+		return keep
+	}
+	if plainAnim(b.Bytes()) {
+		c.store(key, b.Bytes())
+	}
+	if b.Len() >= len(data) {
 		return keep
 	}
 	return Result{Data: b.Bytes(), Mime: mimeWebP, Ext: "webp", Changed: true, Animated: true}

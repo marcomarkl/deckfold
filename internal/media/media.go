@@ -32,6 +32,7 @@ type Stats struct {
 	Fonts    int
 	Before   int64 // bytes of the converted assets before
 	After    int64 // and after
+	Cached   int   // runs of the picture encoder that the cache saved
 }
 
 type kind int
@@ -74,6 +75,9 @@ type Optimizer struct {
 	// Progress, when set, is called from Prepare after every asset (from several goroutines,
 	// one call at a time).
 	Progress func(done, total int)
+	// Cache, when set, keeps the output of the picture encoder between runs. Set it before
+	// the first call of Optimize or Prepare.
+	Cache *Cache
 }
 
 // ErrSystemLibrary reports a build that would encode with a libwebp installed on the machine.
@@ -183,13 +187,13 @@ func (o *Optimizer) convert(data []byte, k kind) (res Result) {
 	}
 	switch k {
 	case kindPNG:
-		return convertPNG(data)
+		return convertPNG(o.Cache, data)
 	case kindGIF:
-		return convertGIF(data)
+		return convertGIF(o.Cache, data)
 	case kindBMP:
-		return convertBMP(data)
+		return convertBMP(o.Cache, data)
 	case kindTIFF:
-		return convertTIFF(data)
+		return convertTIFF(o.Cache, data)
 	case kindSFNT, kindWOFF:
 		return convertFont(data, k)
 	}
@@ -205,6 +209,7 @@ func (o *Optimizer) Stats() Stats {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	s = o.extra
+	s.Cached = o.Cache.Hits()
 	for _, e := range o.memo {
 		if !e.used || !e.res.Changed {
 			continue
@@ -284,7 +289,7 @@ func (o *Optimizer) Still(img *image.NRGBA, pngSize int) ([]byte, string) {
 	if o == nil || o.webpOff != nil || img.Bounds().Dx()*img.Bounds().Dy() > maxPixels || halfTransparent(img) {
 		return nil, ""
 	}
-	out := encodeStill(img, nil, nil)
+	out := encodeStill(o.Cache, img, nil, nil)
 	if out == nil || len(out) >= pngSize {
 		return nil, ""
 	}

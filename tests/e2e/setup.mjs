@@ -14,8 +14,10 @@ export const ROOT = path.resolve(here, '..', '..');
 export const OUT = path.join(ROOT, 'tests', '.out');
 const BIN = path.join(OUT, process.platform === 'win32' ? 'deckfold.exe' : 'deckfold');
 
+// Every conversion here runs without the cache folder (--no-cache), so that the browser tests
+// see pictures the encoder made in this run, never ones kept from an earlier build.
 function deckfold(args, env) {
-  return execFileSync(BIN, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(env || {}) } });
+  return execFileSync(BIN, [...args, '--no-cache'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(env || {}) } });
 }
 
 // Public PowerPoint feature decks: the PowerPoint-saved copy in fixtures/pptx when it exists,

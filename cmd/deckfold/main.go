@@ -91,6 +91,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	generic := fs.Bool("generic", false, "embed an unknown format anyway (no presenter view, overview or auto mode)")
 	warnSize := fs.String("warn-size", "", "warning threshold for the output size, e.g. 250MB")
 	keepAssets := fs.Bool("keep-assets", false, "embed pictures and fonts unchanged instead of converting them to smaller formats")
+	noCache := fs.Bool("no-cache", false, "do not keep converted pictures in the folder .deckfold-cache beside the output")
 	auto := fs.Bool("auto", false, "start in auto mode")
 	autoInterval := fs.Float64("auto-interval", 0, "auto mode interval in seconds (when the source has no timings)")
 	loop := fs.Bool("loop", false, "loop in auto mode")
@@ -172,6 +173,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if set["keep-assets"] {
 		cfg.KeepAssets = *keepAssets
 	}
+	if set["no-cache"] {
+		cfg.NoCache = *noCache
+	}
 	if set["auto"] {
 		cfg.Auto.Enabled = *auto
 	}
@@ -218,6 +222,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if fi, err := os.Stat(input); err == nil {
 		srcIsDir = fi.IsDir()
 	}
+	outPath := *out
+	if outPath == "" {
+		outPath = defaultOutput(srcPath, srcIsDir)
+	}
+	// What the picture encoder wrote is kept in a folder beside the output, so that the next
+	// conversion of the same pictures does not encode them again.
+	if opt != nil && !cfg.NoCache {
+		opt.Cache = media.NewCache(filepath.Join(filepath.Dir(outPath), cacheFolder))
+	}
 	if !srcIsDir && isPowerPoint(input) {
 		// PowerPoint: render the deck into a temporary folder, then embed it like any export.
 		tmp, err := os.MkdirTemp("", "deckfold-pptx-")
@@ -261,10 +274,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 2
-	}
-	outPath := *out
-	if outPath == "" {
-		outPath = defaultOutput(srcPath, srcIsDir)
 	}
 	if same(outPath, srcPath) || same(outPath, in.HTMLPath) {
 		fmt.Fprintln(stderr, "error: the output would overwrite the input; choose another name with -o")
@@ -310,6 +319,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 			parts = append(parts, plural(st.Fonts, "font"))
 		}
 		rep.Converted = fmt.Sprintf("%s, %s -> %s", strings.Join(parts, " and "), report.HumanSize(int(st.Before)), report.HumanSize(int(st.After)))
+		if st.Cached > 0 {
+			// not "pictures": the encoder also runs for a picture that stays, because its
+			// WebP file is not smaller
+			rep.Converted += fmt.Sprintf("; %s saved by %s", plural(st.Cached, "encoder run"), cacheFolder)
+		}
+	}
+	if opt != nil && opt.Cache.Err() != nil {
+		rep.Warn("converted pictures were not kept for the next run: %v", opt.Cache.Err())
 	}
 	for _, n := range opt.Notes() {
 		rep.Warn("%s", n)
@@ -551,6 +568,9 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+// cacheFolder is the folder beside the output that keeps what the picture encoder wrote.
+const cacheFolder = ".deckfold-cache"
 
 func defaultOutput(arg string, isDir bool) string {
 	clean := filepath.Clean(arg)

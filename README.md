@@ -62,6 +62,7 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `--loop` | loop in auto mode |
 | `--warn-size 250MB` | warning threshold for the output size |
 | `--keep-assets` | embed pictures and fonts unchanged instead of converting them to smaller formats |
+| `--no-cache` | do not keep converted pictures in the folder `.deckfold-cache` beside the output |
 | `--lenient` | write the file even if assets cannot be resolved (with a warning) |
 | `--generic` | embed an unknown format anyway |
 | `--allow-outside folder` | allow files outside the input folder (repeatable); for PowerPoint files, the folder of linked pictures and videos |
@@ -88,6 +89,8 @@ Files outside the input folder are not embedded, not even through symlinks or ab
 Live content such as embedded web pages stays live. Without a network connection the still image of the source or a placeholder appears; the report names the slides concerned.
 
 Pictures and fonts are converted to smaller formats: PNG, GIF, BMP and TIFF pictures become lossless WebP, and TrueType, OpenType and WOFF fonts become WOFF2. A converted file replaces the original only when it is smaller and reads back as the same picture, sample by sample, or as the same font tables. Colour profiles are kept. JPEG pictures, SVG, video and sound are embedded unchanged, and so is every file that a script of the source loads itself. The report says how many files were converted and what that saved. `--keep-assets`, or `"keepAssets": true` in the configuration file, embeds everything as it is. Converting the pictures of a large deck takes minutes, because deckfold uses the slowest and best setting of the encoder.
+
+So that this time is spent once, deckfold keeps what the encoder wrote in a folder named `.deckfold-cache` beside the output file; without `-o` that is beside the presentation. The next conversion of the same pictures takes them from there and says so in its report. An entry is used only after deckfold has compared it with the picture of the presentation, sample by sample, so a folder that somebody else filled cannot change what the file shows. The folder holds pictures of your slides: leave it out when you pass the output on. You can delete it at any time, and `--no-cache`, or `"cache": false` in the configuration file, switches it off. Fonts are not kept, they convert fast.
 
 Large media files are embedded unchanged. Chrome opens a 300 MB file in a little over a second; Safari needs about ten seconds for the same file.
 

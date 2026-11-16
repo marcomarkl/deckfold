@@ -117,7 +117,7 @@ func orient(s *image.NRGBA, o int) *image.NRGBA {
 // convertTIFF always converts a TIFF it can read, also when the result is larger: only Safari
 // shows TIFF. "The same picture" here means the pixels of deckfold's decoder, turned as the
 // orientation tag says, with the colour profile of the file.
-func convertTIFF(data []byte) Result {
+func convertTIFF(c *Cache, data []byte) Result {
 	keep := Result{Note: NoteTIFF}
 	tags, ok := tiffTags(data)
 	if !ok {
@@ -146,7 +146,7 @@ func convertTIFF(data []byte) Result {
 	if t, ok := tags[34675]; ok && len(t.raw) > 0 {
 		icc = t.raw
 	}
-	r := webpResult(encodeStill(orient(n, o), icc, nil), len(data), true)
+	r := webpResult(encodeStill(c, orient(n, o), icc, nil), len(data), true)
 	if !r.Changed {
 		return keep
 	}
