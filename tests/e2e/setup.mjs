@@ -132,6 +132,9 @@ export default async function setup() {
   deckfold([path.join(pgen, 'big.pptx'), '-o', path.join(OUT, 'pptx-big.html'), '--force'], BUNDLED);
   fs.writeFileSync(path.join(OUT, 'pptx-big.json'), JSON.stringify({ convertMs, convertWithAssetsMs: Date.now() - t1 }));
 
+  // The page with GIF animations and their WebP files, for gif-timing.spec.mjs
+  execFileSync('go', ['run', './scripts/giftiming', '-out', path.join(OUT, 'giftiming')], { cwd: ROOT, stdio: 'ignore' });
+
   if (corpus.keynoteLinks) deckfold([path.join(ROOT, corpus.keynoteLinks), '-o', path.join(OUT, 'keynote-links.html'), '--force']);
   if (corpus.keynote) {
     deckfold([path.join(ROOT, corpus.keynote), '-o', path.join(OUT, 'keynote.html'), '--force']);

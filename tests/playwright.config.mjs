@@ -16,14 +16,15 @@ export default defineConfig({
       use: { browserName: 'chromium', channel: 'chrome', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } },
       testIgnore: /webkit\.spec\.mjs/,
     },
-    // the start screen tests run in every project: its layout rests on CSS the browsers could size differently
-    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /(webkit|start)\.spec\.mjs/ },
+    // the start screen tests run in every project: its layout rests on CSS the browsers could size
+    // differently; so does the comparison of GIF and WebP animations, which each browser plays itself
+    { name: 'webkit', use: { browserName: 'webkit' }, testMatch: /(webkit|start|gif-timing)\.spec\.mjs/ },
     // Firefox only where its Playwright build starts (not on macOS 27.2): the PowerPoint tests
     // and the start screen
     ...(process.platform === 'darwin' ? [] : [{
       name: 'firefox',
       use: { browserName: 'firefox', launchOptions: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'webgl.force-enabled': true } } },
-      testMatch: /(pptx|start)\.spec\.mjs/,
+      testMatch: /(pptx|start|gif-timing)\.spec\.mjs/,
     }]),
   ],
 });
