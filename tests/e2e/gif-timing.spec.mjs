@@ -13,9 +13,9 @@ import { fileURL } from './helpers.mjs';
 
 const DELAYS = [500, 200, 100, 50, 20];
 
-// Takes screenshots for about `ms` and returns, per screenshot, the time and the colour index
+// Takes screenshots for at least `ms` and until there are at least `min` of them, and returns, per screenshot, the time and the colour index
 // (0 red, 1 green, 2 blue) in the middle of every picture, keyed "gif-200", "webp-200", ...
-async function sample(page, ms) {
+async function sample(page, ms, min) {
   // all animations start in one task, from the first frame
   await page.evaluate(async () => {
     const imgs = [...document.querySelectorAll('img')];
@@ -31,7 +31,10 @@ async function sample(page, ms) {
   }));
   const shots = [];
   const t0 = Date.now();
-  while (Date.now() - t0 < ms) {
+  // A runner that takes a screenshot slowly gives few samples in the same time: the Windows
+  // runner once took 10 in eight seconds, too few to find pictures of different speeds at every
+  // distance, and the control below failed although the method works.
+  while (Date.now() - t0 < ms || shots.length < min) {
     const before = Date.now();
     const buf = await page.screenshot();
     shots.push({ t: (before + Date.now()) / 2 - t0, buf });
@@ -70,14 +73,16 @@ function meanState(samples, key) {
 }
 
 test('GIF and WebP: an animation plays at the same speed in both formats', async ({ page }) => {
+  test.setTimeout(150000); // a slow runner needs up to a minute for its 60 screenshots
   await page.goto(fileURL('giftiming/index.html'));
-  const samples = await sample(page, 8000);
+  const samples = await sample(page, 8000, 60);
+  const took = samples[samples.length - 1].t;
   const seen = {};
   for (const ms of DELAYS) {
     seen[ms] = { pair: distances(samples, `gif-${ms}`, `webp-${ms}`), gif: meanState(samples, `gif-${ms}`), webp: meanState(samples, `webp-${ms}`) };
   }
   const control = { gif: distances(samples, 'gif-100', 'gif-200'), webp: distances(samples, 'webp-100', 'webp-200'), mixed: distances(samples, 'gif-50', 'webp-100') };
-  const said = `${samples.length} screenshots; pairs ${JSON.stringify(seen)}; pictures of different speeds ${JSON.stringify(control)}`;
+  const said = `${samples.length} screenshots in ${Math.round(took)} ms; pairs ${JSON.stringify(seen)}; pictures of different speeds ${JSON.stringify(control)}`;
   console.log(`[${test.info().project.name}] ${said}`); // the measured values, for the log of the run
   // The method tells two speeds apart: pictures of different speeds are found at every distance.
   // Without this the comparison below would show nothing.
@@ -85,7 +90,7 @@ test('GIF and WebP: an animation plays at the same speed in both formats', async
   // The slow pictures change as often as their files say. Screenshots can show that only where
   // one takes much less time than a frame lasts: with a screenshot every 150 ms, as on the Windows
   // runner, changes of a picture with frames of 200 ms are missed and it measures as slower.
-  const step = 8000 / samples.length;
+  const step = took / samples.length;
   for (const ms of [500, 200]) {
     expect(seen[ms].gif, said).toBeGreaterThan(0);
     expect(seen[ms].webp, said).toBeGreaterThan(0);

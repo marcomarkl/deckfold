@@ -22,16 +22,20 @@ func cloneProps(p *props) *props {
 	return c
 }
 
-// applyFontRef sets the defaults a shape style gives its text (font and color).
-func (r *slideRenderer) applyFontRef(rp *props, ref *xmltree.Node, cx colorCtx) {
+// applyFontRef sets the defaults a shape style gives its text: the font, or with colour the
+// colour, which ranks higher (see textStyle.own).
+func (r *slideRenderer) applyFontRef(rp *props, ref *xmltree.Node, cx colorCtx, colour bool) {
 	if ref == nil {
 		return
 	}
-	switch ref.Attr("idx") {
-	case "major":
-		rp.attrs["df-latin"] = "+mj-lt"
-	case "minor":
-		rp.attrs["df-latin"] = "+mn-lt"
+	if !colour {
+		switch ref.Attr("idx") {
+		case "major":
+			rp.attrs["df-latin"] = "+mj-lt"
+		case "minor":
+			rp.attrs["df-latin"] = "+mn-lt"
+		}
+		return
 	}
 	for _, k := range ref.Kids {
 		if c := cx.colorOf(k); c.OK {

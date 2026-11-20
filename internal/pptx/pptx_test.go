@@ -838,3 +838,29 @@ func TestContentDeck(t *testing.T) {
 		t.Errorf("warnings: %q", res.Warnings)
 	}
 }
+
+// TestFontRefColour: the colour of a shape style (p:style/a:fontRef) ranks above what the shape
+// inherits and below its own lstStyle, as PowerPoint draws it (pptxgen.FontRefCases, read from
+// PowerPoint's image of the slide).
+func TestFontRefColour(t *testing.T) {
+	html, _, _ := convert(t, pptxgen.Text2())
+	got := map[string]string{}
+	for _, tg := range htmlscan.Scan([]byte(html)).Tags {
+		if tg.Name != "text" {
+			continue
+		}
+		end := strings.Index(html[tg.End:], "</text>")
+		if end < 0 {
+			continue
+		}
+		got[html[tg.End:tg.End+end]] = strings.TrimPrefix(strings.ToLower(tg.Value("fill")), "#")
+	}
+	if len(pptxgen.FontRefCases) == 0 {
+		t.Fatal("no expected colours")
+	}
+	for name, want := range pptxgen.FontRefCases {
+		if got[name] != want {
+			t.Errorf("text of %q drawn in %q, PowerPoint draws it in %q", name, got[name], want)
+		}
+	}
+}
