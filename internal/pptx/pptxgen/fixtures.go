@@ -284,7 +284,44 @@ func Text2() *Deck {
 	tl.Add(Group{Subs: []Sub{{Effects: []Eff{{Spid: w, Para: -1, Class: "entr", Preset: 10, NodeType: "clickEffect", Iterate: "wd", Bhv: FadeIn}}}}})
 	tl.Add(Group{Subs: []Sub{{Effects: []Eff{{Spid: l, Para: -1, Class: "entr", Preset: 10, NodeType: "clickEffect", Iterate: "lt", Bhv: FadeIn}}}}})
 	s.Timing = tl.XML()
+
+	// Text colour from the shape style. A shape PowerPoint inserts carries p:style, whose
+	// a:fontRef gives its text a colour (lt1, white) that the master's otherStyle (tx1) must not
+	// override. The four cases tell where that colour ranks; FontRefCases has what PowerPoint drew.
+	s = d.Add(LayoutContent)
+	style := `<p:style><a:lnRef idx="0"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>` +
+		`<a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style>`
+	dark := `<a:solidFill><a:srgbClr val="1F3864"/></a:solidFill><a:ln><a:noFill/></a:ln>`
+	styled := func(name string, x float64, lst, rpr string) {
+		id := s.ID()
+		s.Shapes = append(s.Shapes, fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="%s"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr>%s<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>%s</p:spPr>%s`+
+			`<p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle>%s</a:lstStyle><a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="4000" b="1">%s</a:rPr><a:t>%s</a:t></a:r></a:p></p:txBody></p:sp>`,
+			id, Esc(name), Box{X: x, Y: 300, W: 260, H: 220}.xfrm(), dark, style, lst, rpr, Esc(name)))
+	}
+	styled("Style", 60, "", "")
+	styled("List", 360, `<a:lvl1pPr><a:defRPr><a:solidFill><a:srgbClr val="FFC000"/></a:solidFill></a:defRPr></a:lvl1pPr>`, "")
+	styled("Run", 660, "", `<a:solidFill><a:srgbClr val="00B0F0"/></a:solidFill>`)
+	styled("Plain", 960, "", "")
+	// the last one without its style: the master's colour, as a control
+	s.Shapes[len(s.Shapes)-1] = strings.Replace(s.Shapes[len(s.Shapes)-1], style, "", 1)
+	// a placeholder with a style: its colour comes from the master's title style otherwise
+	id := s.ID()
+	s.Shapes = append(s.Shapes, fmt.Sprintf(`<p:sp><p:nvSpPr><p:cNvPr id="%d" name="Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>`+
+		`<p:spPr>%s<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>%s</p:spPr>%s<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>Placeholder</a:t></a:r></a:p></p:txBody></p:sp>`,
+		id, Box{X: 60, Y: 60, W: 1160, H: 160}.xfrm(), dark, style))
 	return d
+}
+
+// FontRefCases names the shapes on the last slide of Text2 and the colour PowerPoint draws
+// their text in. The colours were read from PowerPoint's own image of the slide
+// (fixtures/pptx/ref/text2/3.png, made on 2026-11-20 with scripts/pptxref): the most frequent
+// colour in each shape that is not its fill.
+var FontRefCases = map[string]string{
+	"Style":       "ffffff", // the style's lt1 beats the master's otherStyle (tx1)
+	"List":        "ffc000", // the shape's own lstStyle beats the style
+	"Run":         "00b0f0", // the run beats both
+	"Plain":       "000000", // without a style: the master's tx1
+	"Placeholder": "ffffff", // the style also beats the title style of the master
 }
 
 // FontEmbed has a font embedded as PowerPoint embeds fonts (EOT with MicroType Express): a

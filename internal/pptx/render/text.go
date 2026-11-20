@@ -15,6 +15,12 @@ type textStyle struct {
 	levels  [9][]*xmltree.Node // lvl1pPr .. lvl9pPr sources
 	bodyPr  []*xmltree.Node
 	fontRef *xmltree.Node // p:style/a:fontRef
+	// own[i] is where the sources of the shape's own lstStyle begin in levels[i]. The colour of
+	// the shape style (fontRef) ranks right below them, above everything the shape inherits from
+	// the presentation, the master and the placeholders of layout and master: PowerPoint draws
+	// the text of a shape with fontRef lt1 white although the master's otherStyle or title style
+	// says tx1 (reference image fixtures/pptx/ref/text2/3.png).
+	own [9]int
 }
 
 func (ts *textStyle) addList(lst *xmltree.Node) {
@@ -56,6 +62,9 @@ func (r *slideRenderer) styleFor(sp *xmltree.Node, owner ownerKind) *textStyle {
 		}
 		ts.addList(src.Path("txBody/lstStyle"))
 		ts.bodyPr = append(ts.bodyPr, src.Path("txBody/bodyPr"))
+	}
+	for i := range ts.own {
+		ts.own[i] = len(ts.levels[i])
 	}
 	ts.addList(sp.Path("txBody/lstStyle"))
 	ts.bodyPr = append(ts.bodyPr, sp.Path("txBody/bodyPr"))
@@ -153,10 +162,16 @@ func (r *slideRenderer) layoutTextAt(sp *xmltree.Node, ts *textStyle, box rect, 
 		}
 		pp := newProps()
 		rpBase := newProps()
-		r.applyFontRef(rpBase, ts.fontRef, cx)
-		for _, src := range ts.levels[lvl] {
+		r.applyFontRef(rpBase, ts.fontRef, cx, false)
+		for i, src := range ts.levels[lvl] {
+			if i == ts.own[lvl] {
+				r.applyFontRef(rpBase, ts.fontRef, cx, true)
+			}
 			pp.add(src)
 			rpBase.add(src.Child("defRPr"))
+		}
+		if len(ts.levels[lvl]) == ts.own[lvl] {
+			r.applyFontRef(rpBase, ts.fontRef, cx, true)
 		}
 		pp.add(ppNode)
 		rpBase.add(ppNode.Child("defRPr"))
