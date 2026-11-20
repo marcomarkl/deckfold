@@ -115,3 +115,45 @@ func TestBitmapHook(t *testing.T) {
 		t.Errorf("a hook that returns nothing must leave the PNG: %s", res.SVG)
 	}
 }
+
+// TestClippedBitmap: a bitmap under a clip path keeps its clip on a group around it. On the image
+// itself the clip would be read in the coordinates of the image's own transform and cut the
+// picture down to a strip of it.
+func TestClippedBitmap(t *testing.T) {
+	const w, h = 4, 2
+	body := make([]byte, 72)
+	copy(body[16:], ints(10, 10, 0, 0, w, h, 80, 40, 120, 24, 0, 0x00CC0020, 40, 20))
+	bmi := make([]byte, 40)
+	binary.LittleEndian.PutUint32(bmi[0:], 40)
+	binary.LittleEndian.PutUint32(bmi[4:], w)
+	binary.LittleEndian.PutUint32(bmi[8:], h)
+	binary.LittleEndian.PutUint16(bmi[12:], 1)
+	binary.LittleEndian.PutUint16(bmi[14:], 24)
+	file := build(
+		rec(59, nil),          // BEGINPATH
+		rec(27, ints(12, 12)), // MOVETOEX
+		rec(54, ints(40, 12)), // LINETO
+		rec(54, ints(40, 25)), // LINETO
+		rec(54, ints(12, 25)), // LINETO
+		rec(60, nil),          // ENDPATH
+		rec(67, ints(5)),      // SELECTCLIPPATH, RGN_COPY
+		rec(81, append(append(body, bmi...), make([]byte, 24)...)), // STRETCHDIBITS
+	)
+	res, err := Convert(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svg := string(res.SVG)
+	if !strings.Contains(svg, "<image ") || !strings.Contains(svg, "<clipPath") {
+		t.Fatalf("no clipped image in %s", svg)
+	}
+	for _, el := range strings.Split(svg, "<")[1:] {
+		tag := el[:strings.IndexAny(el, ">")]
+		if strings.Contains(tag, "transform=") && strings.Contains(tag, "clip-path=") {
+			t.Errorf("an element has its own transform and a clip: <%s>", tag)
+		}
+	}
+	if !strings.Contains(svg, `<g clip-path="url(#c1)"><image `) {
+		t.Errorf("the image is not inside a group with the clip: %s", svg)
+	}
+}

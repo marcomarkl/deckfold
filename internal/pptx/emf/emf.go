@@ -715,10 +715,21 @@ func (c *conv) blt(typ uint32, b []byte) {
 	c.image(uri, xd, yd, wd, hd)
 }
 
+// image draws a bitmap as a unit square that a transform puts in place. Its clip goes on a group
+// around it: a clip-path on the image itself would be read in the coordinates of the image's own
+// transform, so a clip in drawing coordinates would be scaled with the picture and leave only a
+// strip of it.
 func (c *conv) image(uri string, x, y, w, h float64) {
 	m := c.st.world.mul(c.page())
-	fmt.Fprintf(&c.out, `<image href="%s" x="0" y="0" width="1" height="1" preserveAspectRatio="none" transform="matrix(%s %s %s %s %s %s)"%s/>`,
-		uri, n(m.a*w), n(m.b*w), n(m.c*h), n(m.d*h), n(m.a*x+m.c*y+m.e), n(m.b*x+m.d*y+m.f), c.clipAttr())
+	clip := c.clipAttr()
+	if clip != "" {
+		fmt.Fprintf(&c.out, `<g%s>`, clip)
+	}
+	fmt.Fprintf(&c.out, `<image href="%s" x="0" y="0" width="1" height="1" preserveAspectRatio="none" transform="matrix(%s %s %s %s %s %s)"/>`,
+		uri, n(m.a*w), n(m.b*w), n(m.c*h), n(m.d*h), n(m.a*x+m.c*y+m.e), n(m.b*x+m.d*y+m.f))
+	if clip != "" {
+		c.out.WriteString(`</g>`)
+	}
 }
 
 // dibURI decodes a device-independent bitmap (offsets relative to the record start, so the
