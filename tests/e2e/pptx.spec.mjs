@@ -304,6 +304,7 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
     window.__gifRuns = [];
     new MutationObserver(() => window.__gifRuns.push([im.getAttribute('href').replace(/^.*#/, ''), Math.round(performance.now())]))
       .observe(im, { attributes: true, attributeFilter: ['href'] });
+    im.addEventListener('load', () => window.__gifRuns.push(['load', Math.round(performance.now())]));
   });
   const now = () => page.evaluate(() => Math.round(performance.now()));
   const t0 = await now();
@@ -316,7 +317,8 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
   const c = await color();
   const after = await now();
   const runs = await page.evaluate(() => window.__gifRuns);
-  const start = runs.length ? runs[runs.length - 1][1] : NaN;
+  const last = runs.filter(([r]) => r !== 'load').pop(), start = last ? last[1] : NaN;
+  console.log(`gif restart: ${c}; ${JSON.stringify(runs.map(([r, t]) => [r, t - t0]))}; screenshot ${before - t0} to ${after - t0}`);
   expect(c, `runs ${JSON.stringify(runs.map(([r, t]) => [r, t - t0]))} ms after the first key; the screenshot between ${before - t0} and ${after - t0} ms, ${before - start} to ${after - start} ms after the last run started`).toBe('red');
   expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
 });
