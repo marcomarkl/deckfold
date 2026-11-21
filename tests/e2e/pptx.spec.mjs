@@ -478,8 +478,12 @@ test('PowerPoint: a player moved past deckfold is brought back to deckfold\'s st
   await solo(page, 'pptx-basic.html');
   await page.waitForTimeout(1500);
   const s = await audState(page);
-  await page.evaluate(() => window.__dfPptx.goTo(2, 0));
-  expect(await shown(page)).toBe(2);
+  // the move and the reading in one task: the show window checks the player once a second, and a
+  // check between two evaluate calls brought it back before it was read (seen once in CI)
+  expect(await page.evaluate(() => {
+    window.__dfPptx.goTo(2, 0);
+    return [...document.querySelectorAll('.df-pptx-slide')].findIndex((e) => e.classList.contains('df-on'));
+  })).toBe(2);
   await expect.poll(() => shown(page), { timeout: 3000 }).toBe(s.slide);
   expect(await page.evaluate(() => window.__dfPptx.state())).toEqual(s);
   expect(await audState(page)).toEqual(s);
