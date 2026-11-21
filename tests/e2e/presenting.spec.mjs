@@ -151,8 +151,9 @@ test('back on the first slide does nothing; after the last slide the end slide a
 test('start screen: arrows at the strip, auto fields only with auto mode, no hash before the start', async ({ page }) => {
   await page.goto(fileURL('pptx-basic.html') + '#2');
   await page.waitForSelector('.df-start [data-df-start]');
-  // a slide number in the address would override the chosen start slide in some players
-  expect(await page.evaluate(() => location.hash)).toBe('');
+  // a slide number in the address would override the chosen start slide in some players; the
+  // start screen keeps only its own start slide there (#df-last=n), which it drops before a player runs
+  expect(await page.evaluate(() => location.hash)).toMatch(/^(#df-last=\d+)?$/);
   await expect(page.locator('[data-df-strip-prev]')).toBeDisabled();
   await page.click('[data-df-strip-next]');
   await page.click('[data-df-strip-next]');
@@ -312,25 +313,41 @@ test('claude.ai presenter view: both previews show their slide after all its ste
 });
 
 test('reload: the start screen chooses the slide chosen or shown last', async ({ page }) => {
+  // for the failure messages: what the session keeps for the start slide, read in the page
+  const kept = () => page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('df-last')).map((k) => sessionStorage.getItem(k)).join(' ') || 'nothing');
+  const reload = async (what) => {
+    const before = await kept();
+    await page.reload();
+    await page.waitForSelector('.df-start [data-df-start]');
+    return `${what}: stored before the reload ${before}, after it ${await kept()}`;
+  };
   await startScreen(page, 'pptx-basic.html');
   await page.click('.df-strip .df-tile[data-i="2"]');
-  await page.reload();
-  await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  let said = await reload('chosen');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '2');
   // shown last: the show reached slide 2 before the reload
   await page.click('.df-strip .df-tile[data-i="0"]');
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold.audience);
+  // the start slide in the address is gone before the player runs
+  expect(await page.evaluate(() => location.hash)).toBe('');
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
-  await page.reload();
-  await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
+  said = await reload('shown');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '1');
   // chosen after that show: the choice wins
   await page.click('.df-strip .df-tile[data-i="2"]');
-  await page.reload();
+  said = await reload('chosen after the show');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '2');
+  // the end of the show (Escape) reloads this window itself: the start screen chooses the slide
+  // shown last, without a pause between the move and the end
+  await page.click('.df-strip .df-tile[data-i="0"]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Escape');
   await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), `ended: stored ${await kept()}`).toHaveAttribute('data-i', '1');
 });
 
 test('presenter view: the full-screen button names what a click does', async ({ page, context }) => {

@@ -155,11 +155,30 @@ test('PowerPoint animations: a fade is in progress halfway through', async ({ pa
   await solo(page, 'pptx-animations.html');
   await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 0, step: 0 }));
   const id = Object.keys(animSpec[0].steps[0])[0];
-  await page.evaluate(() => window.__deckfold.audience.act('next'));
-  await page.waitForTimeout(200);
-  const op = await page.evaluate((id) => parseFloat(getComputedStyle(document.querySelector(`.df-pptx-slide g[data-sid="${id}"]`)).opacity), id);
-  expect(op).toBeGreaterThan(0.05);
-  expect(op).toBeLessThan(0.95);
+  // The fade lasts 500 ms and is drawn frame by frame. Right after the jump to step 0, headless
+  // Chrome with SwiftShader drew its first one to three frames up to 640 ms apart, and after that
+  // a frame every 16 ms (measured on a Mac); a fade started in those first frames was over before
+  // the next frame, or a reading 200 ms later found the shape not drawn yet. So the page first
+  // waits until it draws frames steadily, then starts the fade and reads the shape after every
+  // frame.
+  const frames = await page.evaluate(async (id) => {
+    const el = document.querySelector(`.df-pptx-slide g[data-sid="${id}"]`);
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(performance.now())));
+    let last = await frame(), steady = 0;
+    for (const end = last + 5000; steady < 10 && last < end;) { const now = await frame(); steady = now - last < 50 ? steady + 1 : 0; last = now; }
+    const t0 = performance.now(), seen = [];
+    window.__deckfold.audience.act('next');
+    while (performance.now() - t0 < 2000) {
+      await frame();
+      const cs = getComputedStyle(el), op = parseFloat(cs.opacity);
+      seen.push([Math.round(performance.now() - t0), cs.visibility, op]);
+      if (cs.visibility === 'visible' && op >= 1) break;
+    }
+    return seen;
+  }, id);
+  const between = frames.filter(([, vis, op]) => vis === 'visible' && op > 0.05 && op < 0.95);
+  expect(between.length, `frames after "next" as [ms, visibility, opacity]: ${JSON.stringify(frames)}`).toBeGreaterThan(0);
+  expect(frames.at(-1).slice(1), 'the fade ends visible').toEqual(['visible', 1]);
 });
 
 test('PowerPoint presenter view: previews show the current and the next slide after all their steps', async ({ page, context }) => {
