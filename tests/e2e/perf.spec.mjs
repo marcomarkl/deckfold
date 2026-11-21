@@ -61,24 +61,34 @@ test('PowerPoint deck with 200 slides', async ({ page, context }) => {
   await expect(pres.locator('.df-overview .df-tile')).toHaveCount(200);
   await pres.waitForFunction(() => document.querySelectorAll('.df-overview .df-tile .df-clone svg').length > 0);
   const overview = Date.now() - t2;
-  const steps = [];
+  // A step is the time from the key in the presenter view to the player of the show changing
+  // slide, read from a clock in the show window. Playwright returns from the key press only when
+  // the presenter view has handled the key up as well, and by then it redraws its previews: on
+  // the Windows runner image of 2026-11-16 (4 cores, SwiftShader) that took 150 to 340 ms while
+  // the player had changed after 2 to 61 ms. That time is measured on its own (presenterBusy).
+  await page.evaluate(() => { window.__dfChanged = {}; window.addEventListener('df-pptx-change', (e) => { window.__dfChanged[e.detail.slide] = performance.timeOrigin + performance.now(); }); });
+  const steps = [], busy = [];
   for (let i = 0; i < 10; i++) {
     const t = Date.now();
     await pres.keyboard.press('ArrowRight');
+    busy.push(Date.now() - t);
     await page.waitForFunction((n) => window.__dfPptx.state().slide === n, i + 1);
-    steps.push(Date.now() - t);
+    steps.push(Math.round((await page.evaluate((n) => window.__dfChanged[n], i + 1)) - t));
   }
-  const step = Math.max(...steps);
-  console.log(`start screen ${startScreen} ms, first slide ${firstSlide} ms, presenter view ready ${ready} ms, overview band ${overview} ms, slowest step ${step} ms`);
+  const step = Math.max(...steps), presenterBusy = Math.max(...busy);
+  console.log(`start screen ${startScreen} ms, first slide ${firstSlide} ms, presenter view ready ${ready} ms, overview band ${overview} ms, slowest step ${step} ms (${steps.join(', ')}), presenter view busy after a step up to ${presenterBusy} ms (${busy.join(', ')})`);
   expect(convertMs).toBeLessThanOrEqual(LIMITS.convertMs);
   expect(startScreen).toBeLessThanOrEqual(LIMITS.readyMs);
   expect(firstSlide).toBeLessThanOrEqual(LIMITS.readyMs);
   expect(ready).toBeLessThanOrEqual(LIMITS.readyMs);
   expect(overview).toBeLessThanOrEqual(LIMITS.overviewMs);
   expect(step).toBeLessThanOrEqual(LIMITS.stepMs);
+  expect(presenterBusy).toBeLessThanOrEqual(LIMITS.presenterBusyMs);
 });
 
 // Measured on the first end-to-end slice (Apple silicon MacBook, Chrome, 2026-11-07): conversion
 // 62 ms, presenter view ready 236 ms, overview 62 ms, slowest step 18 ms. The limits leave room
-// for slower machines and for the features that M1 to M3 add to every slide.
-const LIMITS = { convertMs: 3000, readyMs: 3000, overviewMs: 2000, stepMs: 500 };
+// for slower machines and for the features that M1 to M3 add to every slide. presenterBusyMs:
+// on the Windows runner image of 2026-11-16 the presenter view was busy up to 342 ms after a step
+// (30 steps, 2026-11-21), on the Mac 0 to 2 ms.
+const LIMITS = { convertMs: 3000, readyMs: 3000, overviewMs: 2000, stepMs: 500, presenterBusyMs: 1000 };
