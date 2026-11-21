@@ -1,6 +1,7 @@
-// Presenter view (role "presenter", E5): a window the show window opens. Current and next slide,
-// each after all its steps, as muted srcdoc previews, notes, time, slide overview; its settings are changed here while
-// it runs (elements, notes size, target duration, size of the panes). It sends commands to the
+// Presenter view (role "presenter", E5 and E20): a window the show window opens. What the audience
+// sees, large, and what the next click shows, as muted srcdoc previews, with a dot for each state of
+// the slide; notes, time, slide overview; its settings are changed here while it runs (panes shown,
+// notes size, target duration, size of the panes). It sends commands to the
 // show window (window.opener), which owns the state, and gets the state and heartbeat back.
 
 DF.startPresenter = function (snapshotHTML) {
@@ -55,12 +56,13 @@ DF.startPresenter = function (snapshotHTML) {
   var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
   var autoInfo = DF.el("span", { class: "df-autoinfo" });
   var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
-  var toggles = DF.el("span", { class: "df-toggles" }, ["current", "audience", "next", "notes", "time", "overview"].map(function (k) {
-    return DF.el("button", { type: "button", "data-df-el": k, text: DF.t(k), onclick: function () { toggleElement(k); } });
+  // the panes that can be hidden, with their labels; time and overview are always shown (E20)
+  var toggles = DF.el("span", { class: "df-toggles" }, [["audience", "onScreen"], ["next", "nextClick"], ["notes", "notes"]].map(function (t) {
+    return DF.el("button", { type: "button", "data-df-el": t[0], text: DF.t(t[1]), onclick: function () { toggleElement(t[0]); } });
   }));
   var bar = DF.el("header", { class: "df-bar" }, [
     DF.el("strong", { class: "df-title", text: meta.title || document.title || "" }), counterEl,
-    DF.el("span", { class: "df-time-group", "data-k": "time" }, [clockEl, elapsedEl, remainEl, pauseBtn,
+    DF.el("span", { class: "df-time-group" }, [clockEl, elapsedEl, remainEl, pauseBtn,
       DF.el("button", { type: "button", text: "↺", title: DF.t("reset"), onclick: resetTimer }),
       DF.el("label", { class: "df-target" }, [DF.t("target") + " ", targetIn])]),
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
@@ -70,18 +72,21 @@ DF.startPresenter = function (snapshotHTML) {
     fsBtn,
     endBtn
   ]);
-  var cur = pane("current", DF.t("current"));
-  // audience: what the audience sees right now: the slide at its step, black, white, the end slide;
-  // empty only before the start
-  var aud = pane("audience", DF.t("audience"));
+  // audience ("On screen"): what the audience sees right now: the slide at its step, black, white,
+  // the end slide; before the start the slide the show will start on. Its heading has a dot for
+  // each state of the slide and an arrow for the change to the next slide.
+  var paneTitle = {};
+  var aud = pane("audience", DF.t("onScreen"));
   aud.querySelector(".df-stage").appendChild(DF.el("div", { class: "df-audcover" }, [DF.el("span", { text: DF.t("endOfShow") })]));
-  var nxt = pane("next", DF.t("next"));
+  var stepsEl = DF.el("span", { class: "df-steps", "data-df-steps": "", role: "img" });
+  aud.querySelector("h3").appendChild(stepsEl);
+  // next: the state the next click shows, the next step of this slide or the next slide
+  var nxt = pane("next", DF.t("nextStep"));
   var notesEl = DF.el("div", { class: "df-notes-text" });
   var notes = DF.el("section", { class: "df-pane df-notes", "data-k": "notes" }, [DF.el("h3", { text: DF.t("notes") }), notesEl]);
   var splitV = DF.el("div", { class: "df-split df-split-v", "data-df-split": "main" });
   var splitH = DF.el("div", { class: "df-split df-split-h", "data-df-split": "side" });
-  var splitA = DF.el("div", { class: "df-split df-split-h", "data-df-split": "audience" });
-  var left = DF.el("div", { class: "df-left" }, [cur, splitA, aud]);
+  var left = DF.el("div", { class: "df-left" }, [aud]);
   var side = DF.el("div", { class: "df-side" }, [nxt, splitH, notes]);
   var grid = DF.el("main", { class: "df-grid" }, [left, splitV, side]);
   // overview: a band of all slides above the status bar; a click jumps there (before the start it
@@ -91,25 +96,27 @@ DF.startPresenter = function (snapshotHTML) {
     pick: function (i) { command("goto", i); },
     step: function (d) { if (phase === "show") strip.scroll(d); else command(d < 0 ? "prev" : "next"); }
   });
-  var overviewEl = DF.el("div", { class: "df-overview", "data-k": "overview" }, [strip.el]);
+  var overviewEl = DF.el("div", { class: "df-overview" }, [strip.el]);
   var status = DF.el("footer", { class: "df-status" }, [bannerEl, toggles]);
   ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(overviewEl); ui.appendChild(status);
   ui.style.setProperty("--df-ratio", (meta.width || 1920) + " / " + (meta.height || 1080));
   document.body.appendChild(ui);
-  var frames = { current: DF.previewFrame(cur.querySelector(".df-stage"), snapshotHTML), audience: DF.previewFrame(aud.querySelector(".df-stage"), snapshotHTML),
+  var frames = { audience: DF.previewFrame(aud.querySelector(".df-stage"), snapshotHTML),
     next: DF.previewFrame(nxt.querySelector(".df-stage"), snapshotHTML) };
   // narrow window: the panes stand one below the other and the middle scrolls (class df-narrow)
   function narrow() { ui.classList.toggle("df-narrow", ui.clientWidth < 760); }
   if ("ResizeObserver" in window) new ResizeObserver(narrow).observe(ui); else window.addEventListener("resize", narrow);
   narrow();
   function pane(k, title) {
-    return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", { text: title }),
+    paneTitle[k] = DF.el("span", { class: "df-pane-title", text: title });
+    return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", {}, [paneTitle[k]]),
       DF.el("div", { class: "df-stage" }), DF.el("div", { class: "df-endlabel", text: DF.t("end") })]);
   }
 
   // ---------- settings while running ----------
+  function elements() { return DF.presenterElements(cfg.presenter.elements); }
   function toggleElement(k) {
-    var els = cfg.presenter.elements.slice(), i = els.indexOf(k);
+    var els = elements(), i = els.indexOf(k);
     if (i >= 0) els.splice(i, 1); else els.push(k);
     cfg.presenter.elements = els;
     DF.saveSettings(cfg); render();
@@ -118,19 +125,18 @@ DF.startPresenter = function (snapshotHTML) {
     cfg.presenter.notesFontSize = Math.max(8, Math.min(96, cfg.presenter.notesFontSize + d));
     DF.saveSettings(cfg); render();
   }
-  // panes: the dividers between the left column and the side column, between the current slide and
-  // the audience, and between the next slide and the notes can be dragged; the shares are stored
-  // in presenter.layout
+  // panes: the dividers between the left column and the side column and between the next click and
+  // the notes can be dragged; the shares are stored in presenter.layout
   function layout() {
     var l = cfg.presenter.layout || {};
-    return { main: l.main || 0.6, side: l.side || 0.45, audience: l.audience || 0.6 };
+    return { main: l.main || 0.6, side: l.side || 0.45 };
   }
   function drag(el, key) {
     el.addEventListener("pointerdown", function (e) {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       var move = function (ev) {
-        var r = (key === "main" ? grid : key === "audience" ? left : side).getBoundingClientRect();
+        var r = (key === "main" ? grid : side).getBoundingClientRect();
         var f = key === "main" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
         var l = layout();
         l[key] = Math.max(0.2, Math.min(0.8, f));
@@ -144,21 +150,19 @@ DF.startPresenter = function (snapshotHTML) {
       el.addEventListener("pointermove", move); el.addEventListener("pointerup", up);
     });
   }
-  drag(splitV, "main"); drag(splitH, "side"); drag(splitA, "audience");
+  drag(splitV, "main"); drag(splitH, "side");
   // the shares go into CSS variables; the class df-narrow lays the panes out one below the other
   // and ignores them (an inline grid template would override the narrow layout)
   function applyLayout() {
-    var l = layout(), els = cfg.presenter.elements;
-    var showCur = els.indexOf("current") >= 0, showAud = els.indexOf("audience") >= 0;
+    var l = layout(), els = elements();
+    var showLeft = els.indexOf("audience") >= 0;
     var showNext = els.indexOf("next") >= 0, showNotes = els.indexOf("notes") >= 0 && hasNotes;
-    var showLeft = showCur || showAud, showSide = showNext || showNotes;
+    var showSide = showNext || showNotes;
     left.classList.toggle("df-hidden", !showLeft);
     side.classList.toggle("df-hidden", !showSide);
     splitV.classList.toggle("df-hidden", !(showLeft && showSide));
-    splitA.classList.toggle("df-hidden", !(showCur && showAud));
     splitH.classList.toggle("df-hidden", !(showNext && showNotes));
     grid.style.setProperty("--df-cols", showLeft && showSide ? "minmax(0," + l.main + "fr) 8px minmax(0," + (1 - l.main) + "fr)" : "minmax(0,1fr)");
-    cur.style.setProperty("--df-flex", showCur && showAud ? "0 0 calc(" + (l.audience * 100) + "% - 4px)" : "1 1 auto");
     nxt.style.setProperty("--df-flex", showNext && showNotes ? "0 0 calc(" + (l.side * 100) + "% - 4px)" : "1 1 auto");
   }
   var hasNotes = slides.some(function (s) { return s.notes; });
@@ -167,7 +171,7 @@ DF.startPresenter = function (snapshotHTML) {
   function shown() { return phase === "show" ? st : DF.model.goto(sel); }
   function render() {
     cfg = DF.settings();
-    var els = cfg.presenter.elements;
+    var els = elements();
     [].slice.call(ui.querySelectorAll("[data-k]")).forEach(function (n) { n.classList.toggle("df-hidden", els.indexOf(n.getAttribute("data-k")) < 0); });
     [].slice.call(toggles.querySelectorAll("[data-df-el]")).forEach(function (b) {
       var on = els.indexOf(b.getAttribute("data-df-el")) >= 0;
@@ -176,19 +180,28 @@ DF.startPresenter = function (snapshotHTML) {
     if (!hasNotes) notes.classList.add("df-hidden");
     applyLayout();
     var s = shown(), n = slides.length;
+    // the states the slide rests in; the counter and the dots count the same ones, so that auto
+    // steps of claude.ai slides count as no click
+    var stops = DF.model.stops(s.slide), done = stops.filter(function (p) { return p.step <= s.step; }).length;
     counterEl.textContent = (s.slide + 1) + " / " + n +
-      (phase === "show" && slides[s.slide] && slides[s.slide].steps > 1 ? "  ·  " + DF.t("step") + " " + (s.step + 1) + "/" + slides[s.slide].steps : "");
+      (phase === "show" && stops.length > 1 ? "  ·  " + DF.t("step") + " " + done + "/" + stops.length : "");
     notesEl.textContent = (slides[s.slide] && slides[s.slide].notes) || DF.t("noNotes");
     notesEl.style.fontSize = cfg.presenter.notesFontSize + "px";
-    // both previews show a whole slide after all its steps: the slide the audience sees and the
-    // one after it
-    frames.current.show(DF.model.end(s.slide));
+    // the left preview shows what the audience sees (before the start the start slide), the right
+    // one the state of the next click (E20)
     var as = audienceView();
     aud.setAttribute("data-df-audience", as);
+    paneTitle.audience.textContent = DF.t(as === "start" ? "startSlide" : "onScreen");
     if (as === "slide") frames.audience.show({ slide: st.slide, step: st.step });
-    var nx = s.slide + 1 < n ? DF.model.end(s.slide + 1) : null;
+    else if (as === "start") frames.audience.show(s);
+    var ended = as === "end";
+    var nx = ended ? null : DF.model.next(s);
+    var leaves = !ended && (!nx || nx.slide !== s.slide);
     nxt.classList.toggle("df-at-end", !nx);
+    nxt.classList.toggle("df-change", leaves);
+    paneTitle.next.textContent = DF.t(nx && nx.slide === s.slide ? "nextStep" : "nextSlide");
     if (nx) frames.next.show(nx);
+    showSteps(ended ? null : stops, done, leaves);
     autoBtn.textContent = remote.auto.on ? DF.t("autoOn") : DF.t("autoOff");
     autoBtn.classList.toggle("df-active", !!remote.auto.on);
     ui.classList.toggle("df-before", phase !== "show");
@@ -196,11 +209,29 @@ DF.startPresenter = function (snapshotHTML) {
     strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
     banners();
   }
-  // what the audience pane shows: empty before the start, then the end slide, black, white, or the
-  // slide at the step the audience sees (also when that is the whole slide shown in "Current": an
-  // empty pane during the show looked like a fault)
+  // dots in the heading of "On screen": one for each state the slide rests in, filled up to the one
+  // shown, then an arrow for the change to the next slide, marked when the next click makes it. Each
+  // mark after the last filled dot is one click. From 13 states on, a bar stands for the dots.
+  function showSteps(stops, done, leaves) {
+    stepsEl.textContent = "";
+    stepsEl.setAttribute("data-df-steps", stops ? done + "/" + stops.length : "");
+    if (!stops || !stops.length) { stepsEl.removeAttribute("title"); stepsEl.removeAttribute("aria-label"); return; }
+    if (stops.length > 12) {
+      var fill = DF.el("span", { class: "df-stepfill" });
+      fill.style.width = (100 * done / stops.length) + "%";
+      stepsEl.appendChild(DF.el("span", { class: "df-stepbar" }, [fill]));
+    } else {
+      for (var i = 0; i < stops.length; i++) stepsEl.appendChild(DF.el("span", { class: "df-dot" + (i < done ? " df-done" : "") }));
+    }
+    stepsEl.appendChild(DF.el("span", { class: "df-arrow" + (leaves ? " df-next-is-slide" : "") }));
+    var label = DF.t("stepOf").replace("{x}", done).replace("{y}", stops.length);
+    stepsEl.title = label;
+    stepsEl.setAttribute("aria-label", label);
+  }
+  // what the audience pane shows: the start slide before the start, then the end slide, black,
+  // white, or the slide at the step the audience sees
   function audienceView() {
-    if (phase !== "show") return "empty";
+    if (phase !== "show") return "start";
     if (remote.ended) return "end";
     if (remote.blank === "black" || remote.blank === "white") return remote.blank;
     return slides[st.slide] ? "slide" : "empty";

@@ -14,9 +14,10 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Start, press Escape, choose another slide, start again; three times | Every start begins at the chosen slide | |
 | Switch "Presenter view" on | A second window opens, without a permission prompt and without a hint about the screens; "Full screen" can always be chosen | |
 | Drag the presenter view to the other screen | Nothing changes in either window | |
-| Presenter view before the start | It shows the chosen start slide, the slide after it and the notes; the arrow keys there change the start slide on the start screen too | |
-| Previews on a slide with builds, in a narrow presenter view | "Current" shows only this slide, "Next" only the next one, each with all builds shown and nothing playing; no step appears on the way | |
-| Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | The audience pane shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
+| Presenter view before the start | "On screen" shows the chosen start slide at its first step, "Next click" what the first click brings, and the notes; the arrow keys there change the start slide on the start screen too | |
+| Previews on a slide with builds, in a narrow presenter view | "On screen" shows the step the audience sees, "Next click" the step after it, then at the last step the next slide; nothing plays, and no step appears on the way | |
+| Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | "On screen" shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
+| With the clicker, go through a PowerPoint slide with builds, a claude.ai slide with steps that run by themselves and a Keynote slide with builds | The dots of "On screen" fill one per click; steps that run by themselves take no dot; at the last dot the arrow and "Next click" are marked, and the next click changes the slide | |
 | Make the presenter view narrow (about 300 px) and wide again | Narrow: the panes one below the other, the bar one line that scrolls sideways; every control can be reached | |
 | Click once into the presenter view on the second screen, then put the mouse on a slide tile and on a button and keep it still | The highlight stays while the mouse rests. Chrome on macOS shows it only in the active window: after a click in the presentation window it is gone, also under the mouse, until the presenter view is clicked again | |
 | Note where the presenter view is, then click "Start" (with and without "Full screen") | The presenter view keeps its place and size | |
@@ -25,11 +26,10 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Click "Full screen" in the presenter view | The presenter view fills its screen; the button now reads "Window" and takes it back | |
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
 | With ffmpeg installed: convert a deck with a video that browsers do not play (HEVC from an iPhone, WMV) and a WAV sound; play both in Chrome, Safari and Firefox | The report names the converted video and sound. The video plays with its sound, in the right colours and at the right speed; the sound plays | |
-| Hide notes, press A+ twice, drag the divider between the panes | The presenter view changes at once; after reloading it, the changes are still there | |
+| Hide notes, press A+ twice, drag the dividers between the panes | The presenter view changes at once; after reloading it, the changes are still there | |
 | Time: before Start, after Start, pause, resume, reset (button and T) | 00:00 before the start; then it runs, stands still while paused, and starts again from 00:00 | |
 | Type 1:30 as the target, Enter | The field shows 01:30; the time left counts down, turns yellow under two minutes and red after it | |
 | Click a slide in the strip of the presenter view during the show; click its arrows | The click jumps there; the arrows only scroll the strip | |
-| Switch "Overview" off in the status bar, reload the presenter view | The strip stays hidden | |
 | Reload the presenter view during the show | It comes back at the current slide and keeps controlling the presentation | |
 | Restart the browser, open the file again | The start screen appears; the settings of the presenter view are kept | |
 | "Search" on the start screen, or `/`; type a word from a slide; Enter | The outline lists every slide; typing leaves the slides with the word; Enter chooses the slide as the start slide. A word that is only in the notes finds nothing here | |
