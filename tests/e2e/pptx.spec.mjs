@@ -297,12 +297,27 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
     return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
   };
   await expect.poll(color, { timeout: 3000 }).toBe('green');
+  // for the failure message: when the player gave the picture a new run, and when the screenshot
+  // was taken, both on the clock of the page
+  await page.evaluate(() => {
+    const im = document.querySelector('.df-pptx-slide.df-on image[data-df-pptx-gif]');
+    window.__gifRuns = [];
+    new MutationObserver(() => window.__gifRuns.push([im.getAttribute('href').replace(/^.*#/, ''), Math.round(performance.now())]))
+      .observe(im, { attributes: true, attributeFilter: ['href'] });
+  });
+  const now = () => page.evaluate(() => Math.round(performance.now()));
+  const t0 = await now();
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => shown(page)).toBe(1);
   await page.waitForTimeout(400);
   await page.keyboard.press('ArrowLeft');
   await expect.poll(() => shown(page)).toBe(0);
-  expect(await color()).toBe('red');
+  const before = await now();
+  const c = await color();
+  const after = await now();
+  const runs = await page.evaluate(() => window.__gifRuns);
+  const start = runs.length ? runs[runs.length - 1][1] : NaN;
+  expect(c, `runs ${JSON.stringify(runs.map(([r, t]) => [r, t - t0]))} ms after the first key; the screenshot between ${before - t0} and ${after - t0} ms, ${before - start} to ${after - start} ms after the last run started`).toBe('red');
   expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
 });
 
