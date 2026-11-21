@@ -327,26 +327,6 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
   expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
 });
 
-// TEMPORARY measurement, not for main: how long the first frame shows after the slide is entered
-// again at a time unrelated to the grid, and where its end lies on the grid of the first run.
-test('PowerPoint GIF: grid measure', async ({ page }) => {
-  await solo(page, 'pptx-gifs.html');
-  const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
-  const t1 = await gifTurnsGreen(page, img, 4000);
-  await page.keyboard.press('ArrowRight');
-  await expect.poll(() => shown(page)).toBe(1);
-  await page.waitForTimeout(300 + Math.random() * 500);
-  const tLeft = Date.now();
-  await page.keyboard.press('ArrowLeft');
-  await expect.poll(() => shown(page)).toBe(0);
-  const seq = [];
-  const t0 = Date.now();
-  while (Date.now() - t0 < 900) seq.push([Date.now() - tLeft, await gifColor(page, img)]);
-  const g = seq.find(([, c]) => c !== 'red');
-  const t2 = g ? tLeft + g[0] : 0;
-  console.log(`GRIDMEASURE first=${seq[0][1]}@${seq[0][0]} firstFrame=${g ? g[0] : 'none'} gridPhase=${g ? ((t2 - t1) % 500) : 'none'}`);
-});
-
 test('PowerPoint trigger: a click on the trigger shape plays its next step', async ({ page }) => {
   await solo(page, 'pptx-triggers.html');
   const trig = await page.evaluate(() => window.__dfPptx.deck.slides[0].anim.triggers[0]);
