@@ -760,3 +760,128 @@ test('focus: after a click and a key, one ring only, on the marked tile', async 
   expect(stray(await rings(pres, '.df-overview'))).toEqual([]);
   expect(await pres.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.matches(':focus-visible') && !b.classList.contains('df-cur')).map((b) => b.getAttribute('data-df-el') || b.textContent))).toEqual([]);
 });
+
+// Screen wake lock (decision E19, docs/spikes/S10-wake-lock.md). A stand-in for navigator.wakeLock
+// counts the requests of every window and frame and grants, refuses or leaves them open, so that
+// the tests depend neither on the headless browser nor on the system.
+const fakeWakeLock = () => {
+  const ctl = window.__fakeWake = { mode: 'grant', calls: 0, held: [], during: [], order: [] };
+  // requestFullscreen uses the click up, after which Safari refuses the wake lock
+  const fs = Element.prototype.requestFullscreen;
+  if (fs) Element.prototype.requestFullscreen = function (...a) { ctl.order.push('fullscreen'); return fs.apply(this, a); };
+  class Sentinel extends EventTarget {
+    constructor() { super(); this.type = 'screen'; this.released = false; }
+    release() {
+      if (!this.released) { this.released = true; ctl.held = ctl.held.filter((s) => s !== this); this.dispatchEvent(new Event('release')); }
+      return Promise.resolve();
+    }
+  }
+  const api = {
+    request() {
+      ctl.calls++;
+      ctl.during.push(window.event ? window.event.type : null); // the event the request is made in, if any
+      ctl.order.push('wake');
+      if (ctl.mode === 'refuse') return Promise.reject(new DOMException('refused', 'NotAllowedError'));
+      if (ctl.mode === 'hang') return new Promise(() => {});
+      const s = new Sentinel();
+      ctl.held.push(s);
+      return Promise.resolve(s);
+    },
+  };
+  Object.defineProperty(Navigator.prototype, 'wakeLock', { configurable: true, get: () => api });
+};
+const wakeCalls = (p) => p.evaluate(() => window.__fakeWake.calls);
+const frameWakeCalls = async (p) => {
+  let n = 0;
+  for (const f of p.frames()) if (f !== p.mainFrame()) n += await f.evaluate(() => (window.__fakeWake ? window.__fakeWake.calls : 0)).catch(() => 0);
+  return n;
+};
+const wakeInfo = (p) => p.evaluate(() => window.__deckfold.audience.info().wake);
+const banner = (pres) => pres.locator('.df-banner').getAttribute('data-df-banner');
+// starts with the presenter view after setting the mode of the stand-in in the presentation window
+async function presentWith(page, context, mode) {
+  await startScreen(page, 'pptx-basic.html');
+  await page.evaluate((m) => { window.__fakeWake.mode = m; }, mode);
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  return pres;
+}
+
+test('wake lock: nothing before Start; after it one request from the presentation, none from the previews', async ({ page, context }) => {
+  await context.addInitScript(fakeWakeLock);
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.waitForTimeout(1500);
+  expect([await wakeCalls(page), await frameWakeCalls(page), await wakeCalls(pres), await frameWakeCalls(pres)]).toEqual([0, 0, 0, 0]);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect.poll(() => wakeInfo(page)).toBe('held');
+  // Safari grants the lock only shortly after a click or key and not after requestFullscreen in
+  // the same click, so it is asked for in the click on Start, before full screen
+  expect(await page.evaluate(() => window.__fakeWake.during)).toEqual(['click']);
+  expect(await page.evaluate(() => window.__fakeWake.order.slice(0, 2))).toEqual(['wake', 'fullscreen']);
+  await page.waitForTimeout(2000);
+  expect(await wakeCalls(page)).toBe(1);
+  expect(await frameWakeCalls(page)).toBe(0);
+  expect(await frameWakeCalls(pres)).toBe(0);
+  await expect.poll(() => banner(pres)).toBe('');
+});
+
+test('wake lock: a lock the browser releases is requested again', async ({ page, context }) => {
+  await context.addInitScript(fakeWakeLock);
+  await solo(page, 'pptx-basic.html');
+  await expect.poll(() => page.evaluate(() => window.__fakeWake.held.length)).toBe(1);
+  await page.evaluate(() => window.__fakeWake.held[0].release());
+  await expect.poll(() => wakeCalls(page), { timeout: 2000 }).toBe(2);
+  await expect.poll(() => wakeInfo(page)).toBe('held');
+});
+
+test('wake lock: a refused request shows the hint in the presenter view until a later request is granted', async ({ page, context }) => {
+  await context.addInitScript(fakeWakeLock);
+  const pres = await presentWith(page, context, 'refuse');
+  await expect.poll(() => banner(pres)).toBe('noWake');
+  expect(await wakeInfo(page)).toBe('off');
+  await page.evaluate(() => { window.__fakeWake.mode = 'grant'; });
+  await expect.poll(() => banner(pres), { timeout: 15000 }).toBe('');
+  expect(await wakeInfo(page)).toBe('held');
+  expect(await wakeCalls(page)).toBeGreaterThanOrEqual(2);
+});
+
+test('wake lock: a request left open shows no hint for 3 s, then the hint, and is not repeated', async ({ page, context }) => {
+  await context.addInitScript(fakeWakeLock);
+  await startScreen(page, 'pptx-basic.html');
+  await page.evaluate(() => { window.__fakeWake.mode = 'hang'; });
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  expect(await wakeInfo(page)).toBe('pending');
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  expect(await banner(pres)).not.toBe('noWake');
+  await expect.poll(() => banner(pres), { timeout: 6000 }).toBe('noWake');
+  expect(await wakeInfo(page)).toBe('off');
+  await page.waitForTimeout(1000);
+  expect(await wakeCalls(page)).toBe(1);
+});
+
+test('wake lock: without the API the presenter view shows the hint', async ({ page, context }) => {
+  await context.addInitScript(() => { Object.defineProperty(Navigator.prototype, 'wakeLock', { configurable: true, get: () => undefined }); });
+  const pres = await present(page, context, 'pptx-basic.html');
+  await expect.poll(() => wakeInfo(page)).toBe('none');
+  await expect.poll(() => banner(pres)).toBe('noWake');
+});
+
+test('wake lock: after a refusal, a key in the presentation window asks again at once', async ({ page, context }) => {
+  await context.addInitScript(fakeWakeLock);
+  await startScreen(page, 'pptx-basic.html');
+  await page.evaluate(() => { window.__fakeWake.mode = 'refuse'; });
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect.poll(() => wakeInfo(page)).toBe('off');
+  await page.evaluate(() => { window.__fakeWake.mode = 'grant'; });
+  await page.keyboard.press('ArrowRight');
+  // well before the next request of the 10 s rhythm
+  await expect.poll(() => wakeInfo(page), { timeout: 2000 }).toBe('held');
+  expect((await page.evaluate(() => window.__fakeWake.during)).at(-1)).toBe('keydown');
+});

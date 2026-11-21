@@ -4,7 +4,14 @@ Measured and researched on 2026-11-21. The question was whether the presentation
 
 ## What deckfold does
 
-`wake()` in `runtime/src/40-audience.js` calls `navigator.wakeLock.request("screen")` when the presentation starts and again whenever the page becomes visible. It does not look at the result, so a refused request goes unnoticed. The start screen and the presenter view request no lock. The request does not depend on full screen.
+Before decision E19, `wake()` in `runtime/src/40-audience.js` called `navigator.wakeLock.request("screen")` once the presentation had started, and again whenever the page became visible. It did not look at the result, so a refused request went unnoticed. The first measurements below were taken with that code.
+
+Since E19 (see "Safari wants a click" and "What changed" below):
+
+- The request is made in the click or key on "Start" itself, before full screen is requested (`begin()` in `runtime/src/35-start.js`). The presentation takes it over.
+- The presentation holds the lock. It asks again on every key, click and command while it holds none, when the page becomes visible, when the browser releases the lock, and every 10 s after a refusal. A request that is still open is never joined by a second one.
+- `info().wake` says `pending` (a request open for less than 3 s), `held`, `off` or `none` (no API). The presenter view shows "Screen saver not blocked" in its status line while the presentation reports `off` or `none`; the audience sees nothing.
+- The start screen and the presenter view request no lock. The lock does not depend on full screen.
 
 ## Measured on a Mac
 
@@ -16,13 +23,13 @@ macOS 27.2.1, Google Chrome 158.0.8127.36 (channel `chrome`) and the WebKit of P
 |---|---|---|
 | `isSecureContext` on `file://` | true | true |
 | `navigator.wakeLock` | present | present |
-| `request("screen")` | resolves | never settles |
-| power assertion while presenting | `NoDisplaySleepAssertion named: "Blink Wake Lock"`, `PreventUserIdleDisplaySleep` goes from 0 to 1 | none |
+| `request("screen")` | resolves | never settled; granted since the request is made in the click on "Start" |
+| power assertion while presenting | `NoDisplaySleepAssertion named: "Blink Wake Lock"`, `PreventUserIdleDisplaySleep` goes from 0 to 1 | none; since E19 `PreventUserIdleDisplaySleep named: "Screen Wake Lock"` |
 | after the browser is closed | assertion gone | |
 
-The Chrome assertion stayed when the window was switched to full screen through CDP. `pmset` lists the assertions of every process, and at times other Chrome processes on the machine held their own "Blink Wake Lock"; the assertion of the measured browser is the one whose process started with it and whose assertion ended when it closed. The Playwright WebKit result is a property of that build and says nothing about Safari, which was not measured.
+The Chrome assertion stayed when the window was switched to full screen through CDP. `pmset` lists the assertions of every process, and at times other Chrome processes on the machine held their own "Blink Wake Lock"; the assertion of the measured browser is the one whose process started with it and whose assertion ended when it closed. Safari was measured by hand later (below); the Playwright WebKit result alone said nothing about it.
 
-Minimizing the window through CDP (`Browser.setWindowBounds`, `minimized`) left `document.visibilityState` at `visible` and the lock in place. Playwright keeps its pages visible, so what Chrome does with a minimized or covered presentation window is not measured here.
+Minimizing the window through CDP (`Browser.setWindowBounds`, `minimized`) left `document.visibilityState` at `visible` and the lock in place. Playwright keeps its pages visible, so covered and minimized windows were measured by hand (below).
 
 ### Does the screen saver start while the lock is held (`s10.mjs idle`)
 
@@ -44,6 +51,45 @@ What the run does not show:
 - A lock enforced by an MDM profile.
 - Safari, Firefox, Windows, Linux and ChromeOS.
 
+## Safari wants a click
+
+Safari 27.2 on the same Mac, by hand on 2026-11-21: the maintainer opened the files in Safari and clicked, and `pmset -g assertions` was read after each step. Nothing of this ran in Playwright.
+
+A build that asked after the start, as the code before E19 did (already with the new request after a refusal), showed no display assertion at all when `basic.html` was started in Safari. A test page (`tests/.out/wakelock/gesture.html`, not committed) made the request at different times:
+
+| Request | Result |
+|---|---|
+| inside a click | granted; `PreventUserIdleDisplaySleep named: "Screen Wake Lock"` by Safari |
+| 1.5 s after a click | granted |
+| 0.5 s after the page loaded, without a click | `NotAllowedError: Permission was denied` |
+| 10 s after a click | `NotAllowedError: Permission was denied` |
+| in one click: `requestFullscreen()`, then the wake lock | wake lock refused, full screen on |
+| in one click: the wake lock, then `requestFullscreen()` | both granted |
+
+Safari grants the lock only shortly after a click or key, and `requestFullscreen()` uses that click up (the Fullscreen API consumes the user activation). That build asked after `setTimeout(0)` and after the source scripts had been activated, and the start screen had requested full screen in the same click; both explain the refusal. The cases that worked fit too: the request inside a click and 1.5 s after it had an activation left.
+
+With the code of E19, `basic.html` in Safari with the presenter view and full screen on: the assertion "Screen Wake Lock" appeared, and the presenter view showed no hint. Earlier, in a build that asked in the click but after `requestFullscreen()`, Safari refused and the presenter view showed the hint.
+
+What follows from this: once Safari has released the lock, for example while the window was hidden, a request without a click is refused, so the 10 s rhythm cannot win it back there; the next key or click in the presentation window can. Whether Safari releases the lock for a minimized or covered window was not measured. Keys pressed in the presenter view reach the presentation as commands, not as a click or key of its own, so they give Safari no activation there.
+
+## Covered and minimized windows in Chrome
+
+Google Chrome 158, by hand on 2026-11-21, with the code of E19, the presenter view on the same screen and full screen off:
+
+- The presenter view laid fully over the presentation window: the "Blink Wake Lock" assertion stayed, with the same ID, for at least 17 s after the window was covered (read 31 s after it was made).
+- The presentation window minimized to the Dock: the assertion was gone, and the presenter view showed "Screen saver not blocked".
+- The window brought back from the Dock without a click: a new assertion, and the hint went away.
+
+A covered presentation window therefore keeps the lock in Chrome, and the presenter view needs no lock of its own for that case. A minimized one loses it while it is minimized; the presenter view says so.
+
+## What changed (decision E19)
+
+- The request in the click on "Start", before full screen, and the request on keys and clicks: from the Safari measurements.
+- The new request after a release and every 10 s after a refusal: no browser was seen releasing a lock while the page stayed visible; it costs a few lines and covers it.
+- The hint in the presenter view: the presenter sees when the browser does not hold the lock, for example in a browser without the API or with a minimized presentation window.
+- No lock in the presenter view: a covered presentation window keeps its lock in Chrome.
+- The browser tests (`tests/e2e/presenting.spec.mjs`, "wake lock") use a stand-in for `navigator.wakeLock` and check when deckfold asks, in which event, before full screen, and what the presenter view shows. What a lock does to the system only the measurements here show.
+
 ## What the sources say
 
 A search of the specifications, the browser sources, the vendor documentation and the bug trackers on 2026-11-21. It shows which system call each browser makes. Whether that call keeps the screen saver and the lock away is documented for none of macOS and Windows, and no source reports a measurement.
@@ -61,11 +107,10 @@ Chromium (Chrome, Edge and the other browsers built on it) turns the type `scree
 
 Firefox has the API since [bug 1589554](https://bugzilla.mozilla.org/show_bug.cgi?id=1589554) (version 122, Nightly only). For release builds the sources disagree: a comment in [bug 1874849](https://bugzilla.mozilla.org/show_bug.cgi?id=1874849) points to the notes of Firefox 124, [MDN](https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/126) lists it under 126. On Linux Firefox tries the freedesktop interfaces, the XDG portal, GNOME, XScreenSaver and Wayland idle-inhibit in turn ([WakeLockListener.cpp](https://searchfox.org/mozilla-central/source/widget/gtk/WakeLockListener.cpp), [bug 1587360](https://bugzilla.mozilla.org/show_bug.cgi?id=1587360)). Under XFCE the inhibition stopped after a long run and the screen saver came back; [bug 1862159](https://bugzilla.mozilla.org/show_bug.cgi?id=1862159) has the fix in Firefox 144. What Firefox calls on macOS and Windows was not found.
 
-Safari has the API since 16.4 ([WebKit blog](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/), [WebKit bug 247573](https://bugs.webkit.org/show_bug.cgi?id=247573)). Which macOS call it makes, and whether it needs a user gesture, was not found.
+Safari has the API since 16.4 ([WebKit blog](https://webkit.org/blog/13966/webkit-features-in-safari-16-4/), [WebKit bug 247573](https://bugs.webkit.org/show_bug.cgi?id=247573)). Which macOS call it makes, and whether it needs a user gesture, was not found in the sources; the measurements above show both ("Safari wants a click").
 
 ## Open
 
-- Safari on macOS: is the lock granted from `file://`, and does it hold off the screen saver.
-- Chrome on macOS with a minimized or covered presentation window, outside Playwright.
+- Safari on macOS: whether the lock it grants holds off the screen saver (the idle run was made with Chrome only), and what it does with a minimized or covered window.
 - Display sleep and the lock after the screen saver delay, in a run longer than 30 minutes.
 - Windows with and without the inactivity policy, Linux under GNOME and KDE, Firefox on all systems.

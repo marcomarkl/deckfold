@@ -138,7 +138,7 @@ In Chrome and Edge, one Escape ends the presentation in full screen too. Safari 
 
 Common presentation clickers send these keys. You can change the bindings under `keys` in the configuration file.
 
-Auto mode uses timings from the source (automatic timings in PowerPoint, Keynote in self-playing mode, automatic steps in claude.ai decks) and the configured interval otherwise. On slides with a playing video or audio clip it waits until the clip ends. The timer runs in the presentation window, so it keeps going when the presenter view is covered or closed. The presentation window keeps the screen awake and hides the mouse cursor after two seconds.
+Auto mode uses timings from the source (automatic timings in PowerPoint, Keynote in self-playing mode, automatic steps in claude.ai decks) and the configured interval otherwise. On slides with a playing video or audio clip it waits until the clip ends. The timer runs in the presentation window, so it keeps going when the presenter view is covered or closed. The presentation window hides the mouse cursor after two seconds and asks the browser for a screen wake lock. On a Mac, Chrome and Safari grant it, and in Chrome it kept the screen saver from starting. When the browser does not grant it, for example while the presentation window is minimized, the presenter view says "Screen saver not blocked". No web page can stop a lock that a company policy enforces, and Windows, Linux and Firefox are not measured yet.
 
 ## Download and first start
 
