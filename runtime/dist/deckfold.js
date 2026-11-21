@@ -51,7 +51,7 @@ var TEXT = {
     fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
     popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups f\u00fcr diese Datei und schalte die Referentenansicht noch einmal ein.",
-    startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.",
+    startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.", noWake: "Bildschirmschoner nicht blockiert",
     loading: "Wird geladen \u2026",
     clickFs: "Klicken f\u00fcr Vollbild",
     current: "Aktuell", audience: "Publikum", next: "Als N\u00e4chstes", notes: "Notizen", time: "Zeit", overview: "\u00dcbersicht",
@@ -72,7 +72,7 @@ var TEXT = {
     fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
     popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
-    startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.",
+    startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.", noWake: "Screen saver not blocked",
     loading: "Loading \u2026",
     clickFs: "Click for full screen",
     current: "Current", audience: "Audience", next: "Next", notes: "Notes", time: "Time", overview: "Overview",
@@ -1589,7 +1589,16 @@ DF.startShow = function (snapshotHTML) {
     // the click on "Start" must not reach the source player: it registers its listeners while the
     // scripts start and would take the click as "next"
     if (e && e.stopPropagation) e.stopPropagation();
-    // full screen must be requested inside the click or key press, before anything async
+    // the screen wake lock and full screen must be requested inside the click or key press,
+    // before anything async. Safari refuses the wake lock a few seconds after the last click or
+    // key, and also right after requestFullscreen, which uses the click up: the wake lock comes
+    // first (docs/spikes/S10-wake-lock.md). The presentation takes the request over.
+    var wakeLock = null;
+    if (navigator.wakeLock && document.visibilityState === "visible") {
+      try { wakeLock = navigator.wakeLock.request("screen"); } catch (err) { wakeLock = null; }
+      // a refusal before the presentation takes the request over is no unhandled rejection
+      if (wakeLock) wakeLock.catch(function () { });
+    }
     var wantFs = fsBox.checked;
     if (wantFs) DF.requestFs().catch(function () { });
     startBtn.disabled = true;
@@ -1602,7 +1611,7 @@ DF.startShow = function (snapshotHTML) {
     // the scripts start after the click or key event has ended
     new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
       return DF.startAudience({
-        start: start, fullscreen: wantFs,
+        start: start, fullscreen: wantFs, wakeLock: wakeLock,
         send: function (m) { m.sel = sel; return send(m); },
         onEnd: end
       });
@@ -1672,7 +1681,9 @@ DF.startAudience = function (opts) {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
   function updateFsOverlay() { fsEl.classList.toggle("df-on", fsWanted && needFs()); }
-  fsEl.addEventListener("click", function () { DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
+  // the wake lock before full screen: requestFullscreen uses the click up, and Safari grants the
+  // wake lock only in one (see "wake lock" below)
+  fsEl.addEventListener("click", function () { wake(); DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
   document.addEventListener("fullscreenchange", updateFsOverlay);
   window.addEventListener("resize", updateFsOverlay);
   setInterval(updateFsOverlay, 1000);
@@ -1707,13 +1718,41 @@ DF.startAudience = function (opts) {
   window.addEventListener("online", markOffline);
   setTimeout(markOffline, 500);
 
-  // ---------- wake lock and mouse cursor ----------
+  // ---------- wake lock (decision E19) and mouse cursor ----------
+  // The screen wake lock is held while the presentation runs. The first request is made in the
+  // click or key on "Start" (opts.wakeLock), because Safari grants it only shortly after one; it is
+  // requested again on every key, click and command while none is held (in take(): the key
+  // listeners of 30-keys.js stop every event before a listener added here could see it), when
+  // the page becomes visible, when the browser releases it, and every 10 s after a refusal (which
+  // helps where no gesture is needed). A request that is still open is never joined by a second
+  // one; open for more than 3 s, it counts as "off". wakeState() goes to the presenter view, which
+  // shows a hint unless the lock is held.
+  var lock = { sentinel: null, asked: 0, refused: 0 };
   function wake() {
-    if (!navigator.wakeLock || document.visibilityState !== "visible") return;
-    navigator.wakeLock.request("screen").then(function () { }, function () { });
+    if (!navigator.wakeLock || lock.sentinel || lock.asked || document.visibilityState !== "visible") return;
+    var p;
+    try { p = navigator.wakeLock.request("screen"); } catch (e) { p = Promise.reject(e); }
+    hold(p);
+  }
+  function hold(p) {
+    lock.asked = Date.now();
+    p.then(function (s) {
+      lock.asked = 0; lock.refused = 0; lock.sentinel = s;
+      s.addEventListener("release", function () {
+        if (lock.sentinel !== s) return;
+        lock.sentinel = null;
+        wake();
+      });
+    }, function () { lock.asked = 0; lock.refused = Date.now(); });
+  }
+  function wakeState() {
+    if (!navigator.wakeLock) return "none";
+    if (lock.sentinel) return "held";
+    return lock.asked && Date.now() - lock.asked < 3000 ? "pending" : "off";
   }
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") wake(); });
-  wake();
+  setInterval(function () { if (!lock.refused || Date.now() - lock.refused >= 10000) wake(); }, 1000);
+  if (opts.wakeLock) hold(opts.wakeLock); else wake();
   var cursorTimer = 0;
   function showCursor() {
     document.documentElement.classList.remove("df-nocursor");
@@ -1724,7 +1763,7 @@ DF.startAudience = function (opts) {
   showCursor();
 
   // ---------- state ----------
-  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }; }
+  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended, wake: wakeState() }; }
   function report() {
     var m = info();
     m.type = "state"; m.phase = "show";
@@ -1878,6 +1917,9 @@ DF.startAudience = function (opts) {
   // the start slide would be lost.
   var started = false, held = [];
   function take(a, arg) {
+    // a key or click in this window is the gesture Safari needs to grant the wake lock again (the
+    // commands of the presenter view come through here too and give it none)
+    wake();
     if (!started) { held.push([a, arg]); return; }
     return act(a, arg);
   }
@@ -2146,12 +2188,15 @@ DF.startPresenter = function (snapshotHTML) {
   }
   function resetTimer() { timer = { start: phase === "show" ? Date.now() : 0, accum: 0, paused: false }; tickClock(); }
 
-  // ---------- banner: lost connection, start hint ----------
+  // ---------- banner: lost connection, start hint, no wake lock ----------
+  // noWake: the presentation window holds no screen wake lock (refused, released, a request open
+  // for more than 3 s, or no API), so the screen saver can start; the audience sees no hint
   var flash = null, flashUntil = 0;
   function banners() {
     var key = null;
     if (Date.now() - lastBeat > 4000) key = "showLost";
     else if (flash && Date.now() < flashUntil) key = flash;
+    else if (phase === "show" && (remote.wake === "off" || remote.wake === "none")) key = "noWake";
     bannerEl.textContent = key ? DF.t(key) : "";
     bannerEl.setAttribute("data-df-banner", key || "");
     bannerEl.classList.toggle("df-on", !!key);
@@ -2175,7 +2220,7 @@ DF.startPresenter = function (snapshotHTML) {
     if (typeof d.sel === "number") sel = d.sel;
     if (d.state) {
       st = { slide: d.state.slide, step: d.state.step };
-      remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended };
+      remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended, wake: d.wake };
     }
     if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
     if (phase !== "show") remote.auto = { on: false, due: 0 };

@@ -36,7 +36,9 @@ DF.startAudience = function (opts) {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
   function updateFsOverlay() { fsEl.classList.toggle("df-on", fsWanted && needFs()); }
-  fsEl.addEventListener("click", function () { DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
+  // the wake lock before full screen: requestFullscreen uses the click up, and Safari grants the
+  // wake lock only in one (see "wake lock" below)
+  fsEl.addEventListener("click", function () { wake(); DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
   document.addEventListener("fullscreenchange", updateFsOverlay);
   window.addEventListener("resize", updateFsOverlay);
   setInterval(updateFsOverlay, 1000);
@@ -71,13 +73,41 @@ DF.startAudience = function (opts) {
   window.addEventListener("online", markOffline);
   setTimeout(markOffline, 500);
 
-  // ---------- wake lock and mouse cursor ----------
+  // ---------- wake lock (decision E19) and mouse cursor ----------
+  // The screen wake lock is held while the presentation runs. The first request is made in the
+  // click or key on "Start" (opts.wakeLock), because Safari grants it only shortly after one; it is
+  // requested again on every key, click and command while none is held (in take(): the key
+  // listeners of 30-keys.js stop every event before a listener added here could see it), when
+  // the page becomes visible, when the browser releases it, and every 10 s after a refusal (which
+  // helps where no gesture is needed). A request that is still open is never joined by a second
+  // one; open for more than 3 s, it counts as "off". wakeState() goes to the presenter view, which
+  // shows a hint unless the lock is held.
+  var lock = { sentinel: null, asked: 0, refused: 0 };
   function wake() {
-    if (!navigator.wakeLock || document.visibilityState !== "visible") return;
-    navigator.wakeLock.request("screen").then(function () { }, function () { });
+    if (!navigator.wakeLock || lock.sentinel || lock.asked || document.visibilityState !== "visible") return;
+    var p;
+    try { p = navigator.wakeLock.request("screen"); } catch (e) { p = Promise.reject(e); }
+    hold(p);
+  }
+  function hold(p) {
+    lock.asked = Date.now();
+    p.then(function (s) {
+      lock.asked = 0; lock.refused = 0; lock.sentinel = s;
+      s.addEventListener("release", function () {
+        if (lock.sentinel !== s) return;
+        lock.sentinel = null;
+        wake();
+      });
+    }, function () { lock.asked = 0; lock.refused = Date.now(); });
+  }
+  function wakeState() {
+    if (!navigator.wakeLock) return "none";
+    if (lock.sentinel) return "held";
+    return lock.asked && Date.now() - lock.asked < 3000 ? "pending" : "off";
   }
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") wake(); });
-  wake();
+  setInterval(function () { if (!lock.refused || Date.now() - lock.refused >= 10000) wake(); }, 1000);
+  if (opts.wakeLock) hold(opts.wakeLock); else wake();
   var cursorTimer = 0;
   function showCursor() {
     document.documentElement.classList.remove("df-nocursor");
@@ -88,7 +118,7 @@ DF.startAudience = function (opts) {
   showCursor();
 
   // ---------- state ----------
-  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended }; }
+  function info() { return { state: st, blank: blank, auto: { on: auto.on, due: auto.due, waiting: auto.waiting }, ended: !!st.ended, wake: wakeState() }; }
   function report() {
     var m = info();
     m.type = "state"; m.phase = "show";
@@ -242,6 +272,9 @@ DF.startAudience = function (opts) {
   // the start slide would be lost.
   var started = false, held = [];
   function take(a, arg) {
+    // a key or click in this window is the gesture Safari needs to grant the wake lock again (the
+    // commands of the presenter view come through here too and give it none)
+    wake();
     if (!started) { held.push([a, arg]); return; }
     return act(a, arg);
   }
