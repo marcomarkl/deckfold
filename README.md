@@ -54,7 +54,7 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `-o file.html` | output file |
 | `--force` | overwrite an existing output |
 | `--config file.json` | defaults from a configuration file (example: `deckfold --print-config`) |
-| `--presenter-elements current,audience,next,notes,time,overview` | visible parts of the presenter view |
+| `--presenter-elements audience,next,notes` | panes of the presenter view that are shown; the names of earlier versions are still read |
 | `--notes-font-size 22` | notes font size in px |
 | `--target-minutes 30` | target duration of the talk (0 = none) |
 | `--auto` | start in auto mode |
@@ -100,7 +100,7 @@ Large media files that need no conversion are embedded unchanged. Chrome opens a
 
 Open the file in a browser. The window it opens in is the presentation. It shows a start screen first: the title, a large preview of the chosen slide as it looks after all its steps, a strip of all slides (a click or the arrows beside it choose the slide to start from), the settings with the "Start" button next to them, and a last row with a button for the keys, "Search" and the number of slides. The settings are:
 
-- **Presenter view:** opens a second window with previews of the current and the next slide (each as it looks after all its steps), notes, a clock, the elapsed and the remaining time and a strip of all slides. Below the current slide, the audience pane shows what the audience sees during the show: the slide at its current step, a black or white screen, the end slide. Drag the window to the screen where you want to see it.
+- **Presenter view:** opens a second window. On the left, large, "On screen" shows what the audience sees: the slide at its current step, a black or white screen, the end slide; before the start, the slide the show starts on. On the right, "Next click" shows what the next click brings, the next step of the slide or the next slide, and below it the notes. The window also has a clock, the elapsed and the remaining time and a strip of all slides. Drag the window to the screen where you want to see it.
 - **Full screen** for the presentation, or a window.
 - **Auto mode** with its interval and whether it loops.
 
@@ -112,7 +112,7 @@ In the presentation, a click on the slide moves on like the keys for next; links
 
 deckfold does not place windows itself and does not check where they are. Put each window where it belongs, for example the presentation on the projector and the presenter view on the laptop; full screen can always be chosen. The presenter view goes into full screen with F or its "Full screen" button, which then reads "Window" and takes it back.
 
-The presenter view has a status bar at the bottom: hints on the left (for example that the presentation window cannot be reached), and on the right the switches for its panes (current slide, audience, next slide, notes, time, slide strip). Above the status bar runs the strip of all slides: during the show a click on a slide jumps there, and its arrows only scroll the strip, so that a click never moves the audience on by accident; before the start they choose the start slide. A− and A+ change the size of the notes, the target duration sits next to the time (minutes:seconds; "20" becomes 20:00, "1:75" becomes 02:15), and the panes are resized by dragging the dividers between them. In a narrow window the panes stand one below the other and scroll; the bar at the top stays one line and scrolls sideways. The settings are stored in the browser for each presentation. While steps run by themselves (claude.ai decks), the audience pane shows the state the run ends in: deckfold knows that state, not each step on the way.
+The heading of "On screen" has a dot for each step of the slide, filled up to the one the audience sees, and an arrow for the change to the next slide: every mark after the last filled dot is one click. When the next click changes the slide, the arrow and "Next click" are marked. The presenter view has a status bar at the bottom: hints on the left (for example that the presentation window cannot be reached), and on the right the switches for its three panes (on screen, next click, notes); the time and the strip of slides are always shown. Above the status bar runs the strip of all slides: during the show a click on a slide jumps there, and its arrows only scroll the strip, so that a click never moves the audience on by accident; before the start they choose the start slide. A− and A+ change the size of the notes, the target duration sits next to the time (minutes:seconds; "20" becomes 20:00, "1:75" becomes 02:15), and the panes are resized by dragging the dividers between them. In a narrow window the panes stand one below the other and scroll; the bar at the top stays one line and scrolls sideways. The settings are stored in the browser for each presentation. While steps run by themselves (claude.ai decks), "On screen" shows the state the run ends in: deckfold knows that state, not each step on the way, and such a run takes no dot.
 
 Closing the presentation window closes the presenter view too; reloading it does not.
 

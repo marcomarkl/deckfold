@@ -50,6 +50,14 @@ DF.model = {
     while (c && DF.model.same(chain(c), s)) c = rawPrev(c);
     return c ? chain(c) : null;
   },
+  // stops: the states slide i rests in, in order; a click moves from one to the next (auto steps of
+  // claude.ai slides are no stops). The presenter view draws a dot for each (E20).
+  stops: function (i) {
+    var out = [];
+    if (!slidesOf()[i]) return out;
+    for (var s = chain({ slide: i, step: 0 }); s && s.slide === i; s = DF.model.next(s)) out.push(s);
+    return out;
+  },
   same: function (a, b) { return a && b && a.slide === b.slide && a.step === b.step; }
 };
 

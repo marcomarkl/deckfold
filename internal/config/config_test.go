@@ -53,6 +53,34 @@ func TestLayoutAndOldScreens(t *testing.T) {
 	}
 }
 
+// Element lists of v0.9.1 and before (E20): a former default becomes today's default, "current"
+// becomes "audience", "time" and "overview" are dropped, and the share of the audience pane is taken
+// and dropped; an unknown name still fails.
+func TestOldElements(t *testing.T) {
+	for in, want := range map[string][]string{
+		`["current","audience","next","notes","time","overview"]`: Elements,
+		`["current","next","notes","time","overview"]`:            Elements,
+		`["current","notes","time"]`:                              {"audience", "notes"},
+		`["audience","current","overview"]`:                       {"audience"},
+		`["next"]`:                                                {"next"},
+		`[]`:                                                      {},
+	} {
+		c, err := Merge([]byte(`{"presenter":{"elements":`+in+`,"layout":{"main":0.7,"audience":0.4}}}`), Default())
+		if err != nil {
+			t.Fatalf("%s: %v", in, err)
+		}
+		if !sameList(c.Presenter.Elements, want) {
+			t.Errorf("%s: elements %q, want %q", in, c.Presenter.Elements, want)
+		}
+		if c.Presenter.Layout != (Layout{Main: 0.7, Side: 0.45}) {
+			t.Errorf("%s: layout %+v", in, c.Presenter.Layout)
+		}
+	}
+	if _, err := Merge([]byte(`{"presenter":{"elements":["current","slides"]}}`), Default()); err == nil {
+		t.Error("an unknown element passed")
+	}
+}
+
 // targetMinutes of older configuration files becomes targetSeconds; targetSeconds wins when both are given.
 func TestTargetMinutesBecomeSeconds(t *testing.T) {
 	c, err := Merge([]byte(`{"presenter":{"targetMinutes":20}}`), Default())

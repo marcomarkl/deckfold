@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"deckfold/internal/htmlscan"
+	"deckfold/internal/inject"
 )
 
 func runCLI(t *testing.T, args ...string) (int, string, string) {
@@ -343,24 +344,53 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 	if !reflect.DeepEqual(c.Keys["prev"], []string{"ArrowLeft", "Enter"}) {
 		t.Errorf("prev %q, want the file's own list", c.Keys["prev"])
 	}
-	// the element list of v0.3 gets the audience pane; a list the file chose itself stays. The
-	// layout of v0.3 (main and side only) keeps its shares and gets the default for the audience.
-	old = config.Default()
-	old.Presenter.Elements = []string{"current", "next", "notes", "time", "overview"}
-	old.Presenter.Layout = config.Layout{Main: 0.7, Side: 0.3}
-	c = mergeKnown(config.Default(), old)
-	if !reflect.DeepEqual(c.Presenter.Elements, config.Default().Presenter.Elements) {
-		t.Errorf("elements %q, want the current default", c.Presenter.Elements)
+	// the default element lists of v0.3 and of v0.4 to v0.9.1 give way to today's (E20); a list
+	// the file chose itself keeps its meaning: "current" becomes "audience", time and overview are
+	// always shown. The layout keeps its shares; a missing one gets its default.
+	for _, els := range [][]string{{"current", "next", "notes", "time", "overview"}, {"current", "audience", "next", "notes", "time", "overview"}} {
+		old = config.Default()
+		old.Presenter.Elements = els
+		old.Presenter.Layout = config.Layout{Main: 0.7}
+		c = mergeKnown(config.Default(), old)
+		if !reflect.DeepEqual(c.Presenter.Elements, config.Default().Presenter.Elements) {
+			t.Errorf("elements %q, want the current default", c.Presenter.Elements)
+		}
+		if want := (config.Layout{Main: 0.7, Side: config.Default().Presenter.Layout.Side}); c.Presenter.Layout != want {
+			t.Errorf("layout %+v, want %+v", c.Presenter.Layout, want)
+		}
 	}
-	if want := (config.Layout{Main: 0.7, Side: 0.3, Audience: config.Default().Presenter.Layout.Audience}); c.Presenter.Layout != want {
-		t.Errorf("layout %+v, want %+v", c.Presenter.Layout, want)
-	}
-	old.Presenter.Elements = []string{"current", "notes"}
+	old.Presenter.Elements = []string{"current", "notes", "time"}
 	c = mergeKnown(config.Default(), old)
-	if !reflect.DeepEqual(c.Presenter.Elements, []string{"current", "notes"}) {
-		t.Errorf("elements %q, want the file's own list", c.Presenter.Elements)
+	if !reflect.DeepEqual(c.Presenter.Elements, []string{"audience", "notes"}) {
+		t.Errorf("elements %q, want the file's own list in today's names", c.Presenter.Elements)
 	}
 	if err := c.Validate(); err != nil {
 		t.Error(err)
+	}
+}
+
+// --presenter-elements takes the names of v0.9.1 and before (E20): "current" becomes "audience",
+// time and overview are always shown; an unknown name still fails.
+func TestPresenterElementsFlag(t *testing.T) {
+	dir := t.TempDir()
+	html := filepath.Join(dir, "plain.html")
+	put(t, html, `<!doctype html><html><head><meta charset="utf-8"><title>P</title></head><body></body></html>`)
+	out := filepath.Join(dir, "out.html")
+	if c, _, e := runCLI(t, html, "--generic", "-o", out, "--presenter-elements", "current,time,notes,overview"); c != 0 {
+		t.Fatalf("exit %d: %s", c, e)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := inject.ReadDefaults(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"audience", "notes"}; !reflect.DeepEqual(d.Defaults.Presenter.Elements, want) {
+		t.Errorf("elements %q, want %q", d.Defaults.Presenter.Elements, want)
+	}
+	if c, _, e := runCLI(t, html, "--generic", "-o", out, "--force", "--presenter-elements", "current,slides"); c == 0 || !strings.Contains(e, "slides") {
+		t.Errorf("an unknown element passed: exit %d, %s", c, e)
 	}
 }
