@@ -182,9 +182,9 @@ test('PowerPoint animations: a fade is in progress halfway through', async ({ pa
   expect(frames.at(-1).slice(1), 'the fade ends visible').toEqual(['visible', 1]);
 });
 
-// E20: "On screen" shows the step the audience sees (before the start the start slide at its first
+// E20: "Live" shows the step the audience sees (before the start the start slide at its first
 // step), the right pane the state of the next click; the start screen still shows the whole slide.
-test('PowerPoint presenter view: "On screen" shows the step of the audience, the right pane the next click', async ({ page, context }) => {
+test('PowerPoint presenter view: "Live" shows the step of the audience, "Preview" the next click', async ({ page, context }) => {
   await startScreen(page, 'pptx-animations.html');
   const pres = await openPresenter(page, context);
   const ends = animSpec.slice(0, 2).map((sp) => sp.steps.length - 1);
@@ -639,7 +639,7 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
     await expect.poll(() => counter(pres)).toContain(`${k + 1} / ${n}`);
   };
   // For the failure message of the step with the preview at the end: the states the presenter
-  // view was told and the slides its preview "On screen" went to, in order, with times.
+  // view was told and the slides its preview "Live" went to, in order, with times.
   await pres.waitForFunction(() => {
     const f = document.querySelector('.df-audience iframe[data-df-preview]');
     return f && f.style.visibility !== 'hidden' && f.contentWindow.__dfPptx;

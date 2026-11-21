@@ -326,23 +326,38 @@ DF.finder = function (opts) {
   }
   input.addEventListener("input", render);
   return {
-    button: DF.el("button", { type: "button", "data-df-find": "", text: DF.t("search"), onclick: ov.open }),
+    button: DF.iconButton("search", DF.t("search"), { "data-df-find": "", onclick: ov.open }),
     open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };
 
-// The keyboard icon of the key help button: its case, two rows of keys and the space bar. It is
-// drawn here so that it looks the same on every machine (a character such as U+2328 would depend
-// on the fonts installed) and takes the text colour.
-function keyboardIcon() {
+// DF.icon: the icons of the buttons that show no text (key help, search, full screen, end show).
+// They are drawn here so that they look the same on every machine (a character such as U+2328
+// would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
+// keys and the space bar; search: a magnifier; fsEnter and fsExit: four corners pointing out and
+// in; power: the on/off sign.
+var ICONS = {
+  keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
+    ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
+  search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
+  fsEnter: [["path", { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" }]],
+  fsExit: [["path", { d: "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" }]],
+  power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]]
+};
+DF.icon = function (name) {
   var ns = "http://www.w3.org/2000/svg";
   var make = function (tag, attrs) { var e = document.createElementNS(ns, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; };
   var svg = make("svg", { viewBox: "0 0 24 24", width: "20", height: "20", fill: "none", stroke: "currentColor", "stroke-width": "1.6",
     "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", focusable: "false" });
-  svg.appendChild(make("rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }));
-  svg.appendChild(make("path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }));
+  (ICONS[name] || []).forEach(function (p) { svg.appendChild(make(p[0], p[1])); });
   return svg;
-}
+};
+// DF.iconButton: a button with an icon only; its name is its tooltip and its accessible name
+DF.iconButton = function (name, label, attrs) {
+  var a = { type: "button", class: "df-icon-btn", title: label, "aria-label": label };
+  for (var k in attrs || {}) a[k] = k === "class" ? "df-icon-btn " + attrs[k] : attrs[k];
+  return DF.el("button", a, [DF.icon(name)]);
+};
 
 // DF.helpOverlay: the key help of the start screen behind a button with an icon: an overlay with
 // the groups of DF.keyHelp and, below them, the version of deckfold that wrote the file. It has no
@@ -362,7 +377,7 @@ DF.helpOverlay = function (groups) {
     DF.keyHelp(groups),
     DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })]));
   return {
-    button: DF.el("button", { type: "button", class: "df-icon-btn", "data-df-help": "", title: name, "aria-label": name, onclick: ov.open }, [keyboardIcon()]),
+    button: DF.iconButton("keyboard", name, { "data-df-help": "", onclick: ov.open }),
     open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };

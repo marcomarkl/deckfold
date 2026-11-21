@@ -55,7 +55,7 @@ test('presenter view: sync, previews, notes, overview', async ({ page, context }
   const s3 = await expected(pres, ['next', 'next', 'next']);
   await expect.poll(() => audState(page)).toEqual(s3);
   await expect.poll(() => counter(pres)).toContain(`${s3.slide + 1} / ${n}`);
-  // previews: slide shown by the player in "On screen" (where the show is) and in the next click
+  // previews: slide shown by the player in "Live" (where the show is) and in the next click
   const nx = await expected(pres, ['next', 'next', 'next', 'next']);
   const visible = () => pres.evaluate(() => [...document.querySelectorAll('.df-audience iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) =>
     [...f.contentDocument.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'))));
