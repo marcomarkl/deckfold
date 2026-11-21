@@ -43,7 +43,7 @@ DF.token = (function () {
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    slides: "Folien", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
+    slides: "Folien", oneSlide: "Folie", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
     fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zurück", following: "Weiter",
@@ -51,11 +51,11 @@ var TEXT = {
     startInShow: "Gestartet wird im Präsentationsfenster: Klick dort auf „Start“.", showLost: "Das Präsentationsfenster ist nicht erreichbar.", noWake: "Bildschirmschoner nicht blockiert",
     loading: "Wird geladen …",
     clickFs: "Klicken für Vollbild",
-    onScreen: "Im Bild", startSlide: "Startfolie", nextClick: "Nächster Klick", nextStep: "Nächster Schritt", nextSlide: "Nächste Folie", notes: "Notizen",
+    live: "Live", upNext: "Vorschau", notes: "Notizen",
     end: "Ende", endShow: "Beenden", noNotes: "Keine Notizen", elapsed: "Verstrichen", remaining: "Rest",
     clock: "Uhr", pause: "Pause", resume: "Weiter", autoOn: "Auto an", autoOff: "Auto aus", reset: "Zurücksetzen",
     target: "Ziel", smaller: "Notizen kleiner", larger: "Notizen größer",
-    endOfShow: "Ende der Präsentation", step: "Schritt", stepOf: "Schritt {x} von {y}",
+    endOfShow: "Ende der Präsentation", stepOf: "Schritt {x} von {y}",
     offline: "Live-Inhalt – ohne Netz nicht verfügbar", media: "Medien laufen",
     keysStart: "Startbildschirm", keysSlides: "Folien", keysDisplay: "Anzeige", keysRun: "Ablauf",
     chooseSlide: "Folie wählen", firstSlide: "Erste Folie", lastSlide: "Letzte Folie", gotoSlide: "Folie n",
@@ -64,7 +64,7 @@ var TEXT = {
     keySpace: "Leertaste", keyPgDn: "Bild ↓", keyPgUp: "Bild ↑", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "Rückschritt", keyDigits: "1 2 3 …",
   },
   en: {
-    slides: "slides", generic: "Unknown format: no presenter view, overview or auto mode.",
+    slides: "slides", oneSlide: "slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
     fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
@@ -72,11 +72,11 @@ var TEXT = {
     startInShow: "The presentation starts in the presentation window: click “Start” there.", showLost: "The presentation window is not reachable.", noWake: "Screen saver not blocked",
     loading: "Loading …",
     clickFs: "Click for full screen",
-    onScreen: "On screen", startSlide: "Start slide", nextClick: "Next click", nextStep: "Next step", nextSlide: "Next slide", notes: "Notes",
+    live: "Live", upNext: "Preview", notes: "Notes",
     end: "End", endShow: "End show", noNotes: "No notes", elapsed: "Elapsed", remaining: "Left",
     clock: "Clock", pause: "Pause", resume: "Resume", autoOn: "Auto on", autoOff: "Auto off", reset: "Reset",
     target: "Target", smaller: "Smaller notes", larger: "Larger notes",
-    endOfShow: "End of presentation", step: "Step", stepOf: "Step {x} of {y}",
+    endOfShow: "End of presentation", stepOf: "Step {x} of {y}",
     offline: "Live content – not available offline", media: "media playing",
     keysStart: "Start screen", keysSlides: "Slides", keysDisplay: "Display", keysRun: "Show",
     chooseSlide: "Choose slide", firstSlide: "First slide", lastSlide: "Last slide", gotoSlide: "Slide n",
@@ -87,6 +87,8 @@ var TEXT = {
 };
 function t(k) { return (TEXT[LANG] && TEXT[LANG][k]) || TEXT.en[k] || k; }
 DF.t = t;
+// slideCount: "1 slide", "9 slides"
+DF.slideCount = function (n) { return n + " " + t(n === 1 ? "oneSlide" : "slides"); };
 
 function el(tag, attrs, children) {
   var e = document.createElement(tag);

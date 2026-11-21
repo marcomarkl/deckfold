@@ -1,7 +1,8 @@
-// Presenter view (role "presenter", E5 and E20): a window the show window opens. What the audience
-// sees, large, and what the next click shows, as muted srcdoc previews, with a dot for each state of
-// the slide; notes, time, slide overview; its settings are changed here while it runs (panes shown,
-// notes size, target duration, size of the panes). It sends commands to the
+// Presenter view (role "presenter", E5 and E20): a window the show window opens. "Live", large,
+// what the audience sees, and "Preview", what the next click shows, as muted srcdoc previews, with
+// a dot for each state of the slide; notes, time, slide overview, the number of slides; its
+// settings are changed here while it runs (panes shown, notes size, target duration, size of the
+// panes and of the overview). It sends commands to the
 // show window (window.opener), which owns the state, and gets the state and heartbeat back.
 
 DF.startPresenter = function (snapshotHTML) {
@@ -19,7 +20,6 @@ DF.startPresenter = function (snapshotHTML) {
   // ---------- layout ----------
   var ui = DF.el("div", { "data-df-ui": "", class: "df-presenter" });
   var bannerEl = DF.el("div", { class: "df-banner", "data-df-banner": "" });
-  var counterEl = DF.el("span", { class: "df-counter" });
   var clockEl = DF.el("span", { class: "df-clock", title: DF.t("clock") });
   var elapsedEl = DF.el("span", { class: "df-elapsed", title: DF.t("elapsed") });
   var remainEl = DF.el("span", { class: "df-remain", title: DF.t("remaining") });
@@ -44,9 +44,15 @@ DF.startPresenter = function (snapshotHTML) {
   targetIn.addEventListener("change", takeTarget);
   targetIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); takeTarget(); targetIn.blur(); } });
   showTarget();
-  // the full-screen button names what a click does: "Full screen" in a window, "Window" in full screen
-  var fsBtn = DF.el("button", { type: "button", "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
-  function fsLabel() { fsBtn.textContent = DF.t(document.fullscreenElement || document.webkitFullscreenElement ? "window" : "fullscreen"); }
+  // the full-screen button shows what a click does: corners pointing out and "Full screen" in a
+  // window, corners pointing in and "Window" in full screen
+  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
+  function fsLabel() {
+    var full = !!(document.fullscreenElement || document.webkitFullscreenElement), label = DF.t(full ? "window" : "fullscreen");
+    fsBtn.replaceChild(DF.icon(full ? "fsExit" : "fsEnter"), fsBtn.firstChild);
+    fsBtn.title = label;
+    fsBtn.setAttribute("aria-label", label);
+  }
   document.addEventListener("fullscreenchange", fsLabel);
   document.addEventListener("webkitfullscreenchange", fsLabel);
   fsLabel();
@@ -55,37 +61,41 @@ DF.startPresenter = function (snapshotHTML) {
   var finder = DF.finder({ notes: true, pick: function (i) { command("goto", i); }, current: function () { return shown().slide; } });
   var autoBtn = DF.el("button", { type: "button", "data-df-autobtn": "", onclick: function () { command("auto"); } });
   var autoInfo = DF.el("span", { class: "df-autoinfo" });
-  var endBtn = DF.el("button", { type: "button", class: "df-danger", "data-df-end": "", text: DF.t("endShow"), onclick: function () { command("end"); } });
+  var endBtn = DF.iconButton("power", DF.t("endShow"), { class: "df-danger", "data-df-end": "", onclick: function () { command("end"); } });
   // the panes that can be hidden, with their labels; time and overview are always shown (E20)
-  var toggles = DF.el("span", { class: "df-toggles" }, [["audience", "onScreen"], ["next", "nextClick"], ["notes", "notes"]].map(function (t) {
+  var toggles = DF.el("span", { class: "df-toggles" }, [["audience", "live"], ["next", "upNext"], ["notes", "notes"]].map(function (t) {
     return DF.el("button", { type: "button", "data-df-el": t[0], text: DF.t(t[1]), onclick: function () { toggleElement(t[0]); } });
   }));
+  // A- and A+ change the size of the notes; they are off while the notes are not shown
+  var fontDown = DF.el("button", { type: "button", "data-df-font": "-", text: "A−", title: DF.t("smaller"), onclick: function () { fontBy(-2); } });
+  var fontUp = DF.el("button", { type: "button", "data-df-font": "+", text: "A+", title: DF.t("larger"), onclick: function () { fontBy(2); } });
   var bar = DF.el("header", { class: "df-bar" }, [
-    DF.el("strong", { class: "df-title", text: meta.title || document.title || "" }), counterEl,
+    DF.el("strong", { class: "df-title", text: meta.title || document.title || "" }),
     DF.el("span", { class: "df-time-group" }, [clockEl, elapsedEl, remainEl, pauseBtn,
       DF.el("button", { type: "button", text: "↺", title: DF.t("reset"), onclick: resetTimer }),
       DF.el("label", { class: "df-target" }, [DF.t("target") + " ", targetIn])]),
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
-    DF.el("button", { type: "button", "data-df-font": "-", text: "A−", title: DF.t("smaller"), onclick: function () { fontBy(-2); } }),
-    DF.el("button", { type: "button", "data-df-font": "+", text: "A+", title: DF.t("larger"), onclick: function () { fontBy(2); } }),
+    fontDown, fontUp,
     finder ? finder.button : null,
     fsBtn,
     endBtn
   ]);
-  // audience ("On screen"): what the audience sees right now: the slide at its step, black, white,
-  // the end slide; before the start the slide the show will start on. Its heading has a dot for
-  // each state of the slide and an arrow for the change to the next slide.
-  var paneTitle = {};
-  var aud = pane("audience", DF.t("onScreen"));
+  // audience ("Live"): what the audience sees right now: the slide at its step, black, white, the
+  // end slide; before the start the slide the show will start on. Its heading has a dot for each
+  // state of the slide and an arrow for the change to the next slide.
+  var aud = pane("audience", DF.t("live"));
   aud.querySelector(".df-stage").appendChild(DF.el("div", { class: "df-audcover" }, [DF.el("span", { text: DF.t("endOfShow") })]));
   var stepsEl = DF.el("span", { class: "df-steps", "data-df-steps": "", role: "img" });
   aud.querySelector("h3").appendChild(stepsEl);
-  // next: the state the next click shows, the next step of this slide or the next slide
-  var nxt = pane("next", DF.t("nextStep"));
+  // next ("Preview"): the state the next click shows, the next step of this slide or the next
+  // slide; the arrow after the dots tells which of the two
+  var nxt = pane("next", DF.t("upNext"));
   var notesEl = DF.el("div", { class: "df-notes-text" });
   var notes = DF.el("section", { class: "df-pane df-notes", "data-k": "notes" }, [DF.el("h3", { text: DF.t("notes") }), notesEl]);
   var splitV = DF.el("div", { class: "df-split df-split-v", "data-df-split": "main" });
   var splitH = DF.el("div", { class: "df-split df-split-h", "data-df-split": "side" });
+  // the divider above the overview: dragging it up makes the tiles larger
+  var splitS = DF.el("div", { class: "df-split df-split-h", "data-df-split": "strip" });
   var left = DF.el("div", { class: "df-left" }, [aud]);
   var side = DF.el("div", { class: "df-side" }, [nxt, splitH, notes]);
   var grid = DF.el("main", { class: "df-grid" }, [left, splitV, side]);
@@ -97,19 +107,22 @@ DF.startPresenter = function (snapshotHTML) {
     step: function (d) { if (phase === "show") strip.scroll(d); else command(d < 0 ? "prev" : "next"); }
   });
   var overviewEl = DF.el("div", { class: "df-overview" }, [strip.el]);
-  var status = DF.el("footer", { class: "df-status" }, [bannerEl, toggles]);
-  ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(overviewEl); ui.appendChild(status);
+  // the status bar: the number of slides at the left, the hints, the switches at the right
+  var status = DF.el("footer", { class: "df-status" }, [
+    DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: DF.slideCount(slides.length) }), bannerEl, toggles]);
+  ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(splitS); ui.appendChild(overviewEl); ui.appendChild(status);
   ui.style.setProperty("--df-ratio", (meta.width || 1920) + " / " + (meta.height || 1080));
   document.body.appendChild(ui);
   var frames = { audience: DF.previewFrame(aud.querySelector(".df-stage"), snapshotHTML),
     next: DF.previewFrame(nxt.querySelector(".df-stage"), snapshotHTML) };
   // narrow window: the panes stand one below the other and the middle scrolls (class df-narrow)
   function narrow() { ui.classList.toggle("df-narrow", ui.clientWidth < 760); }
-  if ("ResizeObserver" in window) new ResizeObserver(narrow).observe(ui); else window.addEventListener("resize", narrow);
+  // a lower window leaves less room for the overview: its tiles shrink with it (tileWidth)
+  function resized() { narrow(); applyLayout(); }
+  if ("ResizeObserver" in window) new ResizeObserver(resized).observe(ui); else window.addEventListener("resize", resized);
   narrow();
   function pane(k, title) {
-    paneTitle[k] = DF.el("span", { class: "df-pane-title", text: title });
-    return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", {}, [paneTitle[k]]),
+    return DF.el("section", { class: "df-pane df-" + k, "data-k": k }, [DF.el("h3", {}, [DF.el("span", { class: "df-pane-title", text: title })]),
       DF.el("div", { class: "df-stage" }), DF.el("div", { class: "df-endlabel", text: DF.t("end") })]);
   }
 
@@ -122,24 +135,44 @@ DF.startPresenter = function (snapshotHTML) {
     DF.saveSettings(cfg); render();
   }
   function fontBy(d) {
+    if (fontUp.disabled) return;
     cfg.presenter.notesFontSize = Math.max(8, Math.min(96, cfg.presenter.notesFontSize + d));
     DF.saveSettings(cfg); render();
   }
-  // panes: the dividers between the left column and the side column and between the next click and
-  // the notes can be dragged; the shares are stored in presenter.layout
+  // panes: the dividers between the left column and the side column, between the preview and the
+  // notes, and above the overview can be dragged; the shares and the width of a tile of the
+  // overview are stored in presenter.layout
   function layout() {
     var l = cfg.presenter.layout || {};
-    return { main: l.main || 0.6, side: l.side || 0.45 };
+    return { main: l.main || 0.6, side: l.side || 0.45, strip: l.strip || 132 };
   }
+  // tileWidth: the width of a tile of the overview, from 96 to 480 px (config.Layout.Strip) and
+  // small enough that the overview takes at most 45 % of the window height
+  function tileWidth(w) {
+    var r = (meta.height || 1080) / (meta.width || 1920);
+    var room = 0.45 * ui.clientHeight - (overviewEl.offsetHeight - (tileBox() || 0));
+    var most = Math.max(96, Math.min(480, Math.floor(room / r)));
+    return Math.max(96, Math.min(most, Math.round(w)));
+  }
+  // the height of the picture of a tile, 0 when no tile is laid out
+  function tileBox() { var b = strip.band.querySelector(".df-thumb"); return b ? b.offsetHeight : 0; }
   function drag(el, key) {
     el.addEventListener("pointerdown", function (e) {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       var move = function (ev) {
-        var r = (key === "main" ? grid : side).getBoundingClientRect();
-        var f = key === "main" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
         var l = layout();
-        l[key] = Math.max(0.2, Math.min(0.8, f));
+        if (key === "strip") {
+          // the bottom of the overview stays where it is; the tile grows with the distance of the
+          // pointer from it
+          var o = overviewEl.getBoundingClientRect(), r0 = (meta.height || 1080) / (meta.width || 1920);
+          var extra = overviewEl.offsetHeight - tileBox();
+          l.strip = tileWidth((o.bottom - ev.clientY - extra) / r0);
+        } else {
+          var r = (key === "main" ? grid : side).getBoundingClientRect();
+          var f = key === "main" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+          l[key] = Math.max(0.2, Math.min(0.8, f));
+        }
         cfg.presenter.layout = l;
         applyLayout();
       };
@@ -150,7 +183,7 @@ DF.startPresenter = function (snapshotHTML) {
       el.addEventListener("pointermove", move); el.addEventListener("pointerup", up);
     });
   }
-  drag(splitV, "main"); drag(splitH, "side");
+  drag(splitV, "main"); drag(splitH, "side"); drag(splitS, "strip");
   // the shares go into CSS variables; the class df-narrow lays the panes out one below the other
   // and ignores them (an inline grid template would override the narrow layout)
   function applyLayout() {
@@ -164,6 +197,11 @@ DF.startPresenter = function (snapshotHTML) {
     splitH.classList.toggle("df-hidden", !(showNext && showNotes));
     grid.style.setProperty("--df-cols", showLeft && showSide ? "minmax(0," + l.main + "fr) 8px minmax(0," + (1 - l.main) + "fr)" : "minmax(0,1fr)");
     nxt.style.setProperty("--df-flex", showNext && showNotes ? "0 0 calc(" + (l.side * 100) + "% - 4px)" : "1 1 auto");
+    var tw = tileWidth(l.strip);
+    if (overviewEl.style.getPropertyValue("--df-tile") !== tw + "px") {
+      overviewEl.style.setProperty("--df-tile", tw + "px");
+      DF.rescaleTiles(strip.band);
+    }
   }
   var hasNotes = slides.some(function (s) { return s.notes; });
 
@@ -178,28 +216,26 @@ DF.startPresenter = function (snapshotHTML) {
       b.classList.toggle("df-active", on); b.setAttribute("aria-pressed", on ? "true" : "false");
     });
     if (!hasNotes) notes.classList.add("df-hidden");
+    fontDown.disabled = fontUp.disabled = !(els.indexOf("notes") >= 0 && hasNotes);
     applyLayout();
     var s = shown(), n = slides.length;
-    // the states the slide rests in; the counter and the dots count the same ones, so that auto
-    // steps of claude.ai slides count as no click
+    // the states the slide rests in, one dot each, so that auto steps of claude.ai slides count as
+    // no click
     var stops = DF.model.stops(s.slide), done = stops.filter(function (p) { return p.step <= s.step; }).length;
-    counterEl.textContent = (s.slide + 1) + " / " + n +
-      (phase === "show" && stops.length > 1 ? "  ·  " + DF.t("step") + " " + done + "/" + stops.length : "");
+    // the slide this window shows, for the tests: they wait for it before they read a preview
+    ui.setAttribute("data-df-at", (s.slide + 1) + " / " + n);
     notesEl.textContent = (slides[s.slide] && slides[s.slide].notes) || DF.t("noNotes");
     notesEl.style.fontSize = cfg.presenter.notesFontSize + "px";
     // the left preview shows what the audience sees (before the start the start slide), the right
     // one the state of the next click (E20)
     var as = audienceView();
     aud.setAttribute("data-df-audience", as);
-    paneTitle.audience.textContent = DF.t(as === "start" ? "startSlide" : "onScreen");
     if (as === "slide") frames.audience.show({ slide: st.slide, step: st.step });
     else if (as === "start") frames.audience.show(s);
     var ended = as === "end";
     var nx = ended ? null : DF.model.next(s);
     var leaves = !ended && (!nx || nx.slide !== s.slide);
     nxt.classList.toggle("df-at-end", !nx);
-    nxt.classList.toggle("df-change", leaves);
-    paneTitle.next.textContent = DF.t(nx && nx.slide === s.slide ? "nextStep" : "nextSlide");
     if (nx) frames.next.show(nx);
     showSteps(ended ? null : stops, done, leaves);
     autoBtn.textContent = remote.auto.on ? DF.t("autoOn") : DF.t("autoOff");
@@ -209,7 +245,7 @@ DF.startPresenter = function (snapshotHTML) {
     strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
     banners();
   }
-  // dots in the heading of "On screen": one for each state the slide rests in, filled up to the one
+  // dots in the heading of "Live": one for each state the slide rests in, filled up to the one
   // shown, then an arrow for the change to the next slide, marked when the next click makes it. Each
   // mark after the last filled dot is one click. From 13 states on, a bar stands for the dots.
   function showSteps(stops, done, leaves) {

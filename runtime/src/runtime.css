@@ -120,9 +120,12 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 [data-df-ui] .df-start-btn { min-width: 132px; padding: 8px 26px; font-size: 18px; font-weight: 650; border-radius: 8px; }
 .df-start-foot { grid-column: 1; display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .df-start .df-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.df-start[data-df-ui] .df-start-foot [data-df-find] { height: 28px; padding: 0 10px; font-size: 13px; }
-.df-start[data-df-ui] .df-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--df-mute); }
-.df-start[data-df-ui] .df-icon-btn:hover { color: var(--df-fg); }
+/* buttons with an icon only (key help, search, full screen, end show) */
+[data-df-ui] .df-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--df-mute); }
+[data-df-ui] .df-icon-btn:hover { color: var(--df-fg); }
+[data-df-ui] .df-icon-btn.df-danger { color: #ffb4b6; }
+[data-df-ui] .df-icon-btn.df-danger:hover { color: #fff; }
+.df-bar .df-icon-btn { width: 32px; height: 30px; }
 .df-keyhelp { flex: 0 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 18px; color: var(--df-mute); font-size: 13px; }
 .df-keygroup[data-df-keygroup="slides"] { grid-column: span 2; }
 .df-keygroup { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -141,8 +144,9 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--df-line);
   flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
 .df-bar > * { flex: 0 0 auto; }
-.df-bar .df-title { flex: 0 1 auto; min-width: 3em; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw; }
-.df-counter { color: var(--df-mute); margin-right: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.df-bar .df-title { flex: 0 1 auto; min-width: 3em; margin-right: auto; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28vw; }
+[data-df-ui] .df-bar button:disabled { opacity: .35; cursor: default; }
+[data-df-ui] .df-bar button:disabled:hover { border-color: var(--df-line); }
 .df-time-group, .df-auto-group { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .df-clock { color: var(--df-mute); }
 .df-elapsed { font-size: 20px; font-weight: 600; }
@@ -165,7 +169,7 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-before .df-auto-group, .df-before [data-df-end] { display: none !important; }
 .df-pane { background: var(--df-panel); border: 1px solid var(--df-line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0; position: relative; }
 .df-pane h3 { display: flex; align-items: center; gap: 10px; min-height: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); font-weight: 600; }
-/* the dots of "On screen" (E20): one for each state of the slide, filled up to the one shown, then
+/* the dots of "Live" (E20): one for each state of the slide, filled up to the one shown, then
    an arrow for the change to the next slide, in the accent colour when the next click makes it;
    drawn with CSS, so that they do not depend on the fonts of the machine */
 .df-steps { display: inline-flex; align-items: center; gap: 5px; }
@@ -176,8 +180,6 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-arrow { flex: 0 0 auto; width: 16px; height: 12px; margin-left: 2px; background: var(--df-mute);
   clip-path: polygon(0 38%, 55% 38%, 55% 0, 100% 50%, 55% 100%, 55% 62%, 0 62%); }
 .df-arrow.df-next-is-slide { background: var(--df-accent); }
-.df-next.df-change { border-color: var(--df-accent); }
-.df-next.df-change h3 { color: var(--df-accent); }
 .df-stage { position: relative; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden; }
 /* the audience pane: the start slide before the start; black, white or the end slide while the
    audience sees one of them */
@@ -192,12 +194,12 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-next { flex: 0 0 45%; }
 
 /* narrow window: the panes one below the other, each preview in the shape of the slide; the middle
-   scrolls; the dividers have no use there */
+   scrolls; the dividers between the panes have no use there, the one above the overview has */
 .df-presenter.df-narrow .df-grid { grid-template-columns: minmax(0, 1fr); align-content: start; overflow-y: auto; }
 .df-presenter.df-narrow .df-left, .df-presenter.df-narrow .df-side { min-height: auto; }
 .df-presenter.df-narrow .df-pane { flex: none !important; }
 .df-presenter.df-narrow .df-stage { flex: none; aspect-ratio: var(--df-ratio, 16 / 9); }
-.df-presenter.df-narrow .df-split { display: none !important; }
+.df-presenter.df-narrow .df-split:not([data-df-split="strip"]) { display: none !important; }
 .df-presenter.df-narrow .df-notes { min-height: 8em; }
 .df-presenter.df-narrow .df-bar .df-title { display: none; }
 .df-endlabel { display: none; position: absolute; inset: 30px 8px 8px; align-items: center; justify-content: center; color: var(--df-mute); background: #000; border-radius: 4px; }
@@ -207,10 +209,13 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-generic { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; color: var(--df-mute); }
 .df-overview { flex: 0 0 auto; padding: 0 12px; border-top: 1px solid var(--df-line); }
 .df-overview .df-strip { padding-top: 8px; }
-[data-df-ui] .df-overview .df-tile { flex: 0 0 132px; width: 132px; min-width: 0; scroll-snap-align: start; }
+/* the width of a tile follows the divider above the overview (--df-tile, presenter.layout.strip) */
+[data-df-ui] .df-overview .df-tile { flex: 0 0 var(--df-tile, 132px); width: var(--df-tile, 132px); min-width: 0; scroll-snap-align: start; }
+.df-presenter > .df-split { margin: 0 12px; }
 .df-status { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-top: 1px solid var(--df-line); min-height: 40px;
   overflow-x: auto; scrollbar-width: thin; }
 .df-status .df-toggles { flex: 0 0 auto; }
+.df-status .df-count { flex: 0 0 auto; color: var(--df-mute); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .df-status .df-banner { flex: 1; min-width: 0; display: block; padding: 0; background: none; border: 0; color: var(--df-mute); font-size: 13px; }
 .df-status .df-banner.df-on { color: #ffe2a8; }
 .df-status .df-toggles { margin-left: auto; }

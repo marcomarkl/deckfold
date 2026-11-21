@@ -73,7 +73,8 @@ export const hasWebGL = (page) => page.evaluate(() => {
 export const NO_WEBGL = 'no WebGL in this browser; the fallback is checked by the transitions test';
 
 export const audState = (show) => show.evaluate(() => window.__deckfold.audience.state());
-export const counter = (page) => page.textContent('.df-counter');
+// the slide the presenter view shows, as "<slide> / <slides>" (data-df-at; the view shows no counter)
+export const counter = (page) => page.getAttribute('.df-presenter', 'data-df-at');
 export const slideCount = (page) => page.evaluate(() => window.__deckfold.slides().length);
 
 // Expected state after a sequence of model operations, computed with the runtime's own model

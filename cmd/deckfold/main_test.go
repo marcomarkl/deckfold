@@ -355,7 +355,8 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 		if !reflect.DeepEqual(c.Presenter.Elements, config.Default().Presenter.Elements) {
 			t.Errorf("elements %q, want the current default", c.Presenter.Elements)
 		}
-		if want := (config.Layout{Main: 0.7, Side: config.Default().Presenter.Layout.Side}); c.Presenter.Layout != want {
+		d := config.Default().Presenter.Layout
+		if want := (config.Layout{Main: 0.7, Side: d.Side, Strip: d.Strip}); c.Presenter.Layout != want {
 			t.Errorf("layout %+v, want %+v", c.Presenter.Layout, want)
 		}
 	}

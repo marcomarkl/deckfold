@@ -23,13 +23,22 @@ type Presenter struct {
 }
 
 // Layout is the size of the presenter view panes, changed by dragging the dividers: Main is the
-// share of the left column (what the audience sees) in the width, Side the share of the next click
-// in the side column. Files of v0.4 to v0.9.1 also have "audience", the share of a pane that is
-// gone since E20; Merge takes it and drops it.
+// share of the left column ("Live", what the audience sees) in the width, Side the share of
+// "Preview" (the next click) in the side column, Strip the width of a tile of the slide overview
+// in CSS pixels (MinStrip to MaxStrip; the runtime also keeps the overview within 45 % of the
+// window height). Files of v0.4 to v0.9.1 also have "audience", the share of a pane that is gone
+// since E20; Merge takes it and drops it.
 type Layout struct {
-	Main float64 `json:"main"`
-	Side float64 `json:"side"`
+	Main  float64 `json:"main"`
+	Side  float64 `json:"side"`
+	Strip int     `json:"strip"`
 }
+
+// The width of a tile of the slide overview in the presenter view, in CSS pixels.
+const (
+	MinStrip = 96
+	MaxStrip = 480
+)
 
 // Auto describes auto mode (E7).
 type Auto struct {
@@ -115,7 +124,7 @@ func (p *Presenter) Upgrade() {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45}},
+		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45, Strip: 132}},
 		Auto:      Auto{Enabled: false, IntervalSeconds: 8, Loop: false},
 		Keys: map[string][]string{
 			"next":       {"ArrowRight", "ArrowDown", "PageDown", " "},
@@ -160,6 +169,7 @@ func Merge(data []byte, base Config) (Config, error) {
 			Layout        *struct {
 				Main     *float64 `json:"main"`
 				Side     *float64 `json:"side"`
+				Strip    *int     `json:"strip"`
 				Audience *float64 `json:"audience"` // v0.4 to v0.9.1; taken and dropped (E20)
 			} `json:"layout"`
 		} `json:"presenter"`
@@ -201,6 +211,9 @@ func Merge(data []byte, base Config) (Config, error) {
 			}
 			if l.Side != nil {
 				c.Presenter.Layout.Side = *l.Side
+			}
+			if l.Strip != nil {
+				c.Presenter.Layout.Strip = *l.Strip
 			}
 		}
 	}
@@ -258,6 +271,9 @@ func (c Config) Validate() error {
 		if v < 0.2 || v > 0.8 {
 			return fmt.Errorf("presenter.layout: %g is not between 0.2 and 0.8", v)
 		}
+	}
+	if s := c.Presenter.Layout.Strip; s < MinStrip || s > MaxStrip {
+		return fmt.Errorf("presenter.layout.strip: %d is not between %d and %d", s, MinStrip, MaxStrip)
 	}
 	if c.Auto.IntervalSeconds < 1 || c.Auto.IntervalSeconds > 3600 {
 		return fmt.Errorf("auto.intervalSeconds: %g is not between 1 and 3600", c.Auto.IntervalSeconds)

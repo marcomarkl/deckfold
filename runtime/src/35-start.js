@@ -26,7 +26,8 @@ DF.startShow = function (snapshotHTML) {
   // the write can overtake it: on the Windows runner the start screen lost the slide in 4 of 150
   // repeats although the page had read it back before the reload. The address goes with the
   // navigation itself. It is read here, before anything else, and dropped before a player runs.
-  var fromHash = /^#df-last=(\d+)$/.exec(location.hash || "");
+  // ";p" after the number says that the presenter view was open (see presenterOpen below).
+  var fromHash = /^#df-last=(\d+)(;p)?$/.exec(location.hash || "");
   // during a show the slide shown last is kept in the state of the history entry instead, because
   // the address belongs to the source player then
   var fromState = null;
@@ -38,6 +39,11 @@ DF.startShow = function (snapshotHTML) {
   var last = fromHash ? { slide: +fromHash[1], step: 0 } : fromState != null ? { slide: fromState, step: 0 } : DF.ss.get(DF.deckKey("df-last"));
   var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
+  // presenterOpen: whether the presenter view was open before this window loaded (the end of a
+  // show reloads it). The switch shows it from the first frame on; the window itself is known only
+  // once its first message arrives, which it sends once a second. The address counts first, as for
+  // the start slide, then sessionStorage.
+  var presenterOpen = fromHash ? !!fromHash[2] : !!DF.ss.get(DF.deckKey("df-presenter"));
   document.documentElement.classList.add("df-start-mode");
 
   // ---------- start screen ----------
@@ -55,7 +61,7 @@ DF.startShow = function (snapshotHTML) {
   fsBox = fs.box;
   var opts = [];
   if (!generic) {
-    var pre = check("data-df-presenter", DF.t("presenterView"), false, function () { if (pre.box.checked) openR(); else closeR(); });
+    var pre = check("data-df-presenter", DF.t("presenterView"), presenterOpen, function () { if (pre.box.checked) openR(); else closeR(); });
     preBox = pre.box;
     opts.push(DF.el("div", { class: "df-opt" }, [pre.label]));
   }
@@ -107,7 +113,7 @@ DF.startShow = function (snapshotHTML) {
       // the left: the key help, the search, the number of slides. Nothing stands below "Start".
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
         DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
-          generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: slides.length + " " + DF.t("slides") })])
+          generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: DF.slideCount(slides.length) })])
       ])
     ])
   ]);
@@ -161,22 +167,48 @@ DF.startShow = function (snapshotHTML) {
   }
 
   // ---------- presenter view window ----------
+  // waiting: the switch is on because the presenter view was open before this window loaded, and
+  // its first message has not come yet. Without one within 3 s (it sends once a second) the window
+  // was closed meanwhile and the switch goes off. declined: the switch was turned off while
+  // waiting; the window, once it reports, is closed instead of taken.
+  var waiting = !generic && presenterOpen, declined = false;
+  if (waiting) setTimeout(function () {
+    if (!waiting) return;
+    waiting = false;
+    preBox.checked = false;
+    remember(false);
+  }, 3000);
+  // remember: whether the presenter view is open, for the next load of this window
+  function remember(on) {
+    if (on) DF.ss.set(DF.deckKey("df-presenter"), true); else DF.ss.del(DF.deckKey("df-presenter"));
+    if (phase === "start") keepInAddress(sel);
+  }
   function openR() {
     if (rWin && !rWin.closed) return;
+    waiting = declined = false;
     rWin = window.open(location.href.split("#")[0], "df-presenter:" + DF.token, "popup,width=1200,height=760");
-    if (!rWin) { preBox.checked = false; hint("popupBlocked"); return; }
+    if (!rWin) { preBox.checked = false; remember(false); hint("popupBlocked"); return; }
+    remember(true);
     hint(null);
   }
   var closedWin = null; // the window the switch closed: its last messages must not bring it back
   function closeR() {
     if (rWin && !rWin.closed) { try { rWin.close(); } catch (e) { } }
+    if (waiting) { waiting = false; declined = true; }
     closedWin = rWin;
     rWin = null;
+    remember(false);
   }
   function onMsg(d, source) {
     if (!rWin && source) {
       if (source === closedWin || source.closed) return;
-      rWin = source; if (preBox) preBox.checked = true; // after a reload of this window
+      // the presenter view of the time before a reload of this window: switched off meanwhile, it
+      // is closed (this window opened it, so it may); otherwise it is taken
+      if (declined) { declined = false; closedWin = source; try { source.close(); } catch (e) { } return; }
+      waiting = false;
+      rWin = source;
+      if (preBox) preBox.checked = true;
+      remember(true);
     }
     if (d.type === "hello") { send(status("init")); return; }
     if (d.type === "hb") return;
@@ -210,7 +242,7 @@ DF.startShow = function (snapshotHTML) {
   }
   function beat() { if (rWin) send(status("hb")); }
   setInterval(function () {
-    if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; }
+    if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; remember(false); }
     beat();
   }, 1000);
   function hint(k) { hintEl.textContent = k ? DF.t(k) : ""; hintEl.classList.toggle("df-on", !!k); }
@@ -285,11 +317,13 @@ DF.startShow = function (snapshotHTML) {
     phase = "start";
     location.reload();
   }
-  // keepInAddress puts the start slide into the address (see fromHash): on the start screen, where
-  // no source player runs yet (the claude.ai player reads its slide from the address, and begin
-  // drops the hash before it starts), and at the end right before this window reloads itself
+  // keepInAddress puts the start slide into the address (see fromHash), with ";p" while the switch
+  // of the presenter view is on: on the start screen, where no source player runs yet (the
+  // claude.ai player reads its slide from the address, and begin drops the hash before it starts),
+  // and at the end right before this window reloads itself
   function keepInAddress(n) {
     if (generic) return;
-    try { history.replaceState(null, "", location.pathname + location.search + "#df-last=" + n); } catch (e) { }
+    var p = preBox && preBox.checked ? ";p" : "";
+    try { history.replaceState(null, "", location.pathname + location.search + "#df-last=" + n + p); } catch (e) { }
   }
 };

@@ -17,6 +17,8 @@ func TestMergeAndValidate(t *testing.T) {
 		`{"keys":{"jump":["j"]}}`,
 		`{"warnSize":"lots"}`,
 		`{"presenter":{"layout":{"main":0.95}}}`,
+		`{"presenter":{"layout":{"strip":60}}}`,
+		`{"presenter":{"layout":{"strip":600}}}`,
 		`{"unknown":1}`,
 	}
 	for _, b := range bad {
@@ -53,6 +55,21 @@ func TestLayoutAndOldScreens(t *testing.T) {
 	}
 }
 
+// The width of the overview tiles (presenter.layout.strip, v0.11.0): 132 px by default, read from
+// a configuration, refused outside 96 to 480 (the bad list in the test above).
+func TestStrip(t *testing.T) {
+	if Default().Presenter.Layout.Strip != 132 {
+		t.Errorf("default strip %d, want 132", Default().Presenter.Layout.Strip)
+	}
+	c, err := Merge([]byte(`{"presenter":{"layout":{"strip":200}}}`), Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Presenter.Layout != (Layout{Main: 0.6, Side: 0.45, Strip: 200}) {
+		t.Errorf("layout %+v", c.Presenter.Layout)
+	}
+}
+
 // Element lists of v0.9.1 and before (E20): a former default becomes today's default, "current"
 // becomes "audience", "time" and "overview" are dropped, and the share of the audience pane is taken
 // and dropped; an unknown name still fails.
@@ -72,7 +89,7 @@ func TestOldElements(t *testing.T) {
 		if !sameList(c.Presenter.Elements, want) {
 			t.Errorf("%s: elements %q, want %q", in, c.Presenter.Elements, want)
 		}
-		if c.Presenter.Layout != (Layout{Main: 0.7, Side: 0.45}) {
+		if c.Presenter.Layout != (Layout{Main: 0.7, Side: 0.45, Strip: 132}) {
 			t.Errorf("%s: layout %+v", in, c.Presenter.Layout)
 		}
 	}

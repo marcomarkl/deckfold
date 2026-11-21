@@ -415,6 +415,10 @@ func mergeKnown(def, old config.Config) config.Config {
 			*p.v = p.d
 		}
 	}
+	// the width of the overview tiles came with v0.11.0 and is an int, so it is not in the loop
+	if l.Strip == 0 {
+		l.Strip = d.Strip
+	}
 	if c.WarnSize == "" {
 		c.WarnSize = def.WarnSize
 	}

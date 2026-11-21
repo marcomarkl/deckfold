@@ -14,27 +14,29 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Start, press Escape, choose another slide, start again; three times | Every start begins at the chosen slide | |
 | Switch "Presenter view" on | A second window opens, without a permission prompt and without a hint about the screens; "Full screen" can always be chosen | |
 | Drag the presenter view to the other screen | Nothing changes in either window | |
-| Presenter view before the start | "On screen" shows the chosen start slide at its first step, "Next click" what the first click brings, and the notes; the arrow keys there change the start slide on the start screen too | |
-| Previews on a slide with builds, in a narrow presenter view | "On screen" shows the step the audience sees, "Next click" the step after it, then at the last step the next slide; nothing plays, and no step appears on the way | |
-| Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | "On screen" shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
-| With the clicker, go through a PowerPoint slide with builds, a claude.ai slide with steps that run by themselves and a Keynote slide with builds | The dots of "On screen" fill one per click; steps that run by themselves take no dot; at the last dot the arrow and "Next click" are marked, and the next click changes the slide | |
+| Presenter view before the start | "Live" shows the chosen start slide at its first step, "Preview" what the first click brings, and the notes; the arrow keys there change the start slide on the start screen too | |
+| Previews on a slide with builds, in a narrow presenter view | "Live" shows the step the audience sees, "Preview" the step after it, then at the last step the next slide; nothing plays, and no step appears on the way | |
+| Start on a slide without builds; then a slide with builds: step 0, last step, B, W, end slide | "Live" shows the first slide at once; then step 0 with the builds hidden, the whole slide at the last step, black, white, "End of presentation" | |
+| With the clicker, go through a PowerPoint slide with builds, a claude.ai slide with steps that run by themselves and a Keynote slide with builds | The dots of "Live" fill one per click; steps that run by themselves take no dot; at the last dot the arrow is marked, and the next click changes the slide | |
 | Make the presenter view narrow (about 300 px) and wide again | Narrow: the panes one below the other, the bar one line that scrolls sideways; every control can be reached | |
 | Click once into the presenter view on the second screen, then put the mouse on a slide tile and on a button and keep it still | The highlight stays while the mouse rests. Chrome on macOS shows it only in the active window: after a click in the presentation window it is gone, also under the mouse, until the presenter view is clicked again | |
 | Note where the presenter view is, then click "Start" (with and without "Full screen") | The presenter view keeps its place and size | |
 | Close the presentation window | The presenter view closes too; reloading the presentation window does not close it | |
+| End the show with the presenter view open | On the start screen the switch of the presenter view is on at once, not a second later | |
 | Click "Start" with "Full screen" on | The presentation fills its screen at the chosen slide; the presenter view follows | |
-| Click "Full screen" in the presenter view | The presenter view fills its screen; the button now reads "Window" and takes it back | |
+| Click the full-screen button (four corners) in the presenter view | The presenter view fills its screen; the corners now point in, and the button takes it back | |
+| Look at the presenter view on the laptop while the projector shows the slides | The icons for search, full screen and end show are clear without their names; "Live" and "Preview" read as meant | |
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
 | With ffmpeg installed: convert a deck with a video that browsers do not play (HEVC from an iPhone, WMV) and a WAV sound; play both in Chrome, Safari and Firefox | The report names the converted video and sound. The video plays with its sound, in the right colours and at the right speed; the sound plays | |
-| Hide notes, press A+ twice, drag the dividers between the panes | The presenter view changes at once; after reloading it, the changes are still there | |
+| Hide notes, press A+ twice, drag the dividers between the panes and the one above the strip of slides | While the notes are hidden, A− and A+ are grey; the presenter view changes at once, the tiles of the strip grow with it; after reloading it, the changes are still there | |
 | Time: before Start, after Start, pause, resume, reset (button and T) | 00:00 before the start; then it runs, stands still while paused, and starts again from 00:00 | |
 | Type 1:30 as the target, Enter | The field shows 01:30; the time left counts down, turns yellow under two minutes and red after it | |
 | Click a slide in the strip of the presenter view during the show; click its arrows | The click jumps there; the arrows only scroll the strip | |
 | Reload the presenter view during the show | It comes back at the current slide and keeps controlling the presentation | |
 | Restart the browser, open the file again | The start screen appears; the settings of the presenter view are kept | |
-| "Search" on the start screen, or `/`; type a word from a slide; Enter | The outline lists every slide; typing leaves the slides with the word; Enter chooses the slide as the start slide. A word that is only in the notes finds nothing here | |
+| The magnifier on the start screen, or `/`; type a word from a slide; Enter | The outline lists every slide; typing leaves the slides with the word; Enter chooses the slide as the start slide. A word that is only in the notes finds nothing here | |
 | Open the search on the start screen and in the presenter view; click the × beside the text field | The search closes, and the keys move the slides again | |
-| During the show: "Search" in the presenter view, type a word from the notes, Enter | The slide is found with "Notes" next to the place; Enter shows the slide to the audience at its first step; the presentation window never shows the search | |
+| During the show: the magnifier in the presenter view, type a word from the notes, Enter | The slide is found with "Notes" next to the place; Enter shows the slide to the audience at its first step; the presentation window never shows the search | |
 | During the show: open the search in the presenter view, press the arrow keys and Escape | The arrows move in the list and the audience stays on its slide; Escape closes the search and the presentation goes on | |
 | PowerPoint deck, and Keynote export, with a link to another slide: click the link in the presentation, in a window and in full screen | Both windows show the linked slide | |
 

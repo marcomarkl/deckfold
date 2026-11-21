@@ -57,6 +57,8 @@ test('start screen: the title in the middle; the footer below the settings start
       start: box(document.querySelector('[data-df-start]')), n: +count.getAttribute('data-df-count'), slides: window.__deckfold.slides().length,
       text: count.textContent, sub: document.querySelectorAll('.df-start .df-sub').length, last: foot === foot.parentNode.lastElementChild,
       label: help.getAttribute('aria-label') || '', title: help.getAttribute('title') || '', icons: help.querySelectorAll('svg').length, helpText: help.textContent.trim(),
+      findLabel: find.getAttribute('aria-label') || '', findTitle: find.getAttribute('title') || '', findIcons: find.querySelectorAll('svg').length, findText: find.textContent.trim(),
+      search: window.__deckfold.t('search'), countText: window.__deckfold.slideCount(window.__deckfold.slides().length),
       h1: (() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('.df-start h1')); return box(r); })(),
       order: [...foot.children].map((c) => ['data-df-help', 'data-df-find', 'data-df-count'].find((a) => c.hasAttribute(a)) || c.tagName) };
   });
@@ -85,6 +87,13 @@ test('start screen: the title in the middle; the footer below the settings start
   expect(m.find.r).toBeLessThan(m.count.l);
   expect(m.n).toBe(m.slides);
   expect(m.text).toContain(String(m.slides));
+  expect(m.text).toBe(m.countText);
+  // the search is an icon, like the key help, with its name as tooltip
+  expect(m.findIcons).toBe(1);
+  expect(m.findText).toBe('');
+  expect(m.findLabel).toBe(m.search);
+  expect(m.findTitle).toBe(m.search);
+  expect(Math.abs((m.find.r - m.find.l) - (m.help.r - m.help.l))).toBeLessThanOrEqual(1);
   // the button shows an icon and no text; its name is in the title and for screen readers
   expect(m.icons).toBe(1);
   expect(m.helpText).toBe('');

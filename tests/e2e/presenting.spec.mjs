@@ -2,7 +2,7 @@
 // screen first; the presenter view is a second window that the user drags to a screen. Where the
 // windows are is not checked; full screen can always be chosen.
 import { test, expect } from '@playwright/test';
-import { startScreen, openPresenter, solo, present, audState, fileURL, need, visibleSlide, expected } from './helpers.mjs';
+import { startScreen, openPresenter, solo, present, audState, fileURL, need, visibleSlide, expected, counter } from './helpers.mjs';
 
 const deferred = (page) => page.evaluate(() => document.querySelectorAll('script[type="text/df-deferred"]').length);
 
@@ -56,7 +56,7 @@ test('presenter view: opens without a position, follows the start slide, keys be
   // a key in the presenter view chooses the start slide too; Enter does not start from there
   await pres.keyboard.press('ArrowRight');
   await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
-  await expect.poll(() => pres.textContent('.df-counter')).toContain('2 / ');
+  await expect.poll(() => counter(pres)).toContain('2 / ');
   await pres.keyboard.press('Enter');
   await expect(pres.locator('.df-banner')).toHaveAttribute('data-df-banner', 'startInShow');
   expect(await page.evaluate(() => !!window.__deckfold.audience)).toBe(false);
@@ -120,8 +120,8 @@ test('overview band of the presenter view: click, arrows; time and band are alwa
   expect(await switches()).toEqual(['audience', 'next', 'notes']);
   await expect(pres.locator('.df-overview')).toBeVisible();
   await expect(pres.locator('.df-time-group')).toBeVisible();
-  // a list stored by v0.9.1 that hid "On screen" (then "audience"), the notes, the time and the
-  // band: "current" was the large slide on the left and becomes "On screen"; time and band stay
+  // a list stored by v0.9.1 that hid "Live" (then "audience"), the notes, the time and the
+  // band: "current" was the large slide on the left and becomes "Live"; time and band stay
   await pres.evaluate(() => localStorage.setItem('deckfold:' + window.__deckfold.meta.deckHash, JSON.stringify({ presenter: { elements: ['current', 'next'] } })));
   await pres.reload();
   await pres.waitForSelector('.df-presenter');
@@ -251,7 +251,7 @@ test('reloading the presenter view during the show reconnects it', async ({ page
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
   await pres.reload();
   await pres.waitForSelector('.df-presenter');
-  await expect.poll(() => pres.textContent('.df-counter'), { timeout: 8000 }).toMatch(/^2 \//);
+  await expect.poll(() => counter(pres), { timeout: 8000 }).toMatch(/^2 \//);
   await pres.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
 });
@@ -272,8 +272,8 @@ test('start screen: tiles of equal width; the preview shows the chosen slide aft
 // ---------- previews, reload, full-screen button (found in a test with a real deck) ----------
 
 const previewFrames = (pres) => pres.locator('iframe[data-df-preview]');
-// [visible slide, number of hidden builds on it, running animations] in the previews "On screen" and
-// "Next click" of the presenter view (sel: other previews)
+// [visible slide, number of hidden builds on it, running animations] in the previews "Live" and
+// "Preview" of the presenter view (sel: other previews)
 const previewInfo = (pres, sel = '.df-audience iframe[data-df-preview], .df-next iframe[data-df-preview]') => pres.evaluate((sel) => [...document.querySelectorAll(sel)].map((f) => {
   const d = f.contentDocument, i = [...d.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'));
   const sl = d.querySelectorAll('.deck-slide')[i];
@@ -315,7 +315,7 @@ test('claude.ai presenter view: the previews show the step on screen and the nex
   await expect.poll(async () => (await previewInfo(pres)).map((p) => p[0]), { timeout: 10000 }).toEqual([k, k]);
   await pres.waitForTimeout(1500);
   const [onScreen, nextClick] = await previewInfo(pres);
-  // "On screen" shows the builds the audience sees; "Next click" those of the step after it
+  // "Live" shows the builds the audience sees; "Preview" those of the step after it
   expect(onScreen[1]).toBe(atStart);
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: k, step: 1 });
@@ -374,11 +374,11 @@ test('presenter view: the full-screen button names what a click does', async ({ 
   const pres = await openPresenter(page, context);
   const label = (k) => pres.evaluate((k) => window.__deckfold.t(k), k);
   const btn = pres.locator('.df-presenter [data-df-fs]');
-  await expect(btn).toHaveText(await label('fullscreen'));
+  await expect(btn).toHaveAttribute('aria-label', await label('fullscreen'));
   await btn.click();
-  await expect(btn).toHaveText(await label('window'));
+  await expect(btn).toHaveAttribute('aria-label', await label('window'));
   await btn.click();
-  await expect(btn).toHaveText(await label('fullscreen'));
+  await expect(btn).toHaveAttribute('aria-label', await label('fullscreen'));
 });
 
 // fake full screen with Keyboard Lock for all windows of a context
@@ -592,13 +592,13 @@ test('previews paint no step between two states and nothing before their first s
   for (const i of [k, 1, k, 0, k]) { await page.click(`.df-strip .df-tile[data-i="${i}"]`); await page.waitForTimeout(900); }
   [start] = await paintedFrames(page, '.df-start-stage iframe');
   expect(intermediate(start)).toEqual([]);
-  // presenter view: "On screen" and "Next click" while the show moves through the slides with builds
+  // presenter view: "Live" and "Preview" while the show moves through the slides with builds
   const pres = await openPresenter(page, context);
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
   // the states the audience sees (forward, and back within slides), as the presentation shows them;
-  // before the start "On screen" showed the start slide, which the show starts on
+  // before the start "Live" showed the start slide, which the show starts on
   const seen = new Set();
   const note = async () => seen.add((await page.evaluate(() => {
     const all = [...document.querySelectorAll('.deck-slide')], i = all.findIndex((x) => !x.hasAttribute('data-off'));
@@ -616,19 +616,19 @@ test('previews paint no step between two states and nothing before their first s
     const first = f.find(([, , vis]) => vis);
     expect(first && first[0]).toBeGreaterThanOrEqual(0);
   }
-  // "On screen" paints only states the audience saw, nothing in between
+  // "Live" paints only states the audience saw, nothing in between
   const painted = audience.filter(([s, , vis]) => vis && s >= 0).map(([s, h]) => [s, h].join());
   expect(painted.length).toBeGreaterThan(0);
   expect(painted.filter((p) => !seen.has(p))).toEqual([]);
-  // "Next click" paints only states the audience saw after the next click, and the state after
+  // "Preview" paints only states the audience saw after the next click, and the state after
   // the last one, which the show did not reach
   const ahead = next.filter(([s, , vis]) => vis && s >= 0).map(([s, h]) => [s, h].join());
   expect(ahead.length).toBeGreaterThan(0);
   expect(ahead.slice(0, -1).filter((p) => !seen.has(p))).toEqual([]);
 });
 
-// "On screen" (the audience pane, E20): what the audience sees; before the start the start slide.
-test('presenter view: "On screen" shows the start slide, the step, black, white and the end, and is never empty', async ({ page, context }) => {
+// "Live" (the audience pane, E20): what the audience sees; before the start the start slide.
+test('presenter view: "Live" shows the start slide, the step, black, white and the end, and is never empty', async ({ page, context }) => {
   await startScreen(page, 'pptx-animations.html');
   const pres = await openPresenter(page, context);
   const aud = pres.locator('.df-audience');
@@ -686,8 +686,10 @@ test('presenter view: "On screen" shows the start slide, the step, black, white 
 });
 
 // E20: a dot for each state the slide rests in, filled up to the one shown, and an arrow for the
-// change to the next slide, marked when the next click makes it; the right pane is marked then too.
-test('presenter view: the dots of "On screen" count the clicks to the next slide', async ({ page, context }) => {
+// change to the next slide, marked when the next click makes it. The panes are "Live" and
+// "Preview", the same on their headings and their switches, whatever the next click does; the
+// right pane is never marked.
+test('presenter view: the dots of "Live" count the clicks to the next slide; "Live" and "Preview" keep their names', async ({ page, context }) => {
   await startScreen(page, 'pptx-animations.html');
   const pres = await openPresenter(page, context);
   const steps = await page.evaluate(() => window.__deckfold.slides()[0].steps);
@@ -700,10 +702,15 @@ test('presenter view: the dots of "On screen" count the clicks to the next slide
       dots: s ? s.querySelectorAll('.df-dot').length : -1,
       done: s ? s.querySelectorAll('.df-dot.df-done').length : -1,
       arrow: a ? a.classList.contains('df-next-is-slide') : null,
-      change: document.querySelector('.df-next').classList.contains('df-change')
+      change: document.querySelector('.df-next').classList.contains('df-change'),
+      names: ['.df-audience .df-pane-title', '[data-df-el="audience"]', '.df-next .df-pane-title', '[data-df-el="next"]'].map((q) => document.querySelector(q).textContent)
     };
   });
-  const at = (i) => ({ steps: `${i}/${steps}`, dots: steps, done: i, arrow: i === steps, change: i === steps });
+  const [live, upNext] = await pres.evaluate(() => [window.__deckfold.t('live'), window.__deckfold.t('upNext')]);
+  const names = [live, live, upNext, upNext];
+  expect(live).not.toBe('live');
+  expect(upNext).not.toBe('upNext');
+  const at = (i) => ({ steps: `${i}/${steps}`, dots: steps, done: i, arrow: i === steps, change: false, names });
   // before the start: the start slide at its first state
   await expect.poll(read).toEqual(at(1));
   await page.click('[data-df-start]');
@@ -718,12 +725,12 @@ test('presenter view: the dots of "On screen" count the clicks to the next slide
   await pres.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
   const n1 = await page.evaluate(() => window.__deckfold.slides()[1].steps);
-  await expect.poll(read).toEqual({ steps: `1/${n1}`, dots: n1, done: 1, arrow: n1 === 1, change: n1 === 1 });
+  await expect.poll(read).toEqual({ steps: `1/${n1}`, dots: n1, done: 1, arrow: n1 === 1, change: false, names });
   // at the end of the show: no dots, nothing marked
   await pres.keyboard.press('End');
   await pres.keyboard.press('ArrowRight');
   await expect.poll(() => page.evaluate(() => window.__deckfold.audience.info().ended)).toBe(true);
-  await expect.poll(read).toEqual({ steps: '', dots: 0, done: 0, arrow: null, change: false });
+  await expect.poll(read).toEqual({ steps: '', dots: 0, done: 0, arrow: null, change: false, names });
 });
 
 test('claude.ai presenter view: the audience pane shows the builds the audience sees', async ({ page, context }) => {
@@ -756,7 +763,7 @@ test('presenter view: the layout fits windows from 1400 x 900 down to 300 x 900'
         if (r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1) return false;
         const c = b.closest('.df-bar, .df-status');
         return !(c && c.scrollWidth > c.clientWidth);
-      }).map((b) => b.textContent || b.getAttribute('data-df-el'));
+      }).map((b) => b.textContent || b.getAttribute('aria-label') || b.getAttribute('data-df-el'));
       return { narrow: ui.classList.contains('df-narrow'), barH: Math.round(bar.getBoundingClientRect().height), stages, lost };
     });
     expect(m.narrow, `${w}x${h}`).toBe(w < 760);
@@ -837,7 +844,7 @@ test('focus: after a click and a key, one ring only, on the marked tile', async 
   await pres.keyboard.press('ArrowRight');
   await pres.waitForTimeout(300);
   expect(stray(await rings(pres, '.df-overview'))).toEqual([]);
-  expect(await pres.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.matches(':focus-visible') && !b.classList.contains('df-cur')).map((b) => b.getAttribute('data-df-el') || b.textContent))).toEqual([]);
+  expect(await pres.evaluate(() => [...document.querySelectorAll('button')].filter((b) => b.matches(':focus-visible') && !b.classList.contains('df-cur')).map((b) => b.getAttribute('data-df-el') || b.textContent || b.getAttribute('aria-label')))).toEqual([]);
 });
 
 // Screen wake lock (decision E19, docs/spikes/S10-wake-lock.md). A stand-in for navigator.wakeLock
@@ -963,4 +970,137 @@ test('wake lock: after a refusal, a key in the presentation window asks again at
   // well before the next request of the 10 s rhythm
   await expect.poll(() => wakeInfo(page), { timeout: 2000 }).toBe('held');
   expect((await page.evaluate(() => window.__fakeWake.during)).at(-1)).toBe('keydown');
+});
+
+// The show window reloads at the end of a show. The switch of the presenter view stands as it
+// stood before, from the first frame of the start screen on, and does not wait for the next
+// heartbeat of the presenter view (which comes once a second).
+const switchAtStart = (page) => page.waitForFunction(() => {
+  const s = document.querySelector('.df-start [data-df-start]'), b = document.querySelector('[data-df-presenter]');
+  return s && b ? { checked: b.checked } : null;
+}, null, { polling: 'raf' }).then((h) => h.jsonValue());
+
+test('end of the show with the presenter view open: the switch on the start screen is on at once', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  await page.keyboard.press('Escape');
+  expect(await switchAtStart(page)).toEqual({ checked: true });
+  // the presenter view is the same window and goes back to the start screen
+  await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
+  expect(pres.isClosed()).toBe(false);
+});
+
+// Opened with ";p" in the address, the start screen expects the presenter view of the time before
+// the reload. When none reports within 3 s (it would send once a second), the switch goes off.
+test('the switch of the presenter view goes off when no presenter view reports after a reload', async ({ page }) => {
+  await page.goto(fileURL('pptx-basic.html') + '#df-last=0;p');
+  expect(await switchAtStart(page)).toEqual({ checked: true });
+  await expect(page.locator('[data-df-presenter]')).not.toBeChecked({ timeout: 3500 });
+  const key = await page.evaluate(() => window.__deckfold.deckKey('df-presenter'));
+  expect(await page.evaluate((k) => sessionStorage.getItem(k), key)).toBeNull();
+  expect(page.url()).toMatch(/#df-last=0$/);
+});
+
+// Switched off right after the reload, before the presenter view has reported: the presenter view
+// is closed when it reports, and the switch stays off.
+test('the switch of the presenter view turned off right after the end closes the presenter view', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  const closed = pres.waitForEvent('close', { timeout: 4000 });
+  await page.keyboard.press('Escape');
+  expect(await switchAtStart(page)).toEqual({ checked: true });
+  await page.uncheck('[data-df-presenter]');
+  await closed;
+  await page.waitForTimeout(1500);
+  await expect(page.locator('[data-df-presenter]')).not.toBeChecked();
+});
+
+// A- and A+ change the size of the notes; while the notes are hidden they are off
+test('presenter view: A- and A+ are off while the notes are hidden', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  expect(await page.evaluate(() => window.__deckfold.slides().some((s) => s.notes))).toBe(true);
+  const font = () => pres.evaluate(() => window.__deckfold.settings().presenter.notesFontSize);
+  const minus = pres.locator('[data-df-font="-"]'), plus = pres.locator('[data-df-font="+"]');
+  await expect(minus).toBeEnabled();
+  await expect(plus).toBeEnabled();
+  await pres.click('.df-status [data-df-el="notes"]');
+  await expect(pres.locator('.df-notes')).toBeHidden();
+  await expect(minus).toBeDisabled();
+  await expect(plus).toBeDisabled();
+  const before = await font();
+  await plus.click({ force: true });
+  expect(await font()).toBe(before);
+  await pres.click('.df-status [data-df-el="notes"]');
+  await expect(plus).toBeEnabled();
+  await plus.click();
+  expect(await font()).toBe(before + 2);
+});
+
+// Search, full screen and end show are buttons with an icon only; the name is their tooltip
+test('presenter view: search, full screen and end show are icons with a name', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  const m = await pres.evaluate(() => ['[data-df-find]', '[data-df-fs]', '[data-df-end]'].map((q) => {
+    const b = document.querySelector('.df-presenter ' + q);
+    return b && { svg: b.querySelectorAll('svg').length, text: b.textContent.trim(), label: b.getAttribute('aria-label'), title: b.getAttribute('title') };
+  }));
+  const t = await pres.evaluate(() => ['search', 'fullscreen', 'endShow'].map((k) => window.__deckfold.t(k)));
+  expect(m).toEqual(t.map((label) => ({ svg: 1, text: '', label, title: label })));
+});
+
+// No counter in the top bar; the number of slides at the left of the status bar
+test('presenter view: no counter in the top bar, the number of slides at the left of the status bar', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  const m = await pres.evaluate(() => {
+    const bar = document.querySelector('.df-bar'), status = document.querySelector('.df-status');
+    const count = status.querySelector('[data-df-count]');
+    const n = window.__deckfold.slides().length;
+    const title = bar.querySelector('.df-title').textContent;
+    return {
+      counter: document.querySelectorAll('.df-counter').length,
+      slash: bar.textContent.replace(title, '').includes('/'),
+      first: status.firstElementChild === count,
+      text: count && count.textContent, want: window.__deckfold.slideCount(n), n,
+      one: window.__deckfold.slideCount(1), nine: window.__deckfold.slideCount(9),
+      oneWord: window.__deckfold.t('oneSlide'), many: window.__deckfold.t('slides')
+    };
+  });
+  expect(m.counter).toBe(0);
+  expect(m.slash).toBe(false);
+  expect(m.first).toBe(true);
+  expect(m.text).toBe(m.want);
+  expect(m.want).toBe(`${m.n} ${m.many}`);
+  // one slide is "1 slide", not "1 slides"
+  expect(m.one).toBe(`1 ${m.oneWord}`);
+  expect(m.nine).toBe(`9 ${m.many}`);
+  expect(m.oneWord).not.toBe(m.many);
+});
+
+// The divider above the overview: dragged up, the tiles grow; the width is stored and comes back;
+// the overview never takes more than 45 % of the window height
+test('presenter view: the overview can be dragged higher, with larger tiles', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  const width = () => pres.evaluate(() => document.querySelector('.df-overview .df-tile').getBoundingClientRect().width);
+  const w0 = await width();
+  const box = await pres.locator('[data-df-split="strip"]').boundingBox();
+  expect(box, 'divider above the overview').not.toBeNull();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await pres.mouse.move(x, y);
+  await pres.mouse.down();
+  await pres.mouse.move(x, y - 60, { steps: 4 });
+  await pres.mouse.move(x, y - 120, { steps: 4 });
+  await pres.mouse.up();
+  const w1 = await width();
+  expect(w1).toBeGreaterThan(w0 + 60);
+  const stored = await pres.evaluate(() => window.__deckfold.settings().presenter.layout.strip);
+  expect(Math.abs(stored - w1)).toBeLessThanOrEqual(1);
+  await pres.reload();
+  await pres.waitForSelector('.df-presenter');
+  await expect.poll(width).toBeCloseTo(w1, 0);
+  // dragged to the top, the overview stops at 45 % of the window height
+  const b2 = await pres.locator('[data-df-split="strip"]').boundingBox();
+  await pres.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+  await pres.mouse.down();
+  await pres.mouse.move(b2.x + b2.width / 2, 5, { steps: 6 });
+  await pres.mouse.up();
+  const share = await pres.evaluate(() => document.querySelector('.df-overview').offsetHeight / document.querySelector('.df-presenter').clientHeight);
+  expect(share).toBeLessThanOrEqual(0.46);
+  expect(await width()).toBeGreaterThan(w1);
 });
