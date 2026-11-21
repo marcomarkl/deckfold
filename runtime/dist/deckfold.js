@@ -1375,11 +1375,15 @@ DF.startShow = function (snapshotHTML) {
   // repeats although the page had read it back before the reload. The address goes with the
   // navigation itself. It is read here, before anything else, and dropped before a player runs.
   var fromHash = /^#df-last=(\d+)$/.exec(location.hash || "");
+  // during a show the slide shown last is kept in the state of the history entry instead, because
+  // the address belongs to the source player then
+  var fromState = null;
+  try { if (history.state && typeof history.state.dfLast === "number") fromState = history.state.dfLast; } catch (e) { }
   dropHash();
   var cfg = DF.settings();
   var phase = "start"; // start, loading, show
   var rWin = null;
-  var last = fromHash ? { slide: +fromHash[1], step: 0 } : DF.ss.get(DF.deckKey("df-last"));
+  var last = fromHash ? { slide: +fromHash[1], step: 0 } : fromState != null ? { slide: fromState, step: 0 } : DF.ss.get(DF.deckKey("df-last"));
   var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
   document.documentElement.classList.add("df-start-mode");
@@ -1725,7 +1729,12 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
-    if (lastShown) DF.ss.set(DF.deckKey("df-last"), lastShown);
+    if (lastShown) {
+      DF.ss.set(DF.deckKey("df-last"), lastShown);
+      // also in the state of this history entry, which a reload keeps and which goes to the browser
+      // with the navigation (see fromHash in 35-start.js); the address stays as the player wants it
+      try { history.replaceState({ dfLast: lastShown.slide }, ""); } catch (e) { }
+    }
   }
   function go(target, o) {
     if (generic) return;

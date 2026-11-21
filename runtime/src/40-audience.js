@@ -93,7 +93,12 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
-    if (lastShown) DF.ss.set(DF.deckKey("df-last"), lastShown);
+    if (lastShown) {
+      DF.ss.set(DF.deckKey("df-last"), lastShown);
+      // also in the state of this history entry, which a reload keeps and which goes to the browser
+      // with the navigation (see fromHash in 35-start.js); the address stays as the player wants it
+      try { history.replaceState({ dfLast: lastShown.slide }, ""); } catch (e) { }
+    }
   }
   function go(target, o) {
     if (generic) return;
