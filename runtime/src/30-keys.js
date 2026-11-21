@@ -5,6 +5,17 @@ function settings() {
   return DF.merge(DF.cfg.defaults || {}, DF.ls.get(key) || {});
 }
 DF.settings = settings;
+// presenterElements: the panes of the presenter view a stored list names (E20). A list of v0.9.1 or
+// before may name "current" (the pane on the left, now "audience") and "time" and "overview", which
+// are always shown now; config.CleanElements does the same for the file's own settings.
+DF.presenterElements = function (list) {
+  var out = [];
+  (list || []).forEach(function (k) {
+    if (k === "current") k = "audience";
+    if ((k === "audience" || k === "next" || k === "notes") && out.indexOf(k) < 0) out.push(k);
+  });
+  return out;
+};
 DF.saveSettings = function (cur) {
   var key = "deckfold:" + ((DF.meta && DF.meta.deckHash) || "deck");
   var d = DF.diff(DF.cfg.defaults || {}, cur);

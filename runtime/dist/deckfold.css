@@ -154,7 +154,8 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-autoinfo { color: var(--df-mute); min-width: 4em; }
 .df-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--df-cols, minmax(0, 3fr) 8px minmax(0, 2fr)); gap: 4px; padding: 12px; }
 .df-left, .df-side { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
-.df-left > .df-pane, .df-side > .df-next { flex: var(--df-flex, 1 1 auto); }
+.df-left > .df-pane { flex: 1 1 auto; }
+.df-side > .df-next { flex: var(--df-flex, 1 1 auto); }
 .df-split { background: transparent; border-radius: 4px; touch-action: none; }
 .df-split:hover { background: var(--df-line); }
 .df-split-v { cursor: col-resize; }
@@ -165,12 +166,24 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 [data-df-ui] .df-target input { width: 64px; padding: 4px 6px; }
 .df-before .df-auto-group, .df-before [data-df-end] { display: none !important; }
 .df-pane { background: var(--df-panel); border: 1px solid var(--df-line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-height: 0; position: relative; }
-.df-pane h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); font-weight: 600; }
-.df-current { min-height: 0; }
+.df-pane h3 { display: flex; align-items: center; gap: 10px; min-height: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--df-mute); font-weight: 600; }
+/* the dots of "On screen" (E20): one for each state of the slide, filled up to the one shown, then
+   an arrow for the change to the next slide, in the accent colour when the next click makes it;
+   drawn with CSS, so that they do not depend on the fonts of the machine */
+.df-steps { display: inline-flex; align-items: center; gap: 5px; }
+.df-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--df-mute); }
+.df-dot.df-done { background: var(--df-fg); border-color: var(--df-fg); }
+.df-stepbar { flex: 0 0 auto; width: 120px; height: 8px; border-radius: 4px; border: 1.5px solid var(--df-mute); overflow: hidden; }
+.df-stepfill { display: block; height: 100%; background: var(--df-fg); }
+.df-arrow { flex: 0 0 auto; width: 16px; height: 12px; margin-left: 2px; background: var(--df-mute);
+  clip-path: polygon(0 38%, 55% 38%, 55% 0, 100% 50%, 55% 100%, 55% 62%, 0 62%); }
+.df-arrow.df-next-is-slide { background: var(--df-accent); }
+.df-next.df-change { border-color: var(--df-accent); }
+.df-next.df-change h3 { color: var(--df-accent); }
 .df-stage { position: relative; flex: 1; min-height: 0; border-radius: 4px; overflow: hidden; }
-/* the audience pane: empty before the start; black, white or the end slide while the audience sees
-   one of them */
-.df-audience:not([data-df-audience="slide"]) .df-stage iframe { visibility: hidden !important; }
+/* the audience pane: the start slide before the start; black, white or the end slide while the
+   audience sees one of them */
+.df-audience:not([data-df-audience="slide"]):not([data-df-audience="start"]) .df-stage iframe { visibility: hidden !important; }
 .df-audcover { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: #888; font-size: 14px; border-radius: 4px; }
 .df-audience[data-df-audience="black"] .df-audcover { display: flex; background: #000; }
 .df-audience[data-df-audience="black"] .df-audcover span, .df-audience[data-df-audience="white"] .df-audcover span { display: none; }

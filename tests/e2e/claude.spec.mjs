@@ -49,15 +49,15 @@ test('presenter view: sync, previews, notes, overview', async ({ page, context }
   const w = watch(context);
   const pres = await present(page, context, 'claude.html');
   await expect(pres.locator('.df-presenter')).toBeVisible();
-  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(3); // current, audience, next
+  await expect(pres.locator('iframe[data-df-preview]')).toHaveCount(2); // on screen, next click
   const n = await slideCount(pres);
   for (let i = 0; i < 3; i++) await pres.keyboard.press('ArrowRight');
   const s3 = await expected(pres, ['next', 'next', 'next']);
   await expect.poll(() => audState(page)).toEqual(s3);
   await expect.poll(() => counter(pres)).toContain(`${s3.slide + 1} / ${n}`);
-  // previews: slide shown by the player in the current and the next preview (the slide after it)
-  const nx = { slide: s3.slide + 1 };
-  const visible = () => pres.evaluate(() => [...document.querySelectorAll('.df-current iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) =>
+  // previews: slide shown by the player in "On screen" (where the show is) and in the next click
+  const nx = await expected(pres, ['next', 'next', 'next', 'next']);
+  const visible = () => pres.evaluate(() => [...document.querySelectorAll('.df-audience iframe[data-df-preview], .df-next iframe[data-df-preview]')].map((f) =>
     [...f.contentDocument.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'))));
   await expect.poll(visible, { timeout: 10000 }).toEqual([s3.slide, nx.slide]);
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off')))).toBe(s3.slide);
@@ -82,11 +82,13 @@ test('settings of the presenter view change while it runs and survive a reload',
   await pres.click('[data-df-font="+"]');
   await pres.click('[data-df-font="+"]');
   await expect.poll(() => pres.evaluate(() => getComputedStyle(document.querySelector('.df-notes-text')).fontSize)).toBe('26px');
-  await pres.click('[data-df-el="time"]');
+  await pres.click('[data-df-el="next"]');
+  await expect(pres.locator('.df-next')).toBeHidden();
   await pres.reload();
   await pres.waitForSelector('.df-presenter');
+  await expect(pres.locator('.df-next')).toBeHidden();
   const s = await pres.evaluate(() => window.__deckfold.settings());
-  expect(s.presenter.elements).not.toContain('time');
+  expect(s.presenter.elements).not.toContain('next');
   expect(s.presenter.notesFontSize).toBe(26);
   // only the differences are stored
   const stored = await pres.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('deckfold:')).map((k) => JSON.parse(localStorage.getItem(k))));

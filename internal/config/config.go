@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Presenter describes the presenter view (E4, E5).
+// Presenter describes the presenter view (E4, E5, E20).
 type Presenter struct {
 	Elements      []string `json:"elements"`
 	NotesFontSize int      `json:"notesFontSize"`
@@ -23,12 +23,12 @@ type Presenter struct {
 }
 
 // Layout is the size of the presenter view panes, changed by dragging the dividers: Main is the
-// share of the left column (current slide, audience) in the width, Side the share of the next
-// slide in the side column, Audience the share of the current slide above the audience pane.
+// share of the left column (what the audience sees) in the width, Side the share of the next click
+// in the side column. Files of v0.4 to v0.9.1 also have "audience", the share of a pane that is
+// gone since E20; Merge takes it and drops it.
 type Layout struct {
-	Main     float64 `json:"main"`
-	Side     float64 `json:"side"`
-	Audience float64 `json:"audience"`
+	Main float64 `json:"main"`
+	Side float64 `json:"side"`
 }
 
 // Auto describes auto mode (E7).
@@ -53,21 +53,44 @@ type Config struct {
 	NoCache bool `json:"-"`
 }
 
-// Elements are the allowed presenter view elements.
-var Elements = []string{"current", "audience", "next", "notes", "time", "overview"}
+// Elements are the presenter view panes that can be hidden (E20): what the audience sees, the
+// next click, the notes. Time and the slide overview are always shown.
+var Elements = []string{"audience", "next", "notes"}
 
-// formerElements are default element lists of earlier versions; --refresh gives a file that still
-// has one of them the current default (the audience pane came with v0.4).
-var formerElements = [][]string{{"current", "next", "notes", "time", "overview"}}
+// formerElements are default element lists of earlier versions (the audience pane came with v0.4,
+// E20 came after v0.9.1).
+var formerElements = [][]string{
+	{"current", "next", "notes", "time", "overview"},
+	{"current", "audience", "next", "notes", "time", "overview"},
+}
 
-// FormerDefaultElements tells whether els is a default list of an earlier version.
-func FormerDefaultElements(els []string) bool {
+// CleanElements turns an element list of an earlier version into one of today: a default list of
+// an earlier version (which the file never chose) gives way to the current default; otherwise
+// "current" (the pane on the left, now "audience") becomes "audience", "time" and "overview" (now
+// always shown) are dropped, and a name named twice counts once. Other names stay, so that
+// Validate reports them. runtime/src/30-keys.js does the same for lists stored in the browser.
+func CleanElements(els []string) []string {
+	if els == nil {
+		return nil
+	}
 	for _, l := range formerElements {
 		if sameList(l, els) {
-			return true
+			return append([]string(nil), Elements...)
 		}
 	}
-	return false
+	out := []string{}
+	for _, e := range els {
+		switch e {
+		case "current":
+			e = "audience"
+		case "time", "overview":
+			continue
+		}
+		if !in(out, e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 // Actions are the actions keys can be bound to.
@@ -92,7 +115,7 @@ func (p *Presenter) Upgrade() {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45, Audience: 0.6}},
+		Presenter: Presenter{Elements: append([]string(nil), Elements...), NotesFontSize: 22, Layout: Layout{Main: 0.6, Side: 0.45}},
 		Auto:      Auto{Enabled: false, IntervalSeconds: 8, Loop: false},
 		Keys: map[string][]string{
 			"next":       {"ArrowRight", "ArrowDown", "PageDown", " "},
@@ -137,7 +160,7 @@ func Merge(data []byte, base Config) (Config, error) {
 			Layout        *struct {
 				Main     *float64 `json:"main"`
 				Side     *float64 `json:"side"`
-				Audience *float64 `json:"audience"`
+				Audience *float64 `json:"audience"` // v0.4 to v0.9.1; taken and dropped (E20)
 			} `json:"layout"`
 		} `json:"presenter"`
 		Auto *struct {
@@ -161,7 +184,7 @@ func Merge(data []byte, base Config) (Config, error) {
 	}
 	if p := in.Presenter; p != nil {
 		if p.Elements != nil {
-			c.Presenter.Elements = *p.Elements
+			c.Presenter.Elements = CleanElements(*p.Elements)
 		}
 		if p.NotesFontSize != nil {
 			c.Presenter.NotesFontSize = *p.NotesFontSize
@@ -178,9 +201,6 @@ func Merge(data []byte, base Config) (Config, error) {
 			}
 			if l.Side != nil {
 				c.Presenter.Layout.Side = *l.Side
-			}
-			if l.Audience != nil {
-				c.Presenter.Layout.Audience = *l.Audience
 			}
 		}
 	}
@@ -234,7 +254,7 @@ func (c Config) Validate() error {
 	if c.Presenter.TargetSeconds < 0 || c.Presenter.TargetSeconds > MaxTargetSeconds {
 		return fmt.Errorf("presenter.targetSeconds: %d is not between 0 and %d", c.Presenter.TargetSeconds, MaxTargetSeconds)
 	}
-	for _, v := range []float64{c.Presenter.Layout.Main, c.Presenter.Layout.Side, c.Presenter.Layout.Audience} {
+	for _, v := range []float64{c.Presenter.Layout.Main, c.Presenter.Layout.Side} {
 		if v < 0.2 || v > 0.8 {
 			return fmt.Errorf("presenter.layout: %g is not between 0.2 and 0.8", v)
 		}
