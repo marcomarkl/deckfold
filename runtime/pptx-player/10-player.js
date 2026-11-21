@@ -79,7 +79,9 @@ function startMedia(el) {
 
 // GIF animations start again from their first frame whenever their slide is entered, as in the
 // PowerPoint slide show. A browser keeps one animation clock per image URL, so each entry gives
-// the image a new fragment on its (blob) URL.
+// the image a new fragment on its (blob) URL. Firefox then shows the first frame only up to the
+// next point of its animation grid (all pictures whose first frame lasts equally long change frames
+// together, nsRefreshDriver::UpdateAnimatedImages), so there it can be shorter than in the file.
 var gifEntered = -1, gifRun = 0;
 function restartGifs(i) {
   if (i === gifEntered || isPreview() || !sections[i]) return;
