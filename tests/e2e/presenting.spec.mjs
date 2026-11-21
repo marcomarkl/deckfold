@@ -312,29 +312,30 @@ test('claude.ai presenter view: both previews show their slide after all its ste
 });
 
 test('reload: the start screen chooses the slide chosen or shown last', async ({ page }) => {
+  // for the failure messages: what the session keeps for the start slide, read in the page
+  const kept = () => page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('df-last')).map((k) => sessionStorage.getItem(k)).join(' ') || 'nothing');
+  const reload = async (what) => {
+    const before = await kept();
+    await page.reload();
+    await page.waitForSelector('.df-start [data-df-start]');
+    return `${what}: stored before the reload ${before}, after it ${await kept()}`;
+  };
   await startScreen(page, 'pptx-basic.html');
   await page.click('.df-strip .df-tile[data-i="2"]');
-  await page.reload();
-  await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  let said = await reload('chosen');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '2');
   // shown last: the show reached slide 2 before the reload
   await page.click('.df-strip .df-tile[data-i="0"]');
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold.audience);
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
-  // for the failure message: what the session keeps and what the player shows before the reload
-  const kept = () => page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('df-last')).map((k) => sessionStorage.getItem(k)).join(' '));
-  const before = { kept: await kept(), audience: await audState(page), player: await page.evaluate(() => window.__dfPptx.state()) };
-  await page.reload();
-  await page.waitForSelector('.df-start [data-df-start]');
-  const after = { kept: await kept() };
-  await expect(page.locator('.df-strip .df-tile.df-cur'), `before the reload ${JSON.stringify(before)}, after it ${JSON.stringify(after)}`).toHaveAttribute('data-i', '1');
+  said = await reload('shown');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '1');
   // chosen after that show: the choice wins
   await page.click('.df-strip .df-tile[data-i="2"]');
-  await page.reload();
-  await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  said = await reload('chosen after the show');
+  await expect(page.locator('.df-strip .df-tile.df-cur'), said).toHaveAttribute('data-i', '2');
 });
 
 test('presenter view: the full-screen button names what a click does', async ({ page, context }) => {
