@@ -323,9 +323,13 @@ test('reload: the start screen chooses the slide chosen or shown last', async ({
   await page.waitForFunction(() => window.__deckfold.audience);
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
+  // for the failure message: what the session keeps and what the player shows before the reload
+  const kept = () => page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.startsWith('df-last')).map((k) => sessionStorage.getItem(k)).join(' '));
+  const before = { kept: await kept(), audience: await audState(page), player: await page.evaluate(() => window.__dfPptx.state()) };
   await page.reload();
   await page.waitForSelector('.df-start [data-df-start]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
+  const after = { kept: await kept() };
+  await expect(page.locator('.df-strip .df-tile.df-cur'), `before the reload ${JSON.stringify(before)}, after it ${JSON.stringify(after)}`).toHaveAttribute('data-i', '1');
   // chosen after that show: the choice wins
   await page.click('.df-strip .df-tile[data-i="2"]');
   await page.reload();
