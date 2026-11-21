@@ -230,7 +230,16 @@ DF.startShow = function (snapshotHTML) {
     // the click on "Start" must not reach the source player: it registers its listeners while the
     // scripts start and would take the click as "next"
     if (e && e.stopPropagation) e.stopPropagation();
-    // full screen must be requested inside the click or key press, before anything async
+    // the screen wake lock and full screen must be requested inside the click or key press,
+    // before anything async. Safari refuses the wake lock a few seconds after the last click or
+    // key, and also right after requestFullscreen, which uses the click up: the wake lock comes
+    // first (docs/spikes/S10-wake-lock.md). The presentation takes the request over.
+    var wakeLock = null;
+    if (navigator.wakeLock && document.visibilityState === "visible") {
+      try { wakeLock = navigator.wakeLock.request("screen"); } catch (err) { wakeLock = null; }
+      // a refusal before the presentation takes the request over is no unhandled rejection
+      if (wakeLock) wakeLock.catch(function () { });
+    }
     var wantFs = fsBox.checked;
     if (wantFs) DF.requestFs().catch(function () { });
     startBtn.disabled = true;
@@ -243,7 +252,7 @@ DF.startShow = function (snapshotHTML) {
     // the scripts start after the click or key event has ended
     new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
       return DF.startAudience({
-        start: start, fullscreen: wantFs,
+        start: start, fullscreen: wantFs, wakeLock: wakeLock,
         send: function (m) { m.sel = sel; return send(m); },
         onEnd: end
       });

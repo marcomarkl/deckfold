@@ -233,12 +233,15 @@ DF.startPresenter = function (snapshotHTML) {
   }
   function resetTimer() { timer = { start: phase === "show" ? Date.now() : 0, accum: 0, paused: false }; tickClock(); }
 
-  // ---------- banner: lost connection, start hint ----------
+  // ---------- banner: lost connection, start hint, no wake lock ----------
+  // noWake: the presentation window holds no screen wake lock (refused, released, a request open
+  // for more than 3 s, or no API), so the screen saver can start; the audience sees no hint
   var flash = null, flashUntil = 0;
   function banners() {
     var key = null;
     if (Date.now() - lastBeat > 4000) key = "showLost";
     else if (flash && Date.now() < flashUntil) key = flash;
+    else if (phase === "show" && (remote.wake === "off" || remote.wake === "none")) key = "noWake";
     bannerEl.textContent = key ? DF.t(key) : "";
     bannerEl.setAttribute("data-df-banner", key || "");
     bannerEl.classList.toggle("df-on", !!key);
@@ -262,7 +265,7 @@ DF.startPresenter = function (snapshotHTML) {
     if (typeof d.sel === "number") sel = d.sel;
     if (d.state) {
       st = { slide: d.state.slide, step: d.state.step };
-      remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended };
+      remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended, wake: d.wake };
     }
     if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
     if (phase !== "show") remote.auto = { on: false, due: 0 };
