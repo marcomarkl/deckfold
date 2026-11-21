@@ -263,6 +263,35 @@ test('PowerPoint assets: pictures are WebP, fonts WOFF2, and all of them load', 
   expect(st.fonts.filter((f) => !f.endsWith(':loaded')), msg).toEqual([]);
 });
 
+// The GIF of the GIF deck shows red, green and blue for half a second each. gifColor reads the
+// colour in the middle of the picture from a screenshot, since drawImage gives the first frame only.
+async function gifColor(page, img) {
+  const box = await img.boundingBox();
+  const { PNG } = await import('pngjs');
+  const shot = PNG.sync.read(await page.screenshot({ clip: { x: box.x + box.width / 2, y: box.y + box.height / 2, width: 1, height: 1 } }));
+  const [r, g, b] = shot.data;
+  return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
+}
+
+// gifTurnsGreen waits until the picture changes from red to green and returns the time of the
+// first green screenshot.
+async function gifTurnsGreen(page, img, timeout) {
+  const t0 = Date.now();
+  let last = '';
+  while (Date.now() - t0 < timeout) {
+    const c = await gifColor(page, img);
+    if (c === 'green' && last === 'red') return Date.now();
+    last = c;
+  }
+  return 0;
+}
+
+// Firefox starts every animated picture on a grid kept per window: pictures whose first frame lasts
+// equally long change frames together, at multiples of that duration after the first of them
+// started (nsRefreshDriver::UpdateAnimatedImages). So the GIF entered again shows its first frame
+// from the entry up to the next point of that grid, between 0 and 500 ms here, while Chrome and
+// WebKit show it for 500 ms. The test enters the slide again 150 ms after a point of the grid, which
+// it takes from the first change from red to green.
 test('PowerPoint GIF: starts again from its first frame when its slide is entered', async ({ page }) => {
   await solo(page, 'pptx-gifs.html');
   const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
@@ -271,35 +300,51 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
   const mimes = (await assetState(page)).mimes;
   expect(mimes.filter((m) => m === 'image/gif'), JSON.stringify(mimes)).toEqual([]);
   expect(mimes, JSON.stringify(mimes)).toContain('image/webp');
-  // The GIF shows red, green and blue for half a second each.
-  const color = async () => {
-    const box = await img.boundingBox();
-    const { PNG } = await import('pngjs');
-    const shot = PNG.sync.read(await page.screenshot({ clip: { x: box.x + box.width / 2, y: box.y + box.height / 2, width: 1, height: 1 } }));
-    const [r, g, b] = shot.data;
-    return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
-  };
-  await expect.poll(color, { timeout: 3000 }).toBe('green');
-  const tGreen = Date.now();
+  const tGreen = await gifTurnsGreen(page, img, 4000);
+  expect(tGreen, 'the GIF changes from red to green').toBeGreaterThan(0);
   await page.keyboard.press('ArrowRight');
-  const tRight = Date.now();
   await expect.poll(() => shown(page)).toBe(1);
-  await page.waitForTimeout(400);
-  await page.keyboard.press('ArrowLeft');
+  // Without a restart the first run would go on: green from tGreen + 1500 k, blue 500 ms later, red
+  // 500 ms after that. Enter again 150 ms into a green or blue half second, at least 300 ms after
+  // leaving.
+  let at = tGreen + 150;
+  while (at < Date.now() + 300 || Math.round((at - tGreen - 150) / 500) % 3 === 2) at += 500;
+  await page.waitForTimeout(at - Date.now());
   const tLeft = Date.now();
+  await page.keyboard.press('ArrowLeft');
   await expect.poll(() => shown(page)).toBe(0);
-  const tShown = Date.now();
-  const first = await color();
+  const tRead = Date.now();
+  const first = await gifColor(page, img);
   let msg = '';
   if (first !== 'red') {
     // what the picture shows after the failed read, to tell a late start from no start
     const t0 = Date.now();
     const seq = [];
-    while (Date.now() - t0 < 2500) seq.push(`${Date.now() - t0}:${await color()}`);
-    msg = JSON.stringify({ right: tRight - tGreen, left: tLeft - tGreen, shown: tShown - tGreen, read: t0 - tGreen, href: (await img.getAttribute('href')).replace(/^blob:[^#]*/, 'blob:'), after: seq.join(' ') });
+    while (Date.now() - t0 < 2500) seq.push(`${Date.now() - t0}:${await gifColor(page, img)}`);
+    msg = JSON.stringify({ left: tLeft - tGreen, read: tRead - tGreen, after: seq.join(' ') });
   }
   expect(first, msg).toBe('red');
   expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
+});
+
+// TEMPORARY measurement, not for main: how long the first frame shows after the slide is entered
+// again at a time unrelated to the grid, and where its end lies on the grid of the first run.
+test('PowerPoint GIF: grid measure', async ({ page }) => {
+  await solo(page, 'pptx-gifs.html');
+  const img = page.locator('.df-pptx-slide.df-on image[data-df-pptx-gif]');
+  const t1 = await gifTurnsGreen(page, img, 4000);
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => shown(page)).toBe(1);
+  await page.waitForTimeout(300 + Math.random() * 500);
+  const tLeft = Date.now();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => shown(page)).toBe(0);
+  const seq = [];
+  const t0 = Date.now();
+  while (Date.now() - t0 < 900) seq.push([Date.now() - tLeft, await gifColor(page, img)]);
+  const g = seq.find(([, c]) => c !== 'red');
+  const t2 = g ? tLeft + g[0] : 0;
+  console.log(`GRIDMEASURE first=${seq[0][1]}@${seq[0][0]} firstFrame=${g ? g[0] : 'none'} gridPhase=${g ? ((t2 - t1) % 500) : 'none'}`);
 });
 
 test('PowerPoint trigger: a click on the trigger shape plays its next step', async ({ page }) => {
