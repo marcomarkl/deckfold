@@ -280,12 +280,25 @@ test('PowerPoint GIF: starts again from its first frame when its slide is entere
     return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
   };
   await expect.poll(color, { timeout: 3000 }).toBe('green');
+  const tGreen = Date.now();
   await page.keyboard.press('ArrowRight');
+  const tRight = Date.now();
   await expect.poll(() => shown(page)).toBe(1);
   await page.waitForTimeout(400);
   await page.keyboard.press('ArrowLeft');
+  const tLeft = Date.now();
   await expect.poll(() => shown(page)).toBe(0);
-  expect(await color()).toBe('red');
+  const tShown = Date.now();
+  const first = await color();
+  let msg = '';
+  if (first !== 'red') {
+    // what the picture shows after the failed read, to tell a late start from no start
+    const t0 = Date.now();
+    const seq = [];
+    while (Date.now() - t0 < 2500) seq.push(`${Date.now() - t0}:${await color()}`);
+    msg = JSON.stringify({ right: tRight - tGreen, left: tLeft - tGreen, shown: tShown - tGreen, read: t0 - tGreen, href: (await img.getAttribute('href')).replace(/^blob:[^#]*/, 'blob:'), after: seq.join(' ') });
+  }
+  expect(first, msg).toBe('red');
   expect(await img.getAttribute('href')).toMatch(/^blob:.*#df-run\d+$/);
 });
 
