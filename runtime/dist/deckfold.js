@@ -1369,11 +1369,17 @@ DF.startShow = function (snapshotHTML) {
     if (!location.hash) return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { }
   }
+  // The start slide also travels in the address (#df-last=n) across a reload. Chrome sends what
+  // is written to sessionStorage to the browser on a channel of its own, and a reload right after
+  // the write can overtake it: on the Windows runner the start screen lost the slide in 4 of 150
+  // repeats although the page had read it back before the reload. The address goes with the
+  // navigation itself. It is read here, before anything else, and dropped before a player runs.
+  var fromHash = /^#df-last=(\d+)$/.exec(location.hash || "");
   dropHash();
   var cfg = DF.settings();
   var phase = "start"; // start, loading, show
   var rWin = null;
-  var last = DF.ss.get(DF.deckKey("df-last"));
+  var last = fromHash ? { slide: +fromHash[1], step: 0 } : DF.ss.get(DF.deckKey("df-last"));
   var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
   document.documentElement.classList.add("df-start-mode");
@@ -1491,6 +1497,7 @@ DF.startShow = function (snapshotHTML) {
     sel = Math.max(0, Math.min(slides.length - 1, i));
     // the choice survives a reload; the show writes the same key, so the later of the two counts
     DF.ss.set(DF.deckKey("df-last"), { slide: sel, step: 0 });
+    keepInAddress(sel);
     if (frame) frame.show(finalState(sel));
     strip.mark(sel);
     strip.nav(sel > 0, sel < slides.length - 1);
@@ -1605,10 +1612,20 @@ DF.startShow = function (snapshotHTML) {
   // end: back to the start screen with the last slide chosen, by reloading this window; the source
   // player stops with the reload, the presenter view stays open and reconnects
   function end(lastState) {
-    if (lastState) DF.ss.set(DF.deckKey("df-last"), lastState);
+    if (lastState) {
+      DF.ss.set(DF.deckKey("df-last"), lastState);
+      keepInAddress(lastState.slide);
+    }
     send({ type: "ended" });
     phase = "start";
     location.reload();
+  }
+  // keepInAddress puts the start slide into the address (see fromHash): on the start screen, where
+  // no source player runs yet (the claude.ai player reads its slide from the address, and begin
+  // drops the hash before it starts), and at the end right before this window reloads itself
+  function keepInAddress(n) {
+    if (generic) return;
+    try { history.replaceState(null, "", location.pathname + location.search + "#df-last=" + n); } catch (e) { }
   }
 };
 
