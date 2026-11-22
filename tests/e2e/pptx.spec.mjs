@@ -470,11 +470,31 @@ test('PowerPoint builds by word and by letter: the units appear one after the ot
   expect(words.length).toBe(6);
   expect(letters.length).toBe('Andthisoneletterbyletter'.length);
   expect(words.concat(letters).every((v) => !v)).toBe(true);
-  await page.keyboard.press('ArrowRight');
-  // each word starts 10 percent of the effect (500 ms) after the one before: 6 words take 1 s,
-  // so there is a moment when the first word is visible and the last is not
-  await expect.poll(async () => { const m = await vis('g[data-w]'); return m[0] && !m[5]; }, { timeout: 2000, intervals: [20] }).toBe(true);
-  await expect.poll(() => vis('g[data-w]')).toEqual([true, true, true, true, true, true]);
+  // Each word fades in over 500 ms and starts 10 percent of that (50 ms) after the one before. A
+  // word counts as visible above half its opacity, so the first one is from 250 ms on and the
+  // last one only from 500 ms on. Right after the jump, headless Chrome with SwiftShader can draw
+  // its first frames up to 640 ms apart (see the fade test above), and the player sets the
+  // opacity in those frames: one gap can step over the whole window, and a reading from the Node
+  // side comes later still. So the page waits until it draws frames steadily, starts the step
+  // through deckfold and reads the words after every frame.
+  const frames = await page.evaluate(async () => {
+    const words = [...document.querySelectorAll('.df-pptx-slide.df-on g[data-w]')];
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(performance.now())));
+    let last = await frame(), steady = 0;
+    for (const end = last + 5000; steady < 10 && last < end;) { const now = await frame(); steady = now - last < 50 ? steady + 1 : 0; last = now; }
+    const t0 = performance.now(), seen = [];
+    window.__deckfold.audience.act('next');
+    while (performance.now() - t0 < 3000) {
+      await frame();
+      const m = words.map((g) => { const cs = getComputedStyle(g); return cs.visibility !== 'hidden' && parseFloat(cs.opacity || '1') > 0.5; });
+      seen.push([Math.round(performance.now() - t0), m.map(Number).join('')]);
+      if (m.every(Boolean)) break;
+    }
+    return seen;
+  });
+  const log = `frames after "next" as [ms, visible words]: ${JSON.stringify(frames)}`;
+  expect(frames.some(([, m]) => m[0] === '1' && m[5] === '0'), `the first word shows before the last; ${log}`).toBe(true);
+  expect(frames.at(-1)[1], `all words show at the end; ${log}`).toBe('111111');
   // a jump shows the end state of every unit
   await page.evaluate(() => window.__deckfold.audience.act('state', { slide: 1, step: 2 }));
   expect((await vis('g[data-c]')).every((v) => v)).toBe(true);
