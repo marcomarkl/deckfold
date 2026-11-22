@@ -126,14 +126,28 @@ The Chromium source at 158 (`refs/branch-heads/8127`, the same code as `main` th
 
 So full screen fails when a dropped window belongs to one screen while most of it lies on the other. That also explains the cases that work: a second click finds the assignment and the geometry in agreement, and a window inside one screen or moved by script has no such difference. The transition failure inside macOS itself is inferred, not traced.
 
-Two more measurements in Chrome 158 decided the fix:
+Two more measurements in Chrome 158:
 
 - `requestFullscreen()` uses up the click: a second call without a new click was refused ("Permissions check failed") 0 ms, 1 s, 4 s and 6 s after a full screen that ended at once. A second attempt by deckfold is not possible.
-- `window.moveTo(screenX, screenY)` in a popup pulls a window that is not inside its screen fully onto the screen `window.screen` reports (x 1955 became 1360 on the 5K screen, x 2200 became 2560 on the laptop screen) and leaves a window inside its screen where it is; the click still counts afterwards.
+- `window.moveTo(screenX, screenY)` in a popup pulls a window that is not inside its screen fully onto the screen `window.screen` reports (x 1955 became 1360 on the 5K screen, x 2200 became 2560 on the laptop screen) and leaves a window inside its screen where it is.
 
-Since then the presenter view moves itself this way before full screen when it is not inside its screen (`DF.fitScreen`, E14), and asks for full screen 100 ms later. With the fix, 9 of 9 attempts went to full screen: the 6 windows moved by script over the edge after the move, the 3 inside one screen without one. A window dragged by hand could not be tested by script: macOS drops synthetic mouse events without the Accessibility permission. Safari and Firefox are not measured; the presentation window is a tab, which a page cannot move, so it gets no such move.
+A first fix moved the presenter view this way before full screen. In the maintainer's test it took the window back to the screen it came from every time and went to full screen there. The log showed why: the window had been dropped at x 1977 to 3177, `window.screen` still reported the laptop screen it was opened on, and `moveTo` pulled it back to x 2560. In the failure above, too, `window.screen` changed to the 5K screen only after full screen had failed. So after a drag by hand `window.screen` can still name the old screen, and no value a page can read without a permission tells which screen macOS gave the window. That fix was dropped.
 
-How it was measured: Chrome driven by Playwright reports full screen to the page but keeps the window a normal window, so these measurements ran in the installed Chrome, started with its own profile in `tests/.out` and `--remote-debugging-port`, with clicks sent as raw CDP `Input.dispatchMouseEvent` events; then the window goes to macOS full screen (`Browser.getWindowBounds` reports `fullscreen`).
+What a page does know is where the click on the full-screen button was: `MouseEvent.screenX` and `screenY` lie on the screen the user sees the button on. With the window management permission, `getScreenDetails()` lists the screens, and `requestFullscreen({ screen })` asks for full screen on one of them; Chrome then moves the window to that screen by script before it calls `toggleFullScreen:` (`kWindowedMovingToFullscreenTarget` in the full-screen controller), which is the path that never failed. Measured in the installed Chrome with the permission granted:
+
+- Control page, window over the edge with different shares, click on either side: 7 of 7 went to full screen on the screen of the click, also where most of the window lay on the other screen. The click still counted after awaiting `getScreenDetails()`.
+- deckfold's presenter view (the button near the right end of its bar): 6 of 6 and 7 of 7 on the screen of the click, also where the click was on the smaller part.
+
+How the permission behaves (Chrome 158, `file://`):
+
+- It is asked for at the first `getScreenDetails()` that has a click to use. Called after `requestFullscreen()` had used the click, it was refused at once without asking.
+- While Chrome asks, `getScreenDetails()` does not settle, and Chrome refuses full screen ("not granted"). So the first click only asks; full screen follows the answer if the click still counts then, otherwise the next click.
+- The permission is stored for the origin `file://`, so it covers every local file.
+- Headless Chrome under Playwright refuses `getScreenDetails()` at once (19 ms).
+
+Since then a click on the full-screen button of the presenter view asks for full screen on the screen of the click: with the permission granted, or not yet answered, through `getScreenDetails()`; refused, in Safari and Firefox (no `getScreenDetails`), and for the key or a keyboard click, full screen is asked for as before (E14). A window dragged by hand could not be tested by script: macOS drops synthetic mouse events without the Accessibility permission. Safari and Firefox are not measured. The presentation window is a tab and keeps full screen as before.
+
+How it was measured: Chrome driven by Playwright reports full screen to the page but keeps the window a normal window, so these measurements ran in the installed Chrome, started with its own profile in `tests/.out` and `--remote-debugging-port`, with clicks sent as raw CDP `Input.dispatchMouseEvent` events; then the window goes to macOS full screen (`Browser.getWindowBounds` reports `fullscreen`). Permissions set through CDP (`Browser.grantPermissions`, `Browser.setPermission`) only hold when set after the page has loaded, and once any is set, Chrome refuses every plain `requestFullscreen()` in that browser ("not granted"), also on the control page; the refused state could therefore not be measured, and the plain request deckfold makes then is the one measured before.
 
 ## The highlight under a resting mouse (2026-11-11)
 

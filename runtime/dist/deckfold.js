@@ -1073,20 +1073,6 @@ DF.requestFs = function (target, screen) {
   try { return screen ? elx.requestFullscreen({ screen: screen }) : elx.requestFullscreen(); }
   catch (e) { return Promise.reject(e); }
 };
-// DF.fitScreen: a window that is not inside its screen is moved to where it is, and the browser pulls
-// it onto that screen; it reports whether it moved the window. macOS gives a window dragged over the
-// edge of two screens to the screen under the pointer, and full screen then fails when most of the
-// window lies on the other screen (measured with Chrome 158, docs/spikes/S2-file-protocol.md).
-// Only a popup can be moved, so this is for the presenter view (E14).
-DF.fitScreen = function () {
-  var s = window.screen;
-  if (typeof s.availLeft !== "number" || typeof window.moveTo !== "function") return false;
-  var inside = screenX >= s.availLeft && screenY >= s.availTop &&
-    screenX + outerWidth <= s.availLeft + s.availWidth && screenY + outerHeight <= s.availTop + s.availHeight;
-  if (inside) return false;
-  try { window.moveTo(screenX, screenY); } catch (e) { return false; }
-  return true;
-};
 DF.toggleFs = function () {
   if (document.fullscreenElement) return document.exitFullscreen();
   return DF.requestFs();
@@ -2250,13 +2236,26 @@ DF.startPresenter = function (snapshotHTML) {
   showTarget();
   // the full-screen button shows what a click does: corners pointing out and "Full screen" in a
   // window, corners pointing in and "Window" in full screen
-  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { toggleFs(); } });
-  // full screen of this window: a window that hangs over the edge of its screen is first moved onto
-  // it (DF.fitScreen), and full screen follows once the move has reached the window; the click
-  // still counts then, since moving does not use it up
-  function toggleFs() {
-    if (document.fullscreenElement || !DF.fitScreen()) { DF.toggleFs(); return; }
-    setTimeout(function () { DF.requestFs().catch(function () { }); }, 100);
+  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function (e) { toggleFs(e); } });
+  // full screen of this window on the screen the mouse clicked on (E14). After the window was
+  // dragged over the edge of two screens, macOS and the browser can disagree about which screen it is
+  // on, and full screen then ends at once (docs/spikes/S2-file-protocol.md). With the window
+  // management permission the screen of the click is asked for by name, and the browser moves the
+  // window there before it switches. The first click asks for the permission; while the browser
+  // asks, it refuses full screen, which follows the answer if the click still counts then, and the
+  // next click otherwise. Refused, in Safari and Firefox, and for a key or a click from the keyboard
+  // (detail 0), full screen is asked for as before.
+  function toggleFs(e) {
+    if (document.fullscreenElement || !e || !e.detail || typeof window.getScreenDetails !== "function" || !navigator.permissions) { DF.toggleFs(); return; }
+    var x = e.screenX, y = e.screenY;
+    navigator.permissions.query({ name: "window-management" }).then(function (p) {
+      if (p.state === "denied") return DF.requestFs();
+      return window.getScreenDetails().then(function (d) {
+        var at = null;
+        d.screens.forEach(function (s) { if (x >= s.left && x < s.left + s.width && y >= s.top && y < s.top + s.height) at = s; });
+        return DF.requestFs(null, at || d.currentScreen);
+      }, function () { return DF.requestFs(); });
+    }, function () { return DF.requestFs(); }).catch(function () { });
   }
   function fsLabel() {
     var full = !!(document.fullscreenElement || document.webkitFullscreenElement), label = DF.t(full ? "window" : "fullscreen");
