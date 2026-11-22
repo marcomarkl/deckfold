@@ -2568,8 +2568,9 @@ DF.startPresenter = function (snapshotHTML) {
     // consumed, so that it does not press a focused button either
     if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }
     if (phase !== "show") {
-      // before the start: choose the slide
-      if (a === "end") return true;
+      // before the start: choose the slide. "End" has no show to end here; in full screen it leaves
+      // full screen, which Keyboard Lock (30-keys.js) keeps Escape from doing by itself
+      if (a === "end") { if (document.fullscreenElement) document.exitFullscreen().catch(function () { }); return true; }
     }
     if (a === "goto") { command("goto", e.slide); return true; }
     command(a);
