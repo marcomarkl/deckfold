@@ -60,6 +60,9 @@ type Config struct {
 	// NoCache switches off the folder beside the output that keeps what the picture encoder
 	// wrote (configuration key "cache", false). Like KeepAssets it steers the conversion only.
 	NoCache bool `json:"-"`
+	// DropHidden leaves out the slides hidden in a PowerPoint file (configuration key
+	// "dropHidden"), as deckfold did before E21. Like KeepAssets it steers the conversion only.
+	DropHidden bool `json:"-"`
 }
 
 // Elements are the presenter view panes that can be hidden (E20): what the audience sees, the
@@ -187,6 +190,7 @@ func Merge(data []byte, base Config) (Config, error) {
 		WarnSize   *string `json:"warnSize"`
 		KeepAssets *bool   `json:"keepAssets"`
 		Cache      *bool   `json:"cache"`
+		DropHidden *bool   `json:"dropHidden"`
 		Schema     string  `json:"$schema"`
 	}
 	if err := dec.Decode(&in); err != nil {
@@ -242,6 +246,9 @@ func Merge(data []byte, base Config) (Config, error) {
 	}
 	if in.Cache != nil {
 		c.NoCache = !*in.Cache
+	}
+	if in.DropHidden != nil {
+		c.DropHidden = *in.DropHidden
 	}
 	return c, c.Validate()
 }
@@ -353,12 +360,13 @@ func ParseSize(s string) (int, error) {
 
 // Example is the sample configuration printed by --print-config.
 func Example() string {
-	// keepAssets and cache are read from a configuration file but not stored in an output, so
-	// Config leaves them out of its JSON form; the sample shows them.
+	// keepAssets, cache and dropHidden are read from a configuration file but not stored in an
+	// output, so Config leaves them out of its JSON form; the sample shows them.
 	b, _ := json.MarshalIndent(struct {
 		Config
 		KeepAssets bool `json:"keepAssets"`
 		Cache      bool `json:"cache"`
+		DropHidden bool `json:"dropHidden"`
 	}{Config: Default(), Cache: true}, "", "  ")
 	return string(b) + "\n"
 }

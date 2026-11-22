@@ -1145,7 +1145,8 @@ var Tiles = (function () {
 //
 // API:
 //   goTo(slide, step)  show the state after `step` of `slide` at once, without animation
-//   next() / prev()    one step forward or back
+//   next() / prev()    one step forward or back; next(slide) from the last step of a slide plays
+//                      the transition into a later slide (deckfold skips hidden slides with it)
 //   showAll(slide)     show every object of the slide (the editing view, for image comparison)
 //   state()            {slide, step}
 // Events on window: "df-pptx-ready" once, "df-pptx-change" after every state change.
@@ -1573,17 +1574,20 @@ function goTo(slide, step) {
   emit("df-pptx-change");
 }
 
-// next plays the next step, or the transition to the next slide and its entry effects.
-function next() {
+// next plays the next step, or the transition to the next slide and its entry effects. With a
+// target slide after the current one it plays the transition into that slide instead of the next,
+// as PowerPoint does after a hidden slide.
+function next(target) {
   finishPlaying();
-  if (cur.step < stepsOf(cur.slide) - 1) {
+  var skip = typeof target === "number" && target > cur.slide + 1 && target < sections.length;
+  if (!skip && cur.step < stepsOf(cur.slide) - 1) {
     cur = { slide: cur.slide, step: cur.step + 1 };
     playStep(cur.slide, cur.step);
     emit("df-pptx-change");
     return;
   }
-  if (cur.slide >= sections.length - 1) return;
-  var from = cur.slide, to = from + 1;
+  if (!skip && cur.slide >= sections.length - 1) return;
+  var from = cur.slide, to = skip ? target : from + 1;
   cur = { slide: to, step: 0 };
   // the new slide starts in its initial state (objects with entrance effects hidden)
   animOf(to).show(animOf(to).initial());

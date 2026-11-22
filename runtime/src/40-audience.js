@@ -153,15 +153,17 @@ DF.startAudience = function (opts) {
   // before: the slide shown before the current one, for a link to "the last slide viewed"
   var before = null;
   // follow: a link to another slide on the current one (the content model's "jump"). A link goes
-  // to the start of its slide; "next" and "prev" mean slides here, not steps.
+  // to the start of its slide; "next" and "prev" mean slides here, not steps, and like "first" and
+  // "last" they skip slides hidden from the show (E21). A link to a slide by its number shows it,
+  // hidden or not.
   function follow(to) {
     if (st.ended) return;
-    var n = DF.slides().length;
+    var n = DF.slides().length, j;
     switch (to) {
-      case "next": return st.slide + 1 < n ? go(DF.model.goto(st.slide + 1)) : go(null);
-      case "prev": return st.slide > 0 ? go(DF.model.goto(st.slide - 1)) : undefined;
-      case "first": return go(DF.model.goto(0));
-      case "last": return go(DF.model.goto(n - 1));
+      case "next": j = DF.model.shownAfter(st.slide); return j >= 0 ? go(DF.model.goto(j)) : go(null);
+      case "prev": j = DF.model.shownBefore(st.slide); return j >= 0 ? go(DF.model.goto(j)) : undefined;
+      case "first": return go(DF.model.first());
+      case "last": return go(DF.model.last());
       case "back": return before != null ? go(DF.model.goto(before)) : undefined;
       case "end": return finish();
     }

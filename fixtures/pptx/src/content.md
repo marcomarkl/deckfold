@@ -43,7 +43,9 @@ Show the hint
 
 A hint only the button shows
 
-## 4. Links to other slides
+## 4. This slide is hidden
+
+## 5. Links to other slides
 
 Next slide
 
@@ -63,6 +65,6 @@ The hidden slide
 
 To the free text
 
-## 5. The last slide
+## 6. The last slide
 
 - Nothing follows this slide

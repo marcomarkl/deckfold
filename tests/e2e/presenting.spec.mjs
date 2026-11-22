@@ -15,18 +15,19 @@ test('start screen: title, preview, strip; a tile sets the start slide; the play
   // before "Start" no source script has run
   expect(await deferred(page)).toBeGreaterThan(0);
   expect(await page.evaluate(() => !!window.__dfPptx)).toBe(false);
-  await page.click('.df-strip .df-tile[data-i="2"]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  // the last slide (the third is hidden from the show, E21)
+  await page.click('.df-strip .df-tile[data-i="3"]');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '3');
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold.audience);
-  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
   await expect(page.locator('.df-start')).toHaveCount(0);
   expect(await deferred(page)).toBe(0);
   // the end returns to the start screen by reloading: the player is inactive again, the last slide is chosen
   await page.keyboard.press('Escape');
   await page.waitForSelector('.df-start [data-df-start]');
   expect(await deferred(page)).toBeGreaterThan(0);
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '3');
 });
 
 test('start screen keys: arrows choose the slide, Enter starts', async ({ page }) => {
@@ -101,20 +102,21 @@ test('end: Escape in the presenter view ends; the presenter view stays open and 
 test('overview band of the presenter view: click, arrows; time and band are always shown', async ({ page, context }) => {
   await startScreen(page, 'pptx-basic.html');
   const pres = await openPresenter(page, context);
-  // before the start: a click and the arrows choose the start slide
-  await pres.click('.df-overview .df-tile[data-i="2"]');
-  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  // before the start: a click and the arrows choose the start slide (the third slide is hidden
+  // from the show and not in this strip, E21)
+  await pres.click('.df-overview .df-tile[data-i="3"]');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '3');
   await pres.click('.df-overview [data-df-strip-prev]');
   await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold.audience);
   await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
   // during the show: a click jumps, the arrows only scroll the band
-  await pres.click('.df-overview .df-tile[data-i="2"]');
-  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  await pres.click('.df-overview .df-tile[data-i="3"]');
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
   await pres.click('.df-overview [data-df-strip-prev]');
   await page.waitForTimeout(400);
-  expect(await audState(page)).toEqual({ slide: 2, step: 0 });
+  expect(await audState(page)).toEqual({ slide: 3, step: 0 });
   // the status bar holds three switches; the time and the band have none and are always shown (E20)
   const switches = () => pres.evaluate(() => [...document.querySelectorAll('.df-status [data-df-el]')].map((b) => b.getAttribute('data-df-el')));
   expect(await switches()).toEqual(['audience', 'next', 'notes']);
@@ -167,9 +169,12 @@ test('start screen: arrows at the strip, auto fields only with auto mode, no has
   // start screen keeps only its own start slide there (#df-last=n), which it drops before a player runs
   expect(await page.evaluate(() => location.hash)).toMatch(/^(#df-last=\d+)?$/);
   await expect(page.locator('[data-df-strip-prev]')).toBeDisabled();
+  // the arrows of the start screen go through every slide, the hidden third one too (E21)
   await page.click('[data-df-strip-next]');
   await page.click('[data-df-strip-next]');
   await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '2');
+  await page.click('[data-df-strip-next]');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '3');
   await expect(page.locator('[data-df-strip-next]')).toBeDisabled();
   await page.uncheck('[data-df-auto]');
   await expect(page.locator('[data-df-interval]')).toBeDisabled();
@@ -252,8 +257,11 @@ test('reloading the presenter view during the show reconnects it', async ({ page
   await pres.reload();
   await pres.waitForSelector('.df-presenter');
   await expect.poll(() => counter(pres), { timeout: 8000 }).toMatch(/^2 \//);
+  // the reloaded view knows the slides hidden from the show (E21): the third is not in its strip,
+  // and "next" goes past it
+  await expect(pres.locator('.df-overview .df-tile[data-i="2"]')).toBeHidden();
   await pres.keyboard.press('ArrowRight');
-  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
 });
 
 test('start screen: tiles of equal width; the preview shows the chosen slide after all its steps', async ({ page }) => {
@@ -806,8 +814,8 @@ test('commands right after Start are carried out, from the presenter view and by
   const pres = await openPresenter(page, context);
   await page.click('[data-df-start]');
   await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
-  await pres.click('.df-overview .df-tile[data-i="2"]');
-  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  await pres.click('.df-overview .df-tile[data-i="3"]');
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
   // by key in the presentation window, at once after the click on Start
   await page.keyboard.press('Escape');
   await page.waitForSelector('.df-start [data-df-start]');
@@ -1051,13 +1059,14 @@ test('presenter view: no counter in the top bar, the number of slides at the lef
   const m = await pres.evaluate(() => {
     const bar = document.querySelector('.df-bar'), status = document.querySelector('.df-status');
     const count = status.querySelector('[data-df-count]');
-    const n = window.__deckfold.slides().length;
+    const n = window.__deckfold.slides().length, shown = n - window.__deckfold.hiddenSlides().length;
     const title = bar.querySelector('.df-title').textContent;
     return {
       counter: document.querySelectorAll('.df-counter').length,
       slash: bar.textContent.replace(title, '').includes('/'),
       first: status.firstElementChild === count,
-      text: count && count.textContent, want: window.__deckfold.slideCount(n), n,
+      text: count && count.textContent, want: window.__deckfold.slideCount(n, shown), all: window.__deckfold.slideCount(n), n, shown,
+      of: window.__deckfold.t('of'),
       one: window.__deckfold.slideCount(1), nine: window.__deckfold.slideCount(9),
       oneWord: window.__deckfold.t('oneSlide'), many: window.__deckfold.t('slides')
     };
@@ -1066,7 +1075,10 @@ test('presenter view: no counter in the top bar, the number of slides at the lef
   expect(m.slash).toBe(false);
   expect(m.first).toBe(true);
   expect(m.text).toBe(m.want);
-  expect(m.want).toBe(`${m.n} ${m.many}`);
+  // the third slide of the basic deck is hidden from the show (E21): "3 of 4 slides"
+  expect(m.shown).toBe(m.n - 1);
+  expect(m.want).toBe(`${m.shown} ${m.of} ${m.n} ${m.many}`);
+  expect(m.all).toBe(`${m.n} ${m.many}`);
   // one slide is "1 slide", not "1 slides"
   expect(m.one).toBe(`1 ${m.oneWord}`);
   expect(m.nine).toBe(`9 ${m.many}`);
@@ -1103,4 +1115,125 @@ test('presenter view: the overview can be dragged higher, with larger tiles', as
   const share = await pres.evaluate(() => document.querySelector('.df-overview').offsetHeight / document.querySelector('.df-presenter').clientHeight);
   expect(share).toBeLessThanOrEqual(0.46);
   expect(await width()).toBeGreaterThan(w1);
+});
+
+// ---------- slides hidden from the show (E21) ----------
+
+// The presenter view's strip leaves out the slides hidden from the show and follows every change on
+// the start screen at once: the show window sends the list right after the click, not with its
+// next heartbeat a second later.
+test('hidden slides: the strip of the presenter view follows the eyes of the start screen at once', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  const n = await page.evaluate(() => window.__deckfold.slides().length);
+  const hiddenTiles = () => pres.evaluate(() => [...document.querySelectorAll('.df-overview .df-tile')].filter((t) => getComputedStyle(t).display === 'none').map((t) => +t.getAttribute('data-i')));
+  await expect.poll(hiddenTiles).toEqual([2]);
+  const count = (shown) => page.evaluate(([n, shown]) => window.__deckfold.slideCount(n, shown), [n, shown]);
+  await expect(pres.locator('.df-status [data-df-count]')).toHaveText(await count(n - 1));
+  // each change shows in the presenter view within 300 ms, three times in a row; the heartbeat
+  // comes once a second, so a view that waited for it would miss this most of the time
+  const times = [];
+  for (const [i, want] of [[1, [1, 2]], [1, [2]], [2, []]]) {
+    const t0 = Date.now();
+    await page.click(`.df-strip [data-df-eye="${i}"]`);
+    await pres.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.df-overview .df-tile')]
+      .filter((t) => getComputedStyle(t).display === 'none').map((t) => +t.getAttribute('data-i'))) === JSON.stringify(want), want, { polling: 'raf', timeout: 3000 });
+    times.push(Date.now() - t0);
+  }
+  expect(Math.max(...times), `ms from the click to the strip of the presenter view: ${times}`).toBeLessThan(300);
+  await expect(pres.locator('.df-status [data-df-count]')).toHaveText(await count(n));
+});
+
+// "next", "back", End and the preview skip the hidden slide; a jump by its number shows it.
+test('hidden slides: next, back, End and the preview skip a hidden slide, its number shows it', async ({ page, context }) => {
+  const pres = await present(page, context, 'pptx-basic.html');
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([2]);
+  const playerSlide = () => page.evaluate(() => window.__dfPptx.state().slide);
+  const nextPreview = () => pres.evaluate(() => {
+    const f = document.querySelector('.df-next iframe[data-df-preview]');
+    return f && f.contentDocument ? [...f.contentDocument.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')) : -1;
+  });
+  // the last step of the second slide: "Preview" shows the fourth slide, the arrow is marked
+  const end1 = await page.evaluate(() => window.__deckfold.model.end(1));
+  await page.evaluate((s) => window.__deckfold.audience.act('state', s), end1);
+  await expect.poll(() => counter(pres)).toContain('2 / 4');
+  await expect.poll(nextPreview, { timeout: 10000 }).toBe(3);
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
+  await expect.poll(playerSlide).toBe(3);
+  await pres.keyboard.press('ArrowLeft');
+  await expect.poll(() => audState(page)).toEqual(end1);
+  await pres.keyboard.press('Home');
+  await expect.poll(() => audState(page)).toEqual(await expected(page, ['first']));
+  await pres.keyboard.press('End');
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
+  // the number of the hidden slide and Enter show it; "next" goes on to the next shown one
+  await pres.keyboard.press('3');
+  await pres.keyboard.press('Enter');
+  await expect.poll(() => audState(page)).toEqual({ slide: 2, step: 0 });
+  await expect.poll(playerSlide).toBe(2);
+  await pres.keyboard.press('ArrowRight');
+  await expect.poll(() => audState(page)).toEqual({ slide: 3, step: 0 });
+});
+
+// A chosen start slide that is hidden: "Live" shows the slide the show will begin on, and it
+// begins there; the presenter view's arrows before the start skip hidden slides.
+test('hidden slides: a hidden start slide, "Live" and the start', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.click('.df-strip .df-tile[data-i="1"]');
+  await expect.poll(() => counter(pres)).toContain('2 / 4');
+  // hiding the chosen slide: "Live" moves to the next shown one (the third is hidden too)
+  await page.click('.df-strip [data-df-eye="1"]');
+  await expect.poll(() => counter(pres)).toContain('4 / 4');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
+  // the presenter view's back arrow goes to the shown slide before the one it shows
+  await pres.keyboard.press('ArrowLeft');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '0');
+  await pres.keyboard.press('ArrowRight');
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '3');
+  // the last slide chosen and hidden: the show begins on the shown slide before it
+  await page.click('.df-strip [data-df-eye="3"]');
+  await expect.poll(() => counter(pres)).toContain('1 / 4');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience);
+  await expect.poll(() => audState(page)).toEqual({ slide: 0, step: 0 });
+});
+
+// Without a chosen slide (a new tab), the start slide is the first shown one, not slide 1.
+test('hidden slides: with the first slide hidden, the start slide is the first shown one', async ({ page }) => {
+  await startScreen(page, 'pptx-basic.html');
+  await page.click('.df-strip [data-df-eye="0"]');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto('about:blank');
+  await startScreen(page, 'pptx-basic.html');
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([0, 2]);
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
+  await expect(page.locator('[data-df-hint]')).toHaveText('');
+});
+
+// Auto mode skips hidden slides too, also when it loops back to the first slide and that one is
+// hidden.
+test('hidden slides: auto mode with loop skips them, also on the way back to the first slide', async ({ page }) => {
+  test.setTimeout(60_000);
+  await startScreen(page, 'pptx-basic.html');
+  await page.click('.df-strip [data-df-eye="0"]');
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([0, 2]);
+  await page.check('[data-df-auto]');
+  await page.locator('[data-df-interval]').fill('1');
+  await page.locator('[data-df-interval]').dispatchEvent('change');
+  await page.check('[data-df-loop]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience && window.__dfPptx && window.__dfPptx.state().slide === 1);
+  await page.evaluate(() => {
+    window.__seen = [];
+    setInterval(() => window.__seen.push([window.__deckfold.audience.state().slide, window.__dfPptx.state().slide]), 50);
+  });
+  // through the fourth slide and back to the second
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.__seen.map((x) => x[0]), i = s.indexOf(3);
+    return i >= 0 && s.slice(i).includes(1);
+  }), { timeout: 40_000 }).toBe(true);
+  const seen = await page.evaluate(() => window.__seen);
+  expect(seen.filter(([a, p]) => a === 0 || a === 2 || p === 0 || p === 2), 'states (show, player) on a hidden slide').toEqual([]);
 });

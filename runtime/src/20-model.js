@@ -15,7 +15,38 @@ function chain(s) {
   return { slide: s.slide, step: step };
 }
 
-function rawPrev(s) {
+// Hidden slides (E21): the slides the show skips on "next", "back", Home, End and in auto mode.
+// A jump to a slide by its number, a hit of the search or a link to it still shows it. The set is
+// the same in the show window and in the presenter view (the show window sends it along).
+var hiddenSet = {};
+function selfPlaying() {
+  return slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
+}
+// canHide: whether deckfold moves the player itself, so that it can skip a slide. The generic
+// adapter cannot move a player at all, and a self-playing Keynote export moves on by itself.
+DF.canHide = function () {
+  var f = DF.format();
+  if (f === "generic" || !DF.adapters || !DF.adapters[f]) return false;
+  return !(f === "keynote" && selfPlaying());
+};
+// setHidden takes a list of slide indices; indices outside the deck are dropped, and one slide
+// always stays shown, so that the show is never empty.
+DF.setHidden = function (list) {
+  var n = slidesOf().length, h = {}, count = 0;
+  (list || []).forEach(function (i) {
+    if (typeof i === "number" && i % 1 === 0 && i >= 0 && i < n && !h[i]) { h[i] = true; count++; }
+  });
+  if (n && count >= n) { for (var k = 0; k < n; k++) if (h[k]) { delete h[k]; break; } }
+  hiddenSet = h;
+};
+DF.hiddenSlides = function () { return Object.keys(hiddenSet).map(Number).sort(function (a, b) { return a - b; }); };
+DF.isShown = function (i) { return !hiddenSet[i]; };
+function shownAfter(i) { var n = slidesOf().length; for (var j = i + 1; j < n; j++) if (!hiddenSet[j]) return j; return -1; }
+function shownBefore(i) { for (var j = Math.min(i, slidesOf().length) - 1; j >= 0; j--) if (!hiddenSet[j]) return j; return -1; }
+
+// stepBack: the state before s, one step or onto the last step of the slide before; skip leaves
+// out hidden slides.
+function stepBack(s, skip) {
   var sl = slidesOf();
   if (s.step > 0) {
     var st = s.step - 1, cur = sl[s.slide];
@@ -23,33 +54,48 @@ function rawPrev(s) {
     while (st > 0 && cur.auto && cur.auto[st]) st--;
     return { slide: s.slide, step: st };
   }
-  if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
+  var j = skip ? shownBefore(s.slide) : s.slide - 1;
+  if (j >= 0) return { slide: j, step: Math.max(0, sl[j].steps - 1) };
   return null;
 }
 function hasAuto(i) { var sl = slidesOf()[i]; return !!(sl && sl.auto && sl.auto.some(Boolean)); }
+// stepAfter and restBefore: the neighbouring states as the player sees them; skip leaves out hidden slides
+function stepAfter(s, skip) {
+  var sl = slidesOf(), cur = sl[s.slide];
+  if (!cur) return null;
+  if (s.step < cur.steps - 1) return chain({ slide: s.slide, step: s.step + 1 });
+  var j = skip ? shownAfter(s.slide) : (s.slide + 1 < sl.length ? s.slide + 1 : -1);
+  return j >= 0 ? chain({ slide: j, step: 0 }) : null;
+}
+function restBefore(s, skip) {
+  var c = stepBack(s, skip);
+  while (c && DF.model.same(chain(c), s)) c = stepBack(c, skip);
+  return c ? chain(c) : null;
+}
 
 DF.model = {
-  first: function () { return chain({ slide: 0, step: 0 }); },
-  last: function () { var n = slidesOf().length; return chain({ slide: Math.max(0, n - 1), step: 0 }); },
+  first: function () { return chain({ slide: Math.max(0, shownAfter(-1)), step: 0 }); },
+  last: function () { return chain({ slide: Math.max(0, shownBefore(slidesOf().length)), step: 0 }); },
   goto: function (slide) { var n = slidesOf().length; return chain({ slide: Math.max(0, Math.min(n - 1, slide)), step: 0 }); },
+  // startAt: where a show chosen to start on slide i begins: there, or, when it is hidden, on the
+  // next shown slide after it, else on the last shown one before it
+  startAt: function (i) {
+    if (DF.isShown(i)) return DF.model.goto(i);
+    var j = shownAfter(i);
+    return DF.model.goto(j >= 0 ? j : Math.max(0, shownBefore(i)));
+  },
+  // shownAfter and shownBefore: the index of the next or previous shown slide, or -1
+  shownAfter: shownAfter,
+  shownBefore: shownBefore,
   // end: slide i as it looks after all its steps (what the previews show)
   end: function (i) { var sl = slidesOf()[i] || {}; return { slide: i, step: Math.max(0, (sl.steps || 1) - 1) }; },
-  // next returns null at the end of the presentation.
-  next: function (s) {
-    var sl = slidesOf(), cur = sl[s.slide];
-    if (!cur) return null;
-    if (s.step < cur.steps - 1) return chain({ slide: s.slide, step: s.step + 1 });
-    if (s.slide + 1 < sl.length) return chain({ slide: s.slide + 1, step: 0 });
-    return null;
-  },
+  // next returns null at the end of the presentation. After the last step of a slide it goes to
+  // the next shown slide; on a hidden slide reached by a jump, its own steps come first.
+  next: function (s) { return stepAfter(s, true); },
   // prev returns a state the source player rests in, like next: a state followed by an auto step
   // would not stay (the player runs on by itself), so back skips over whole auto runs. On a slide
   // whose steps after the first are all auto, back goes to the slide before.
-  prev: function (s) {
-    var c = rawPrev(s);
-    while (c && DF.model.same(chain(c), s)) c = rawPrev(c);
-    return c ? chain(c) : null;
-  },
+  prev: function (s) { return restBefore(s, true); },
   // stops: the states slide i rests in, in order; a click moves from one to the next (auto steps of
   // claude.ai slides are no stops). The presenter view draws a dot for each (E20).
   stops: function (i) {
@@ -229,10 +275,7 @@ DF.adapters = {
     // shown: the slide index of the player's last slide change event. A self-playing export (its
     // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
     // is not compared there.
-    shown: function () {
-      var selfPlaying = slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
-      return selfPlaying ? null : this._at;
-    }
+    shown: function () { return selfPlaying() ? null : this._at; }
   },
   // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
   pptx: {
@@ -245,7 +288,10 @@ DF.adapters = {
       });
       return this._ready;
     },
-    forward: function () { if (window.__dfPptx) window.__dfPptx.next(); },
+    // forward(to): with a target on a later slide (the next shown one after hidden slides), the
+    // player plays the transition into that slide (see next in runtime/pptx-player/10-player.js)
+    forwardSkips: true,
+    forward: function (to) { if (window.__dfPptx) window.__dfPptx.next(to && to.slide); },
     back: function () { if (window.__dfPptx) window.__dfPptx.prev(); },
     jump: function (target) {
       if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
@@ -279,7 +325,12 @@ DF.drive = function (from, to) {
   if (DF.role === "preview") return a.jump(to, from);
   var claude = DF.format() === "claude";
   if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
-  if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
-  if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
+  // a key press moves the player to its neighbouring state, hidden or not: it is used only where
+  // that is the target (the model's next and prev skip hidden slides, the player does not)
+  if (from && DF.model.same(stepAfter(from, false), to)) { a.forward(); return Promise.resolve(); }
+  if (from && DF.model.same(restBefore(from, false), to)) { a.back(); return Promise.resolve(); }
+  // the next shown slide after hidden ones: PowerPoint's player plays the transition into it, as
+  // PowerPoint does; the other players jump
+  if (from && a.forwardSkips && to.slide > from.slide && DF.model.same(DF.model.next(from), to)) { a.forward(to); return Promise.resolve(); }
   return a.jump(to, from);
 };

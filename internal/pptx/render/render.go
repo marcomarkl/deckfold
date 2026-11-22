@@ -44,6 +44,9 @@ const (
 type Options struct {
 	Fonts *fonts.Resolver
 	Warn  func(format string, a ...any)
+	// DropHidden leaves out the slides hidden in PowerPoint (--drop-hidden); otherwise they are
+	// drawn and marked as hidden (E21).
+	DropHidden bool
 	// Linked loads a file the presentation links to (TargetMode="External"): a path relative to
 	// the presentation, a file: URL or an http(s) URL. Without it, linked files are reported.
 	Linked func(target string) (data []byte, ext string, err error)
@@ -60,6 +63,7 @@ type Options struct {
 // Slide is one rendered slide.
 type Slide struct {
 	Number int    // position in the file, 1-based
+	Hidden bool   // hidden in PowerPoint (show="0")
 	Label  string // title text
 	Notes  string
 	SVG    string // the slide content (an <svg> element)
@@ -126,7 +130,9 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 	}
 	res := &Result{Width: float64(pres.Width) / emuPx, Height: float64(pres.Height) / emuPx, Assets: rd.assets}
 	for _, s := range pres.Slides {
-		if s.Hidden {
+		// a hidden slide is drawn too, marked as hidden, so that it can be switched on in the
+		// browser (E21); --drop-hidden leaves it out
+		if s.Hidden && opt.DropHidden {
 			continue
 		}
 		// the number a slide number field shows is the place of the slide in the deck: PowerPoint
@@ -136,6 +142,7 @@ func Render(pres *model.Presentation, opt Options) (*Result, error) {
 		if err != nil {
 			return nil, fmt.Errorf("slide %d: %w", s.Number, err)
 		}
+		out.Hidden = s.Hidden
 		out.Anim = anim.Read(s.Root, &res.AnimReport)
 		if t := out.Anim.Transition; t != nil && anim.WebGLTransitions[t.Type] {
 			rd.webGL = true // tile transitions are drawn with three.js
@@ -294,8 +301,8 @@ var showJumps = map[string]string{"nextslide": "next", "previousslide": "prev", 
 
 // jumpTarget returns the target of a link to another slide: "next", "prev", "first", "last",
 // "back" (the slide viewed before), "end" (end the show), or the index of the slide among the
-// shown slides. It returns "" for every other link, and for a link to a hidden slide, which is
-// not part of the deck deckfold writes.
+// slides deckfold writes. It returns "" for every other link, and, with DropHidden, for a link to
+// a hidden slide, which is not part of the deck then.
 func (rl relLookup) jumpTarget(h *xmltree.Node) string {
 	action := h.Attr("action")
 	if j, ok := strings.CutPrefix(action, "ppaction://hlinkshowjump?jump="); ok {
@@ -308,17 +315,18 @@ func (rl relLookup) jumpTarget(h *xmltree.Node) string {
 	if !ok || rel.External {
 		return ""
 	}
-	shown := 0
+	drop := rl.rd.opt.DropHidden
+	written := 0
 	for _, s := range rl.rd.pres.Slides {
 		if s.Name == rel.Target {
-			if s.Hidden {
+			if s.Hidden && drop {
 				rl.rd.warnOnce("a link to a hidden slide is shown as text without an action")
 				return ""
 			}
-			return strconv.Itoa(shown)
+			return strconv.Itoa(written)
 		}
-		if !s.Hidden {
-			shown++
+		if !s.Hidden || !drop {
+			written++
 		}
 	}
 	return ""

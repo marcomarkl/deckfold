@@ -58,6 +58,9 @@ type Options struct {
 	// Media converts pictures and fonts into smaller formats that show the same (E17); nil
 	// embeds every asset unchanged.
 	Media *media.Optimizer
+	// DropHidden leaves out the slides hidden in PowerPoint (--drop-hidden), as deckfold did before
+	// E21; otherwise they are written, marked as hidden, and skipped in the show until switched on.
+	DropHidden bool
 }
 
 // MissingError lists linked files that could not be loaded (exit code 1 unless --lenient).
@@ -70,7 +73,8 @@ func (e *MissingError) Error() string {
 // Result reports what the conversion did.
 type Result struct {
 	Slides   int
-	Hidden   int
+	Hidden   int  // slides hidden in PowerPoint
+	Dropped  bool // the hidden slides were left out (DropHidden)
 	Warnings []string
 	Fonts    []string // one line per font: family, source
 }
@@ -150,7 +154,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 		fr.Dirs = opt.FontDirs
 	}
 	prepareMedia(pkg, opt.Media)
-	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked, AssetDir: filepath.Join(dir, "assets"), Media: opt.Media,
+	out, err := render.Render(pres, render.Options{Fonts: fr, Warn: warn, Linked: linked, AssetDir: filepath.Join(dir, "assets"), Media: opt.Media, DropHidden: opt.DropHidden,
 		Missing: func(target, where string, err error) {
 			missing = append(missing, report.Missing{Ref: target, Where: filepath.Base(src) + ": " + where, Reason: err.Error()})
 		}})
@@ -194,7 +198,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 	data := deck.Data{Version: deck.BlocksVersion, Title: pres.Title, Width: out.Width, Height: out.Height, Loop: pres.Loop, UseTimings: pres.UseTimings}
 	for _, s := range out.Slides {
 		a := s.Anim
-		sd := deck.SlideData{Number: s.Number, Label: s.Label, Notes: s.Notes, Steps: len(a.Steps), Shapes: s.Shapes, Anim: &a, Advance: a.Advance}
+		sd := deck.SlideData{Number: s.Number, Label: s.Label, Notes: s.Notes, Hidden: s.Hidden, Steps: len(a.Steps), Shapes: s.Shapes, Anim: &a, Advance: a.Advance}
 		if sd.Steps < 1 {
 			sd.Steps = 1
 		}
@@ -219,6 +223,7 @@ func Convert(src, dir string, opt Options) (*Result, error) {
 			res.Hidden++
 		}
 	}
+	res.Dropped = opt.DropHidden
 	res.Slides = len(out.Slides)
 	if res.Slides == 0 {
 		return nil, fmt.Errorf("the presentation has no visible slides")

@@ -27,7 +27,7 @@ The model is a JSON block in the output file, next to the deck metadata:
 }
 ```
 
-`slides` has one entry for every slide of the deck metadata (`deck.slides` in `#df-meta`), in the same order. Slides that are hidden in a PowerPoint file are in neither list. Presenter notes stay in the deck metadata (`deck.slides[].notes`); `--content` puts both together.
+`slides` has one entry for every slide of the deck metadata (`deck.slides` in `#df-meta`), in the same order. A slide hidden in a PowerPoint file is in both lists, marked with `hidden` in the metadata (decision E21), unless the file was converted with `--drop-hidden`, which leaves it out of both. Whether a slide is hidden from the show in the browser is a setting of the viewer and not part of the content. Presenter notes stay in the deck metadata (`deck.slides[].notes`); `--content` puts both together.
 
 | Field | Meaning |
 |---|---|
@@ -37,7 +37,7 @@ The model is a JSON block in the output file, next to the deck metadata:
 | `text` | The text with white space collapsed. A line break inside a block is a space. |
 | `step` | The first step of the slide in which the block shows; 0 means from the start. When a block sits inside something that appears later, the later step counts. `-1` means the block shows in no step of the click order: a PowerPoint shape that only a trigger shows, or one that stays hidden. The field is missing when the source does not tell the step, which is the case for every block of a Keynote export. |
 | `level` | The list level of an `item`, left out for the first level. |
-| `jump` | A link to another slide: `{"slide": n}` with an index into `slides`, or `{"to": "next"}` with `next` and `prev` (the next and the previous slide, not step), `first`, `last`, `back` (the slide shown before) or `end` (end the presentation). PowerPoint decks and Keynote exports have them. A link to a hidden or skipped slide is not a link here, because such slides are not in the deck. |
+| `jump` | A link to another slide: `{"slide": n}` with an index into `slides`, or `{"to": "next"}` with `next` and `prev` (the next and the previous slide, not step), `first`, `last`, `back` (the slide shown before) or `end` (end the presentation). PowerPoint decks and Keynote exports have them. A link to a slide that is not in the deck is not a link here: a slide skipped in Keynote, which the export leaves out, or a slide hidden in PowerPoint when the file was converted with `--drop-hidden`. |
 
 There are no positions in the model, and no links to the web.
 

@@ -46,7 +46,7 @@ DF.token = (function () {
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    slides: "Folien", oneSlide: "Folie", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
+    slides: "Folien", oneSlide: "Folie", of: "von", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
     fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
@@ -67,7 +67,7 @@ var TEXT = {
     keySpace: "Leertaste", keyPgDn: "Bild \u2193", keyPgUp: "Bild \u2191", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "R\u00fcckschritt", keyDigits: "1 2 3 \u2026",
   },
   en: {
-    slides: "slides", oneSlide: "slide", generic: "Unknown format: no presenter view, overview or auto mode.",
+    slides: "slides", oneSlide: "slide", of: "of", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
     fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
@@ -90,8 +90,11 @@ var TEXT = {
 };
 function t(k) { return (TEXT[LANG] && TEXT[LANG][k]) || TEXT.en[k] || k; }
 DF.t = t;
-// slideCount: "1 slide", "9 slides"
-DF.slideCount = function (n) { return n + " " + t(n === 1 ? "oneSlide" : "slides"); };
+// slideCount: "1 slide", "9 slides"; with shown < n (slides hidden from the show, E21) "7 of 9 slides"
+DF.slideCount = function (n, shown) {
+  var all = n + " " + t(n === 1 ? "oneSlide" : "slides");
+  return shown != null && shown < n ? shown + " " + t("of") + " " + all : all;
+};
 
 function el(tag, attrs, children) {
   var e = document.createElement(tag);
@@ -527,7 +530,38 @@ function chain(s) {
   return { slide: s.slide, step: step };
 }
 
-function rawPrev(s) {
+// Hidden slides (E21): the slides the show skips on "next", "back", Home, End and in auto mode.
+// A jump to a slide by its number, a hit of the search or a link to it still shows it. The set is
+// the same in the show window and in the presenter view (the show window sends it along).
+var hiddenSet = {};
+function selfPlaying() {
+  return slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
+}
+// canHide: whether deckfold moves the player itself, so that it can skip a slide. The generic
+// adapter cannot move a player at all, and a self-playing Keynote export moves on by itself.
+DF.canHide = function () {
+  var f = DF.format();
+  if (f === "generic" || !DF.adapters || !DF.adapters[f]) return false;
+  return !(f === "keynote" && selfPlaying());
+};
+// setHidden takes a list of slide indices; indices outside the deck are dropped, and one slide
+// always stays shown, so that the show is never empty.
+DF.setHidden = function (list) {
+  var n = slidesOf().length, h = {}, count = 0;
+  (list || []).forEach(function (i) {
+    if (typeof i === "number" && i % 1 === 0 && i >= 0 && i < n && !h[i]) { h[i] = true; count++; }
+  });
+  if (n && count >= n) { for (var k = 0; k < n; k++) if (h[k]) { delete h[k]; break; } }
+  hiddenSet = h;
+};
+DF.hiddenSlides = function () { return Object.keys(hiddenSet).map(Number).sort(function (a, b) { return a - b; }); };
+DF.isShown = function (i) { return !hiddenSet[i]; };
+function shownAfter(i) { var n = slidesOf().length; for (var j = i + 1; j < n; j++) if (!hiddenSet[j]) return j; return -1; }
+function shownBefore(i) { for (var j = Math.min(i, slidesOf().length) - 1; j >= 0; j--) if (!hiddenSet[j]) return j; return -1; }
+
+// stepBack: the state before s, one step or onto the last step of the slide before; skip leaves
+// out hidden slides.
+function stepBack(s, skip) {
   var sl = slidesOf();
   if (s.step > 0) {
     var st = s.step - 1, cur = sl[s.slide];
@@ -535,33 +569,48 @@ function rawPrev(s) {
     while (st > 0 && cur.auto && cur.auto[st]) st--;
     return { slide: s.slide, step: st };
   }
-  if (s.slide > 0) return { slide: s.slide - 1, step: Math.max(0, sl[s.slide - 1].steps - 1) };
+  var j = skip ? shownBefore(s.slide) : s.slide - 1;
+  if (j >= 0) return { slide: j, step: Math.max(0, sl[j].steps - 1) };
   return null;
 }
 function hasAuto(i) { var sl = slidesOf()[i]; return !!(sl && sl.auto && sl.auto.some(Boolean)); }
+// stepAfter and restBefore: the neighbouring states as the player sees them; skip leaves out hidden slides
+function stepAfter(s, skip) {
+  var sl = slidesOf(), cur = sl[s.slide];
+  if (!cur) return null;
+  if (s.step < cur.steps - 1) return chain({ slide: s.slide, step: s.step + 1 });
+  var j = skip ? shownAfter(s.slide) : (s.slide + 1 < sl.length ? s.slide + 1 : -1);
+  return j >= 0 ? chain({ slide: j, step: 0 }) : null;
+}
+function restBefore(s, skip) {
+  var c = stepBack(s, skip);
+  while (c && DF.model.same(chain(c), s)) c = stepBack(c, skip);
+  return c ? chain(c) : null;
+}
 
 DF.model = {
-  first: function () { return chain({ slide: 0, step: 0 }); },
-  last: function () { var n = slidesOf().length; return chain({ slide: Math.max(0, n - 1), step: 0 }); },
+  first: function () { return chain({ slide: Math.max(0, shownAfter(-1)), step: 0 }); },
+  last: function () { return chain({ slide: Math.max(0, shownBefore(slidesOf().length)), step: 0 }); },
   goto: function (slide) { var n = slidesOf().length; return chain({ slide: Math.max(0, Math.min(n - 1, slide)), step: 0 }); },
+  // startAt: where a show chosen to start on slide i begins: there, or, when it is hidden, on the
+  // next shown slide after it, else on the last shown one before it
+  startAt: function (i) {
+    if (DF.isShown(i)) return DF.model.goto(i);
+    var j = shownAfter(i);
+    return DF.model.goto(j >= 0 ? j : Math.max(0, shownBefore(i)));
+  },
+  // shownAfter and shownBefore: the index of the next or previous shown slide, or -1
+  shownAfter: shownAfter,
+  shownBefore: shownBefore,
   // end: slide i as it looks after all its steps (what the previews show)
   end: function (i) { var sl = slidesOf()[i] || {}; return { slide: i, step: Math.max(0, (sl.steps || 1) - 1) }; },
-  // next returns null at the end of the presentation.
-  next: function (s) {
-    var sl = slidesOf(), cur = sl[s.slide];
-    if (!cur) return null;
-    if (s.step < cur.steps - 1) return chain({ slide: s.slide, step: s.step + 1 });
-    if (s.slide + 1 < sl.length) return chain({ slide: s.slide + 1, step: 0 });
-    return null;
-  },
+  // next returns null at the end of the presentation. After the last step of a slide it goes to
+  // the next shown slide; on a hidden slide reached by a jump, its own steps come first.
+  next: function (s) { return stepAfter(s, true); },
   // prev returns a state the source player rests in, like next: a state followed by an auto step
   // would not stay (the player runs on by itself), so back skips over whole auto runs. On a slide
   // whose steps after the first are all auto, back goes to the slide before.
-  prev: function (s) {
-    var c = rawPrev(s);
-    while (c && DF.model.same(chain(c), s)) c = rawPrev(c);
-    return c ? chain(c) : null;
-  },
+  prev: function (s) { return restBefore(s, true); },
   // stops: the states slide i rests in, in order; a click moves from one to the next (auto steps of
   // claude.ai slides are no stops). The presenter view draws a dot for each (E20).
   stops: function (i) {
@@ -741,10 +790,7 @@ DF.adapters = {
     // shown: the slide index of the player's last slide change event. A self-playing export (its
     // steps carry timings) may move on by itself, which deckfold cannot tell from a drift, so it
     // is not compared there.
-    shown: function () {
-      var selfPlaying = slidesOf().some(function (s) { return s.delay && s.delay.some(function (d) { return d != null && d >= 0; }); });
-      return selfPlaying ? null : this._at;
-    }
+    shown: function () { return selfPlaying() ? null : this._at; }
   },
   // Decks generated from PowerPoint: deckfold's own player (runtime/pptx-player) with a public API.
   pptx: {
@@ -757,7 +803,10 @@ DF.adapters = {
       });
       return this._ready;
     },
-    forward: function () { if (window.__dfPptx) window.__dfPptx.next(); },
+    // forward(to): with a target on a later slide (the next shown one after hidden slides), the
+    // player plays the transition into that slide (see next in runtime/pptx-player/10-player.js)
+    forwardSkips: true,
+    forward: function (to) { if (window.__dfPptx) window.__dfPptx.next(to && to.slide); },
     back: function () { if (window.__dfPptx) window.__dfPptx.prev(); },
     jump: function (target) {
       if (window.__dfPptx) window.__dfPptx.goTo(target.slide, target.step);
@@ -791,8 +840,13 @@ DF.drive = function (from, to) {
   if (DF.role === "preview") return a.jump(to, from);
   var claude = DF.format() === "claude";
   if (claude && from && hasAuto(from.slide)) return a.jump(to, null);
-  if (from && DF.model.same(DF.model.next(from), to)) { a.forward(); return Promise.resolve(); }
-  if (from && DF.model.same(DF.model.prev(from), to)) { a.back(); return Promise.resolve(); }
+  // a key press moves the player to its neighbouring state, hidden or not: it is used only where
+  // that is the target (the model's next and prev skip hidden slides, the player does not)
+  if (from && DF.model.same(stepAfter(from, false), to)) { a.forward(); return Promise.resolve(); }
+  if (from && DF.model.same(restBefore(from, false), to)) { a.back(); return Promise.resolve(); }
+  // the next shown slide after hidden ones: PowerPoint's player plays the transition into it, as
+  // PowerPoint does; the other players jump
+  if (from && a.forwardSkips && to.slide > from.slide && DF.model.same(DF.model.next(from), to)) { a.forward(to); return Promise.resolve(); }
   return a.jump(to, from);
 };
 
@@ -815,10 +869,38 @@ DF.presenterElements = function (list) {
   });
   return out;
 };
-DF.saveSettings = function (cur) {
+// saveSettings stores the differences from the defaults. The list of hidden slides is written only
+// by saveHidden: the start screen and the presenter view each keep the settings they read, and a
+// copy read before the list changed would otherwise put the old list back.
+DF.saveSettings = function (cur, withHidden) {
   var key = "deckfold:" + ((DF.meta && DF.meta.deckHash) || "deck");
+  cur = DF.clone(cur);
+  if (!withHidden) {
+    var stored = DF.ls.get(key) || {};
+    if (Array.isArray(stored.hidden)) cur.hidden = stored.hidden; else delete cur.hidden;
+  }
   var d = DF.diff(DF.cfg.defaults || {}, cur);
   if (d) DF.ls.set(key, d); else DF.ls.del(key);
+};
+// hiddenList: the slides hidden from the show (E21), as stored for this deck ("hidden" among the
+// settings), otherwise the deck's own: the slides PowerPoint hides. Where deckfold cannot skip a
+// slide (DF.canHide), none.
+function deckHidden() {
+  var out = [];
+  DF.slides().forEach(function (s, i) { if (s.hidden) out.push(i); });
+  return out;
+}
+DF.hiddenList = function () {
+  if (!DF.canHide()) return [];
+  var h = settings().hidden;
+  return Array.isArray(h) ? h.slice() : deckHidden();
+};
+// saveHidden stores the list; a list that is the deck's own is not stored, so that the deck
+// decides again.
+DF.saveHidden = function (list) {
+  var cur = settings(), sorted = list.slice().sort(function (a, b) { return a - b; });
+  if (JSON.stringify(sorted) === JSON.stringify(deckHidden())) delete cur.hidden; else cur.hidden = sorted;
+  DF.saveSettings(cur, true);
 };
 
 function actionFor(e) {
@@ -1090,9 +1172,20 @@ DF.rescaleTiles = function (root) { [].slice.call(root.querySelectorAll(".df-thu
 // used by the start screen and by the presenter view. opts.pick(i) is called for a click on a
 // tile, opts.step(-1 | 1) for the arrows. mark(i) highlights the tile and scrolls it into view;
 // nav(canBack, canForward) enables or disables the arrows.
+// With opts.eye (the start screen), each tile has an eye at the right of its number that hides the
+// slide from the show or shows it again (E21): opts.onEye(i). The eye is a button of its own beside
+// the tile button, in a wrapper, since a button inside a button is not allowed.
+// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, otherwise
+// (the presenter view) by leaving their tiles out.
 DF.slideStrip = function (opts) {
   var band = DF.el("div", { class: "df-strip", "data-df-strip": "" });
-  DF.slides().forEach(function (s, i) { band.appendChild(DF.slideTile(i, function () { opts.pick(i); })); });
+  DF.slides().forEach(function (s, i) {
+    var tile = DF.slideTile(i, function () { opts.pick(i); });
+    if (!opts.eye) { band.appendChild(tile); return; }
+    var eye = DF.iconButton("eye", DF.t("hideSlide"), { class: "df-eye", "data-df-eye": String(i), "aria-pressed": "false",
+      onclick: function () { opts.onEye(i); } });
+    band.appendChild(DF.el("div", { class: "df-tile-wrap", "data-i": String(i) }, [tile, eye]));
+  });
   var back = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-prev": "", "aria-label": DF.t("previous"), title: DF.t("previous"), text: "\u2039", onclick: function () { opts.step(-1); } });
   var fwd = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-next": "", "aria-label": DF.t("following"), title: DF.t("following"), text: "\u203a", onclick: function () { opts.step(1); } });
   var el = DF.el("div", { class: "df-strip-wrap" }, [back, band, fwd]);
@@ -1111,6 +1204,25 @@ DF.slideStrip = function (opts) {
       }
     },
     nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
+    hide: function (list) {
+      var set = {}, n = DF.slides().length;
+      (list || []).forEach(function (i) { set[i] = true; });
+      var shown = n - Object.keys(set).length;
+      if (!opts.eye) {
+        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-hidden", !!set[+t.getAttribute("data-i")]); });
+        DF.rescaleTiles(band);
+        return;
+      }
+      [].slice.call(band.querySelectorAll(".df-tile-wrap")).forEach(function (w) {
+        var off = !!set[+w.getAttribute("data-i")], eye = w.querySelector("[data-df-eye]"), label = DF.t(off ? "showSlide" : "hideSlide");
+        w.classList.toggle("df-off", off);
+        eye.replaceChild(DF.icon(off ? "eyeOff" : "eye"), eye.firstChild);
+        eye.title = label; eye.setAttribute("aria-label", label);
+        eye.setAttribute("aria-pressed", off ? "true" : "false");
+        // the last shown slide cannot be hidden: the show is never empty
+        eye.disabled = !off && shown <= 1;
+      });
+    },
     // scroll: move the band by most of its width without choosing a slide
     scroll: function (dir) { band.scrollBy({ left: dir * band.clientWidth * 0.8, behavior: "smooth" }); }
   };
@@ -1334,14 +1446,16 @@ DF.finder = function (opts) {
 // They are drawn here so that they look the same on every machine (a character such as U+2328
 // would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
 // keys and the space bar; search: a magnifier; fsEnter and fsExit: four corners pointing out and
-// in; power: the on/off sign.
+// in; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
   keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
     ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
   fsEnter: [["path", { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" }]],
   fsExit: [["path", { d: "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" }]],
-  power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]]
+  power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
+  eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
+  eyeOff: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }], ["path", { d: "M4 20L20 4" }]]
 };
 DF.icon = function (name) {
   var ns = "http://www.w3.org/2000/svg";
@@ -1421,7 +1535,10 @@ DF.startShow = function (snapshotHTML) {
   var phase = "start"; // start, loading, show
   var rWin = null;
   var last = fromHash ? { slide: +fromHash[1], step: 0 } : fromState != null ? { slide: fromState, step: 0 } : DF.ss.get(DF.deckKey("df-last"));
-  var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : 0;
+  // the slides hidden from the show (E21); without a chosen slide the start slide is the first
+  // shown one (a PowerPoint deck may hide its first slide)
+  DF.setHidden(DF.hiddenList());
+  var sel = last && slides.length ? Math.max(0, Math.min(slides.length - 1, last.slide)) : DF.model.first().slide;
   var send = DF.channel(function () { return rWin; }, function () { return DF.token; }, onMsg);
   // presenterOpen: whether the presenter view was open before this window loaded (the end of a
   // show reloads it). The switch shows it from the first frame on; the window itself is known only
@@ -1481,12 +1598,14 @@ DF.startShow = function (snapshotHTML) {
   var stage = DF.el("div", { class: "df-start-stage" });
   var view = DF.el("div", { class: "df-start-view" }, [stage]);
   view.style.setProperty("--df-ar", String((meta.width || 1920) / (meta.height || 1080)));
-  if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); } });
+  if (!generic) strip = DF.slideStrip({ pick: function (i) { setSel(i); }, step: function (d) { setSel(sel + d); },
+    eye: DF.canHide(), onEye: toggleHidden });
   // search and outline: only the slide text here, because this window may already be on the
   // projector; the presenter view searches the notes too
   var finder = generic ? null : DF.finder({ notes: false, pick: function (i) { setSel(i); }, current: function () { return sel; } });
   // the key help and the version of deckfold are behind the button at the start of the footer
   var help = DF.helpOverlay(keyGroups());
+  var countEl = generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length) });
   var root = DF.el("div", { "data-df-ui": "", class: "df-start" }, [
     DF.el("div", { class: "df-start-box" }, [
       DF.el("h1", { text: meta.title || document.title || "deckfold" }),
@@ -1497,7 +1616,7 @@ DF.startShow = function (snapshotHTML) {
       // the left: the key help, the search, the number of slides. Nothing stands below "Start".
       DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
         DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
-          generic ? null : DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: DF.slideCount(slides.length) })])
+          countEl])
       ])
     ])
   ]);
@@ -1532,6 +1651,7 @@ DF.startShow = function (snapshotHTML) {
       setTimeout(function () { frame = DF.previewFrame(stage, snapshotHTML); frame.show(finalState(sel)); }, 0);
     });
     autoFields();
+    showHidden();
     setSel(sel);
   }
   try { startBtn.focus({ preventScroll: true }); } catch (e) { }
@@ -1547,7 +1667,24 @@ DF.startShow = function (snapshotHTML) {
     if (frame) frame.show(finalState(sel));
     strip.mark(sel);
     strip.nav(sel > 0, sel < slides.length - 1);
+    showHint();
     beat();
+  }
+  // toggleHidden: the eye of slide i hides it from the show or shows it again (E21); the presenter
+  // view follows with the next message, sent at once
+  function toggleHidden(i) {
+    var list = DF.hiddenSlides(), at = list.indexOf(i);
+    if (at >= 0) list.splice(at, 1); else list.push(i);
+    DF.setHidden(list);
+    DF.saveHidden(DF.hiddenSlides());
+    showHidden();
+    showHint();
+    beat();
+  }
+  function showHidden() {
+    var h = DF.hiddenSlides();
+    if (strip) strip.hide(h);
+    if (countEl) countEl.textContent = DF.slideCount(slides.length, slides.length - h.length);
   }
 
   // ---------- presenter view window ----------
@@ -1597,7 +1734,7 @@ DF.startShow = function (snapshotHTML) {
     if (d.type === "hello") { send(status("init")); return; }
     if (d.type === "hb") return;
     if (d.type === "cmd") {
-      if (phase === "start") return selectBy(d.cmd, d.arg);
+      if (phase === "start") return selectBy(d.cmd, d.arg, true);
       // from "Start" on: to the presentation; while it is still loading, kept for it
       if (DF.audience) return DF.audience.act(d.cmd, d.arg);
       early.push([d.cmd, d.arg]);
@@ -1610,7 +1747,21 @@ DF.startShow = function (snapshotHTML) {
     var q = early; early = [];
     q.forEach(function (c) { DF.audience.act(c[0], c[1]); });
   }
-  function selectBy(cmd, arg) {
+  // selectBy: a command that moves the start slide. The keys and arrows of the start screen go
+  // through every slide, since hiding is done here; the presenter view's commands (fromPresenter)
+  // skip hidden slides, which its strip does not show, starting from the slide it shows as "Live".
+  function selectBy(cmd, arg, fromPresenter) {
+    if (fromPresenter) {
+      var at = DF.model.startAt(sel).slide, j;
+      switch (cmd) {
+        case "next": j = DF.model.shownAfter(at); return j >= 0 ? setSel(j) : undefined;
+        case "prev": j = DF.model.shownBefore(at); return j >= 0 ? setSel(j) : undefined;
+        case "first": return setSel(DF.model.first().slide);
+        case "last": return setSel(DF.model.last().slide);
+        case "goto": return setSel(arg);
+      }
+      return;
+    }
     switch (cmd) {
       case "next": return setSel(sel + 1);
       case "prev": return setSel(sel - 1);
@@ -1620,7 +1771,7 @@ DF.startShow = function (snapshotHTML) {
     }
   }
   function status(type) {
-    var m = { type: type, phase: phase === "show" ? "show" : "start", sel: sel };
+    var m = { type: type, phase: phase === "show" ? "show" : "start", sel: sel, hidden: DF.hiddenSlides() };
     if (phase === "show" && DF.audience) { var i = DF.audience.info(); for (var k in i) m[k] = i[k]; }
     return m;
   }
@@ -1629,7 +1780,16 @@ DF.startShow = function (snapshotHTML) {
     if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; remember(false); }
     beat();
   }, 1000);
-  function hint(k) { hintEl.textContent = k ? DF.t(k) : ""; hintEl.classList.toggle("df-on", !!k); }
+  // hint: a message in the line beside "Start" (popupBlocked) until it is cleared; otherwise, while
+  // the chosen slide is hidden from the show, the slide the show starts on (E21)
+  var hintKey = null;
+  function hint(k) { hintKey = k; showHint(); }
+  function showHint() {
+    if (!hintEl) return;
+    var text = hintKey ? DF.t(hintKey) : !generic && slides.length && !DF.isShown(sel) ? DF.t("startsAt") + " " + (DF.model.startAt(sel).slide + 1) : "";
+    hintEl.textContent = text;
+    hintEl.classList.toggle("df-on", !!text);
+  }
 
   // ---------- keys on the start screen ----------
   DF.installKeys(function (a, e) {
@@ -1673,14 +1833,15 @@ DF.startShow = function (snapshotHTML) {
     startBtn.textContent = DF.t("loading");
     if (finder) finder.remove(); // no search in the presentation itself
     help.remove();
-    var start = generic ? null : DF.model.goto(sel);
+    // a chosen slide hidden from the show is not where it begins (E21)
+    var start = generic ? null : DF.model.startAt(sel);
     document.documentElement.classList.remove("df-start-mode");
     dropHash();
     // the scripts start after the click or key event has ended
     new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
       return DF.startAudience({
         start: start, fullscreen: wantFs, wakeLock: wakeLock,
-        send: function (m) { m.sel = sel; return send(m); },
+        send: function (m) { m.sel = sel; m.hidden = DF.hiddenSlides(); return send(m); },
         onEnd: end
       });
     }).then(function () {
@@ -1868,15 +2029,17 @@ DF.startAudience = function (opts) {
   // before: the slide shown before the current one, for a link to "the last slide viewed"
   var before = null;
   // follow: a link to another slide on the current one (the content model's "jump"). A link goes
-  // to the start of its slide; "next" and "prev" mean slides here, not steps.
+  // to the start of its slide; "next" and "prev" mean slides here, not steps, and like "first" and
+  // "last" they skip slides hidden from the show (E21). A link to a slide by its number shows it,
+  // hidden or not.
   function follow(to) {
     if (st.ended) return;
-    var n = DF.slides().length;
+    var n = DF.slides().length, j;
     switch (to) {
-      case "next": return st.slide + 1 < n ? go(DF.model.goto(st.slide + 1)) : go(null);
-      case "prev": return st.slide > 0 ? go(DF.model.goto(st.slide - 1)) : undefined;
-      case "first": return go(DF.model.goto(0));
-      case "last": return go(DF.model.goto(n - 1));
+      case "next": j = DF.model.shownAfter(st.slide); return j >= 0 ? go(DF.model.goto(j)) : go(null);
+      case "prev": j = DF.model.shownBefore(st.slide); return j >= 0 ? go(DF.model.goto(j)) : undefined;
+      case "first": return go(DF.model.first());
+      case "last": return go(DF.model.last());
       case "back": return before != null ? go(DF.model.goto(before)) : undefined;
       case "end": return finish();
     }
@@ -2133,8 +2296,8 @@ DF.startPresenter = function (snapshotHTML) {
   });
   var overviewEl = DF.el("div", { class: "df-overview" }, [strip.el]);
   // the status bar: the number of slides at the left, the hints, the switches at the right
-  var status = DF.el("footer", { class: "df-status" }, [
-    DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: DF.slideCount(slides.length) }), bannerEl, toggles]);
+  var countEl = DF.el("span", { class: "df-count", "data-df-count": String(slides.length) });
+  var status = DF.el("footer", { class: "df-status" }, [countEl, bannerEl, toggles]);
   ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(splitS); ui.appendChild(overviewEl); ui.appendChild(status);
   ui.style.setProperty("--df-ratio", (meta.width || 1920) + " / " + (meta.height || 1080));
   document.body.appendChild(ui);
@@ -2231,7 +2394,21 @@ DF.startPresenter = function (snapshotHTML) {
   var hasNotes = slides.some(function (s) { return s.notes; });
 
   // ---------- rendering ----------
-  function shown() { return phase === "show" ? st : DF.model.goto(sel); }
+  // before the start: the slide the show will begin on, which is not a chosen slide hidden from it
+  function shown() { return phase === "show" ? st : DF.model.startAt(sel); }
+  // the slides hidden from the show (E21): the strip leaves them out, and the count says so. The
+  // show window sends the list with every message, so a change on the start screen shows at once.
+  var hiddenNow = null;
+  function applyHidden(list) {
+    var key = JSON.stringify(list || []);
+    if (key === hiddenNow) return false;
+    hiddenNow = key;
+    DF.setHidden(list || []);
+    strip.hide(DF.hiddenSlides());
+    countEl.textContent = DF.slideCount(slides.length, slides.length - DF.hiddenSlides().length);
+    marked = -1;
+    return true;
+  }
   function render() {
     cfg = DF.settings();
     var els = elements();
@@ -2267,7 +2444,7 @@ DF.startPresenter = function (snapshotHTML) {
     autoBtn.classList.toggle("df-active", !!remote.auto.on);
     ui.classList.toggle("df-before", phase !== "show");
     if (s.slide !== marked) { marked = s.slide; strip.mark(s.slide); }
-    strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
+    strip.nav(phase === "show" || DF.model.shownBefore(s.slide) >= 0, phase === "show" || DF.model.shownAfter(s.slide) >= 0);
     banners();
   }
   // dots in the heading of "Live": one for each state the slide rests in, filled up to the one
@@ -2361,7 +2538,8 @@ DF.startPresenter = function (snapshotHTML) {
     }
     if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
     if (phase !== "show") remote.auto = { on: false, due: 0 };
-    if (d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
+    var hid = Array.isArray(d.hidden) && applyHidden(d.hidden);
+    if (hid || d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
   }
   function beat() { send({ type: "hb" }); banners(); }
   setInterval(beat, 1000);
@@ -2403,6 +2581,8 @@ DF.startPresenter = function (snapshotHTML) {
   window.addEventListener("blur", function () { setTimeout(refocus, 0); });
   setInterval(refocus, 500);
 
+  // the list as stored until the show window sends its own
+  applyHidden(DF.hiddenList());
   render();
   tickClock();
   send({ type: "hello" });

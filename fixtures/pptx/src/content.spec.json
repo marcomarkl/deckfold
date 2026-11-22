@@ -108,6 +108,16 @@
       ]
     },
     {
+      "title": "This slide is hidden",
+      "blocks": [
+        {
+          "role": "title",
+          "text": "This slide is hidden",
+          "step": 0
+        }
+      ]
+    },
+    {
       "title": "Links to other slides",
       "blocks": [
         {
@@ -174,7 +184,10 @@
         {
           "role": "text",
           "text": "The hidden slide",
-          "step": 0
+          "step": 0,
+          "jump": {
+            "slide": 3
+          }
         },
         {
           "role": "text",

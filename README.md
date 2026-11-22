@@ -23,7 +23,7 @@ deckfold reads the slides, layouts, masters and themes of the file and draws eve
 
 Charts are drawn from the data stored with them: column, bar, line, area, pie, doughnut, scatter, bubble, radar, stock, pie of pie, bar of pie and surface charts. 3D shapes (bevels, extrusions, cameras) and 3D charts are drawn with WebGL (three.js, embedded only in decks that need it); without WebGL, and in the previews of the presenter view, an SVG approximation takes their place.
 
-Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, word and letter, effects that start with or after the previous one, and triggers (a click on a shape plays its effects; a click on a video or an audio icon plays or pauses it). Animated GIFs start again when their slide is shown. Morph moves, scales and turns the objects it pairs. The transitions of PowerPoint 2010 and later are drawn too: the 3D ones (cube, flip, gallery, doors and others) with CSS, the ones that break the slide into pieces (glitter, honeycomb, vortex, shred and others) with WebGL, and as a fade where WebGL is missing. Slides with automatic timings advance by themselves in auto mode. Hidden slides are left out. A link to another slide works on text and on a shape: to a slide, to the next, previous, first or last slide, to the slide viewed before, or to the end of the show.
+Animations and transitions are played by deckfold's player: entrance, exit and emphasis effects, motion paths, builds by paragraph, word and letter, effects that start with or after the previous one, and triggers (a click on a shape plays its effects; a click on a video or an audio icon plays or pauses it). Animated GIFs start again when their slide is shown. Morph moves, scales and turns the objects it pairs. The transitions of PowerPoint 2010 and later are drawn too: the 3D ones (cube, flip, gallery, doors and others) with CSS, the ones that break the slide into pieces (glitter, honeycomb, vortex, shred and others) with WebGL, and as a fade where WebGL is missing. Slides with automatic timings advance by themselves in auto mode. A slide hidden in PowerPoint is in the file and hidden from the show; its eye on the start screen shows it again (see Presenting). Its text, pictures and notes are then in the file too, so to pass on a file without such slides, convert it with `--drop-hidden` or `"dropHidden": true` in the configuration file, which leaves them out as deckfold did up to v0.11.0. A PowerPoint file converted before v0.12.0 gets these slides only from a new conversion, not from `--refresh`. A link to another slide works on text and on a shape: to a slide, to the next, previous, first or last slide, to the slide viewed before, or to the end of the show.
 
 What deckfold does not show as PowerPoint does:
 
@@ -62,6 +62,7 @@ Without `-o` the result is `<name>.standalone.html` next to the input. deckfold 
 | `--loop` | loop in auto mode |
 | `--warn-size 250MB` | warning threshold for the output size |
 | `--keep-assets` | embed pictures, fonts, video and sound unchanged instead of converting them |
+| `--drop-hidden` | leave out the slides hidden in a PowerPoint file (by default they are included and skipped in the show) |
 | `--no-cache` | do not keep converted pictures in the folder `.deckfold-cache` beside the output |
 | `--lenient` | write the file even if assets cannot be resolved (with a warning) |
 | `--generic` | embed an unknown format anyway |
@@ -98,11 +99,13 @@ Large media files that need no conversion are embedded unchanged. Chrome opens a
 
 ## Presenting
 
-Open the file in a browser. The window it opens in is the presentation. It shows a start screen first: the title, a large preview of the chosen slide as it looks after all its steps, a strip of all slides (a click or the arrows beside it choose the slide to start from), the settings with the "Start" button next to them, and a last row with a button for the keys, one for the search (a magnifier) and the number of slides. The settings are:
+Open the file in a browser. The window it opens in is the presentation. It shows a start screen first: the title, a large preview of the chosen slide as it looks after all its steps, a strip of all slides (a click or the arrows beside it choose the slide to start from; the eye at the right of a slide's number hides it from the show or shows it again), the settings with the "Start" button next to them, and a last row with a button for the keys, one for the search (a magnifier) and the number of slides. The settings are:
 
 - **Presenter view:** opens a second window. On the left, large, "Live" shows what the audience sees: the slide at its current step, a black or white screen, the end slide; before the start, the slide the show starts on. On the right, "Preview" shows what the next click brings, the next step of the slide or the next slide, and below it the notes. The window also has a clock, the elapsed and the remaining time, a strip of all slides and the number of slides. Drag the window to the screen where you want to see it. When the show ends, the switch stays on as long as the presenter view is open.
 - **Full screen** for the presentation, or a window.
 - **Auto mode** with its interval and whether it loops.
+
+A slide hidden with its eye stays in the strip, greyed out, with a crossed eye. The show skips it: next, back, Home, End, the links to the next and previous slide and auto mode go past it. Its number with Enter, a hit of the search or a link to it still shows it, and the show goes on with the next slide that is not hidden. The show always begins on a slide that is not hidden; when the chosen slide is hidden, the line beside "Start" names the slide it begins on. The last slide that is not hidden cannot be hidden. The number of slides then reads, for example, "7 of 9 slides". The choice is stored in the browser for this presentation; until something is chosen, the slides hidden in PowerPoint are hidden. The presenter view's strip of slides leaves hidden slides out and follows each change at once. The eye is there for PowerPoint, claude.ai and Keynote decks, not for a self-playing Keynote export or an unknown format, where deckfold does not move the player itself.
 
 The magnifier (or `/`, Ctrl+F, Cmd+F) opens the outline: every slide with its title, or with its number and the start of its text when the source marks no title. Typing searches the slide text and shows the slides that hold it; Enter or a click chooses the slide to start from. The presenter view has the same search. There it searches the notes too, and choosing a slide goes there at once, like a click in the strip of slides. Escape, the × beside the text field or a click beside the list closes the search. The presentation window itself has no search, because the audience would see it.
 
@@ -122,7 +125,7 @@ One step after the last slide shows a black end slide, which stays until the pre
 |---|---|
 | → ↓ Page Down, Space | next |
 | ← ↑ Page Up, Backspace | back |
-| Home / End | first / last slide |
+| Home / End | first / last slide that is not hidden |
 | digits, then Enter | go to slide n |
 | Enter | start (start screen); nothing during the presentation |
 | click on the slide | next |

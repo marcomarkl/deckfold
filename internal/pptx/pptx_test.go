@@ -22,6 +22,12 @@ import (
 // convert writes a generated deck to a temp file and converts it with the bundled fonts.
 func convert(t *testing.T, d *pptxgen.Deck) (string, *Result, deck.Data) {
 	t.Helper()
+	return convertWith(t, d, Options{})
+}
+
+// convertWith converts with options (the bundled fonts are always set).
+func convertWith(t *testing.T, d *pptxgen.Deck, opt Options) (string, *Result, deck.Data) {
+	t.Helper()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "in.pptx")
 	if err := d.Write(src); err != nil {
@@ -31,7 +37,8 @@ func convert(t *testing.T, d *pptxgen.Deck) (string, *Result, deck.Data) {
 	if err := os.Mkdir(out, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Convert(src, out, Options{BundledFontsOnly: true})
+	opt.BundledFontsOnly = true
+	res, err := Convert(src, out, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +58,38 @@ func convert(t *testing.T, d *pptxgen.Deck) (string, *Result, deck.Data) {
 	return string(html), res, data
 }
 
-func TestBasicDeck(t *testing.T) {
-	html, res, data := convert(t, pptxgen.Basic())
-	if res.Slides != 3 || res.Hidden != 1 || len(data.Slides) != 3 {
-		t.Fatalf("slides %d, hidden %d, data %d; want 3, 1, 3", res.Slides, res.Hidden, len(data.Slides))
+// The hidden third slide of the basic deck is drawn and marked as hidden (E21), so that it can
+// be switched on in the browser; with DropHidden it is left out, as before.
+func TestBasicDeckDropHidden(t *testing.T) {
+	html, res, data := convertWith(t, pptxgen.Basic(), Options{DropHidden: true})
+	if res.Slides != 3 || res.Hidden != 1 || !res.Dropped || len(data.Slides) != 3 {
+		t.Fatalf("slides %d, hidden %d, dropped %v, data %d; want 3, 1, true, 3", res.Slides, res.Hidden, res.Dropped, len(data.Slides))
 	}
 	if strings.Contains(html, "This slide is hidden") {
 		t.Error("the hidden slide was rendered")
+	}
+	for i, s := range data.Slides {
+		if s.Hidden {
+			t.Errorf("slide %d is marked as hidden", i+1)
+		}
+	}
+	if data.Slides[2].Number != 4 {
+		t.Errorf("third visible slide is number %d in the file, want 4", data.Slides[2].Number)
+	}
+}
+
+func TestBasicDeck(t *testing.T) {
+	html, res, data := convert(t, pptxgen.Basic())
+	if res.Slides != 4 || res.Hidden != 1 || res.Dropped || len(data.Slides) != 4 {
+		t.Fatalf("slides %d, hidden %d, dropped %v, data %d; want 4, 1, false, 4", res.Slides, res.Hidden, res.Dropped, len(data.Slides))
+	}
+	if !strings.Contains(html, "This slide is hidden") {
+		t.Error("the hidden slide was not rendered")
+	}
+	for i, s := range data.Slides {
+		if s.Hidden != (i == 2) {
+			t.Errorf("slide %d: hidden %v", i+1, s.Hidden)
+		}
 	}
 	if data.Slides[0].Notes != "Notes of the first slide.\nA second paragraph of notes." {
 		t.Errorf("notes of slide 1 = %q", data.Slides[0].Notes)
@@ -65,8 +97,8 @@ func TestBasicDeck(t *testing.T) {
 	if data.Slides[1].Label != "Bullets and a picture" {
 		t.Errorf("label of slide 2 = %q", data.Slides[1].Label)
 	}
-	if data.Slides[2].Number != 4 {
-		t.Errorf("third visible slide is number %d in the file, want 4", data.Slides[2].Number)
+	if data.Slides[3].Number != 4 {
+		t.Errorf("fourth slide is number %d in the file, want 4", data.Slides[3].Number)
 	}
 	sections := 0
 	for _, tg := range htmlscan.Scan([]byte(html)).Tags {
@@ -74,7 +106,7 @@ func TestBasicDeck(t *testing.T) {
 			sections++
 		}
 	}
-	if sections != 3 {
+	if sections != 4 {
 		t.Errorf("%d slide sections", sections)
 	}
 	// the bullet character comes from the master body style
@@ -213,7 +245,18 @@ func TestSlideNumberCountsHiddenSlides(t *testing.T) {
 	number(hidden)
 	number(d.Add(pptxgen.LayoutBlank))
 	number(d.Add(pptxgen.LayoutBlank))
+	// the hidden slide is drawn too (E21), with its own number
 	html, _, data := convert(t, d)
+	if len(data.Slides) != 4 || !data.Slides[1].Hidden {
+		t.Fatalf("want 4 slides with the second hidden, got %d", len(data.Slides))
+	}
+	for _, want := range []string{">Slide 1</text>", ">Slide 2</text>", ">Slide 3</text>", ">Slide 4</text>"} {
+		if n := strings.Count(html, want); n != 1 {
+			t.Errorf("%s is drawn %d times, want once", want, n)
+		}
+	}
+	// left out (DropHidden), it still counts
+	html, _, data = convertWith(t, d, Options{DropHidden: true})
 	if len(data.Slides) != 3 {
 		t.Fatalf("want 3 shown slides, got %d", len(data.Slides))
 	}
@@ -227,7 +270,7 @@ func TestSlideNumberCountsHiddenSlides(t *testing.T) {
 	}
 	// with a first slide number the count starts there
 	d.FirstSlideNum = 7
-	html, _, _ = convert(t, d)
+	html, _, _ = convertWith(t, d, Options{DropHidden: true})
 	for _, want := range []string{">Slide 7</text>", ">Slide 9</text>", ">Slide 10</text>"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("first slide number 7: no %s", want)
@@ -777,7 +820,7 @@ func TestPowerPointBuiltDecks(t *testing.T) {
 
 // The content deck: the text blocks the converter stores for the content model are the ones the
 // generator put on the slides, with their roles, list levels and the steps in which they show.
-// Footer, slide number and the hidden slide are not among them.
+// Footer and slide number are not among them; the hidden slide is (E21).
 func TestContentDeck(t *testing.T) {
 	d, spec := pptxgen.ContentWithSpec()
 	html, res, data := convert(t, d)
@@ -798,7 +841,7 @@ func TestContentDeck(t *testing.T) {
 			if g.Role != w.Role || g.Text != w.Text || g.Step != w.Step || g.Level != w.Level {
 				t.Errorf("slide %d, block %d: %+v, want %+v", i+1, k+1, g, w)
 			}
-			// links to other slides: a slide by its index among the shown slides, or a direction
+			// links to other slides: a slide by its index among the written slides, or a direction
 			gj, wj := "", ""
 			if g.Jump != nil {
 				gj = g.Jump.To
@@ -824,11 +867,41 @@ func TestContentDeck(t *testing.T) {
 			jumps[tg.Name+" "+j.Val]++
 		}
 	}
+	want := map[string]int{"a next": 1, "a prev": 1, "a first": 1, "a last": 1, "a back": 1, "a end": 1, "a 1": 1, "a 3": 1, "g 2": 1}
+	if !reflect.DeepEqual(jumps, want) {
+		t.Errorf("links in the drawing: %v, want %v", jumps, want)
+	}
+	// the link to the hidden slide leads there, so nothing is reported
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "link to a hidden slide") || strings.Contains(w, "other than a jump") {
+			t.Errorf("warnings: %q", res.Warnings)
+		}
+	}
+}
+
+// With DropHidden the hidden slide of the content deck is left out: the link to it stays text and
+// is reported, and the slides after it move up by one.
+func TestContentDeckDropHidden(t *testing.T) {
+	d, spec := pptxgen.ContentWithSpec()
+	html, res, data := convertWith(t, d, Options{DropHidden: true})
+	if len(data.Slides) != len(spec.Slides)-1 {
+		t.Fatalf("%d slides, want %d", len(data.Slides), len(spec.Slides)-1)
+	}
+	for _, s := range data.Slides {
+		if s.Label == "This slide is hidden" {
+			t.Error("the hidden slide is written")
+		}
+	}
+	jumps := map[string]int{}
+	for _, tg := range htmlscan.Scan([]byte(html)).Tags {
+		if j, ok := tg.Get("data-df-jump"); ok {
+			jumps[tg.Name+" "+j.Val]++
+		}
+	}
 	want := map[string]int{"a next": 1, "a prev": 1, "a first": 1, "a last": 1, "a back": 1, "a end": 1, "a 1": 1, "g 2": 1}
 	if !reflect.DeepEqual(jumps, want) {
 		t.Errorf("links in the drawing: %v, want %v", jumps, want)
 	}
-	// the link to the hidden slide stays text and is reported; the other links are not
 	hidden, other := false, false
 	for _, w := range res.Warnings {
 		hidden = hidden || strings.Contains(w, "link to a hidden slide")

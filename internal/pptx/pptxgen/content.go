@@ -138,10 +138,15 @@ func ContentWithSpec() (*Deck, ContentSpec) {
 		{Role: "text", Text: "A hint only the button shows", Step: -1},
 	}})
 
-	// slide 4 is hidden: it is not in the content model, and a link to it is no link
+	// slide 4 is hidden in PowerPoint: deckfold writes it, marked as hidden (E21), so it is in the
+	// content model, and a link to it leads there (with --drop-hidden it is left out, and a link to
+	// it is no link)
 	s = d.Add(LayoutContent)
 	s.Hidden = true
 	s.Placeholder("title", Para{Text: "This slide is hidden"})
+	spec.Slides = append(spec.Slides, ContentSlide{Title: "This slide is hidden", Blocks: []ContentBlock{
+		{Role: "title", Text: "This slide is hidden"},
+	}})
 
 	// slide 5: links to other slides, one per paragraph, and one on a shape
 	s = d.Add(LayoutContent)
@@ -168,7 +173,7 @@ func ContentWithSpec() (*Deck, ContentSpec) {
 		{Role: "text", Text: "Last slide viewed", Jump: &ContentJump{To: "back"}},
 		{Role: "text", Text: "End the show", Jump: &ContentJump{To: "end"}},
 		{Role: "text", Text: "The lists slide", Jump: &ContentJump{Slide: at(1)}},
-		{Role: "text", Text: "The hidden slide"},
+		{Role: "text", Text: "The hidden slide", Jump: &ContentJump{Slide: at(3)}},
 		{Role: "text", Text: "To the free text", Jump: &ContentJump{Slide: at(2)}},
 	}})
 

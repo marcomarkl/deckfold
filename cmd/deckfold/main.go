@@ -95,6 +95,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	warnSize := fs.String("warn-size", "", "warning threshold for the output size, e.g. 250MB")
 	keepAssets := fs.Bool("keep-assets", false, "embed pictures and fonts unchanged instead of converting them to smaller formats")
 	noCache := fs.Bool("no-cache", false, "do not keep converted pictures in the folder .deckfold-cache beside the output")
+	dropHidden := fs.Bool("drop-hidden", false, "leave out the slides hidden in a PowerPoint file (by default they are included and skipped in the show)")
 	auto := fs.Bool("auto", false, "start in auto mode")
 	autoInterval := fs.Float64("auto-interval", 0, "auto mode interval in seconds (when the source has no timings)")
 	loop := fs.Bool("loop", false, "loop in auto mode")
@@ -179,6 +180,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if set["no-cache"] {
 		cfg.NoCache = *noCache
 	}
+	if set["drop-hidden"] {
+		cfg.DropHidden = *dropHidden
+	}
 	if set["auto"] {
 		cfg.Auto.Enabled = *auto
 	}
@@ -248,7 +252,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		defer os.RemoveAll(tmp)
 		res, err := pptx.Convert(input, tmp, pptx.Options{BundledFontsOnly: os.Getenv("DECKFOLD_BUNDLED_FONTS") == "1",
-			AllowOutside: allow, Fetcher: fetcher, Lenient: *lenient, Media: opt})
+			AllowOutside: allow, Fetcher: fetcher, Lenient: *lenient, Media: opt, DropHidden: cfg.DropHidden})
 		if err != nil {
 			var me *pptx.MissingError
 			if errors.As(err, &me) {
@@ -268,8 +272,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		rep.Summary = plural(res.Slides, "slide")
-		if res.Hidden > 0 {
+		if res.Hidden > 0 && res.Dropped {
 			rep.Summary += ", " + plural(res.Hidden, "hidden slide") + " skipped"
+		} else if res.Hidden > 0 {
+			rep.Summary += ", " + plural(res.Hidden, "hidden slide") + " included, skipped in the show (--drop-hidden leaves them out)"
 		}
 		rep.Fonts = res.Fonts
 		for _, w := range res.Warnings {

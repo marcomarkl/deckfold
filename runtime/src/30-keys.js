@@ -16,10 +16,38 @@ DF.presenterElements = function (list) {
   });
   return out;
 };
-DF.saveSettings = function (cur) {
+// saveSettings stores the differences from the defaults. The list of hidden slides is written only
+// by saveHidden: the start screen and the presenter view each keep the settings they read, and a
+// copy read before the list changed would otherwise put the old list back.
+DF.saveSettings = function (cur, withHidden) {
   var key = "deckfold:" + ((DF.meta && DF.meta.deckHash) || "deck");
+  cur = DF.clone(cur);
+  if (!withHidden) {
+    var stored = DF.ls.get(key) || {};
+    if (Array.isArray(stored.hidden)) cur.hidden = stored.hidden; else delete cur.hidden;
+  }
   var d = DF.diff(DF.cfg.defaults || {}, cur);
   if (d) DF.ls.set(key, d); else DF.ls.del(key);
+};
+// hiddenList: the slides hidden from the show (E21), as stored for this deck ("hidden" among the
+// settings), otherwise the deck's own: the slides PowerPoint hides. Where deckfold cannot skip a
+// slide (DF.canHide), none.
+function deckHidden() {
+  var out = [];
+  DF.slides().forEach(function (s, i) { if (s.hidden) out.push(i); });
+  return out;
+}
+DF.hiddenList = function () {
+  if (!DF.canHide()) return [];
+  var h = settings().hidden;
+  return Array.isArray(h) ? h.slice() : deckHidden();
+};
+// saveHidden stores the list; a list that is the deck's own is not stored, so that the deck
+// decides again.
+DF.saveHidden = function (list) {
+  var cur = settings(), sorted = list.slice().sort(function (a, b) { return a - b; });
+  if (JSON.stringify(sorted) === JSON.stringify(deckHidden())) delete cur.hidden; else cur.hidden = sorted;
+  DF.saveSettings(cur, true);
 };
 
 function actionFor(e) {

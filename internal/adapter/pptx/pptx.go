@@ -48,7 +48,7 @@ func (Adapter) Meta(in *adapter.Input) (adapter.Meta, []string, error) {
 	m := adapter.Meta{Format: "pptx", Title: d.Title, Width: int(d.Width + 0.5), Height: int(d.Height + 0.5),
 		SlideSelector: "." + deck.SlideClass, Extra: map[string]any{"loop": d.Loop}}
 	for _, s := range d.Slides {
-		sl := adapter.Slide{Label: s.Label, Notes: s.Notes, Steps: s.Steps, Auto: s.Auto, Delay: s.Delay}
+		sl := adapter.Slide{Label: s.Label, Notes: s.Notes, Steps: s.Steps, Auto: s.Auto, Delay: s.Delay, Hidden: s.Hidden}
 		if sl.Steps < 1 {
 			sl.Steps = 1
 		}
