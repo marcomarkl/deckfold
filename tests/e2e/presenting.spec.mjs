@@ -1131,16 +1131,27 @@ test('hidden slides: the strip of the presenter view follows the eyes of the sta
   const count = (shown) => page.evaluate(([n, shown]) => window.__deckfold.slideCount(n, shown), [n, shown]);
   await expect(pres.locator('.df-status [data-df-count]')).toHaveText(await count(n - 1));
   // each change shows in the presenter view within 300 ms, three times in a row; the heartbeat
-  // comes once a second, so a view that waited for it would miss this most of the time
+  // comes once a second, so a view that waited for it would miss this most of the time. The time
+  // runs from the click in the show window to the change of the strip in the presenter view, both
+  // read in the windows by the same clock (Date.now), so that the way of the click through
+  // Playwright does not count (it took over 300 ms on the Windows runner by itself)
+  await page.evaluate(() => document.addEventListener('click', (e) => { if (e.target.closest('[data-df-eye]')) window.__eyeAt = Date.now(); }, true));
+  await pres.evaluate(() => {
+    window.__strip = [];
+    const band = document.querySelector('.df-overview');
+    new MutationObserver(() => window.__strip.push([Date.now(), [...band.querySelectorAll('.df-tile')].filter((t) => t.classList.contains('df-hidden')).map((t) => +t.getAttribute('data-i'))]))
+      .observe(band, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
   const times = [];
   for (const [i, want] of [[1, [1, 2]], [1, [2]], [2, []]]) {
-    const t0 = Date.now();
+    await pres.evaluate(() => { window.__strip = []; });
     await page.click(`.df-strip [data-df-eye="${i}"]`);
-    await pres.waitForFunction((want) => JSON.stringify([...document.querySelectorAll('.df-overview .df-tile')]
-      .filter((t) => getComputedStyle(t).display === 'none').map((t) => +t.getAttribute('data-i'))) === JSON.stringify(want), want, { polling: 'raf', timeout: 3000 });
-    times.push(Date.now() - t0);
+    const at = await page.evaluate(() => window.__eyeAt);
+    await expect.poll(() => hiddenTiles()).toEqual(want);
+    const seen = await pres.evaluate((want) => window.__strip.find(([, h]) => JSON.stringify(h) === JSON.stringify(want)), want);
+    times.push(seen[0] - at);
   }
-  expect(Math.max(...times), `ms from the click to the strip of the presenter view: ${times}`).toBeLessThan(300);
+  expect(Math.max(...times), `ms from the click in the show window to the strip of the presenter view: ${times}`).toBeLessThan(300);
   await expect(pres.locator('.df-status [data-df-count]')).toHaveText(await count(n));
 });
 
