@@ -124,3 +124,36 @@ export async function middleColor(page, locator) {
   const [r, g, b] = shot.data;
   return r > 150 && g < 100 ? 'red' : g > 120 && r < 100 ? 'green' : b > 150 ? 'blue' : `${r},${g},${b}`;
 }
+
+// The Base64 text of an asset block is emptied once the asset is decoded, and its URLs come from
+// the kept Blob (10-loader.js). Starts `name` without the presenter view and checks: at least one
+// asset was decoded and its text emptied; every asset, decoded by the show or now by url(), gives
+// through url() and two fresh() URLs the bytes its Base64 held; has() stays true; and after url()
+// its text is empty too. Returns the number of assets and of those emptied by the start.
+export async function checkFreedBase64(page, name) {
+  // the decoded size of every asset, read from the file: the start screen decodes some at once
+  const sizes = {};
+  const html = fs.readFileSync(path.join(OUT, name), 'latin1');
+  for (const m of html.matchAll(/<script type="application\/octet-stream" id="df-a-([0-9a-f]+)-\d+"[^>]*>([^<]*)<\/script>/g)) {
+    sizes[m[1]] = (sizes[m[1]] || 0) + Buffer.from(m[2], 'base64').length;
+  }
+  await startScreen(page, name);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  return page.evaluate(async (sizes) => {
+    const a = window.__deckfold.assets;
+    const empty = (h) => [...document.querySelectorAll('script[type="application/octet-stream"][id^="df-a-' + h + '-"]')].every((b) => b.textContent === '');
+    const emptied = Object.keys(sizes).filter(empty);
+    const bad = [];
+    for (const [h, size] of Object.entries(sizes)) {
+      const urls = [a.url(h), a.fresh(h), a.fresh(h)];
+      for (const u of urls) {
+        const n = (await (await fetch(u)).arrayBuffer()).byteLength;
+        if (n !== size) bad.push(h + ': ' + n + ' bytes, want ' + size);
+      }
+      if (!a.has(h)) bad.push(h + ': has() is false');
+      if (!empty(h)) bad.push(h + ': text kept after url()');
+    }
+    return { assets: Object.keys(sizes).length, emptied: emptied.length, bad };
+  }, sizes);
+}
