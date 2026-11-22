@@ -107,6 +107,27 @@ Revised the same day after the maintainer's next test, in which this check did n
 
 Not documented: when macOS moves a clipped window fully onto one display; whether `NSWindow.screen` uses the Space assignment or the geometry first; how Chrome and Firefox treat `file://` as a secure context for these interfaces; Chrome's `screenX` under Wayland in a test.
 
+## Full screen of the presenter view after a drag to another screen (2026-11-22)
+
+Reported by the maintainer (Chrome 158, macOS 27.2, external 5K screen at x 0 to 2560 and the laptop screen at x 2560 to 4288, "Displays have separate Spaces" on): after the presenter view was dragged from the laptop screen to the 5K screen, the first click on its full-screen button made the window jump and stay a window; a second click worked. Before the start, during the show and after it. Safari, with the same file and the same moves, went to full screen at the first click.
+
+A log in both windows (position, `window.screen`, full-screen events, keys, clicks with their screen position, every 100 ms) showed, in the maintainer's Chrome:
+
+- During the drag Chrome reported one new position only. Afterwards the window lay fully on the 5K screen, but Chrome reported it at x 2006 to 3206 and `window.screen` named the laptop screen; the click on the full-screen button was reported at x 3175, on the laptop screen as well.
+- `requestFullscreen()` resolved and `fullscreenchange` fired; about 90 ms later full screen ended, and only then `window.screen` named the 5K screen.
+- After a further drag on the 5K screen Chrome reported every position (11 in about a second), and full screen worked at the first click.
+- Windows that Chrome knew to lie inside one screen went to full screen at the first click every time (16 of 16 dragged by the maintainer, 45 of 45 moved by script).
+
+So after a drag to another screen Chrome can hold a wrong position and screen for its own window, and macOS ends full screen when it is asked for on that basis. Chrome asks macOS for full screen with `-[NSWindow toggleFullScreen:]` and takes `window.screen` from `NSWindow.screen` (Chromium 158, `native_widget_ns_window_fullscreen_controller.mm`, `ui/display/mac/screen_mac.mm`). Keyboard Lock is not involved: on macOS it only sets a flag in the view.
+
+A page cannot correct this, measured in Chrome 158:
+
+- `window.moveTo` keeps the window inside the screen Chrome believes it is on: 5 of 5 moves to the other screen ended at the edge of the old one. A first fix that moved the presenter view onto "its" screen before full screen took it back to the screen it came from.
+- `requestFullscreen()` uses up the click; a second call without a new click was refused 0 ms to 6 s after a failure.
+- With the window management permission, `requestFullscreen({ screen })` on the screen of the click worked for windows moved by script, but the click itself is reported in the same wrong coordinates, so it would name the old screen; the permission also asks once for every local file. The maintainer chose not to use it.
+
+deckfold therefore leaves full screen as it is; the README names the fault and what helps. How it was measured: Chrome driven by Playwright reports full screen to the page but keeps the window a normal window, and a window dragged by hand cannot be reproduced by script (macOS drops synthetic mouse events without the Accessibility permission, and a window moved by script never got a wrong position). The measurements by script ran in the installed Chrome, started with its own profile in `tests/.out` and `--remote-debugging-port`, with clicks as raw CDP `Input.dispatchMouseEvent` events; once a permission is set through CDP, that Chrome refuses every plain `requestFullscreen()`.
+
 ## The highlight under a resting mouse (2026-11-11)
 
 Seen twice with the presenter view on a second screen: the highlight of a slide tile or a button went away while the mouse rested on it. Measured on the maintainer's Mac (macOS 27.2, Chrome 157, a 5K display and the built-in one), with real mouse movements.
