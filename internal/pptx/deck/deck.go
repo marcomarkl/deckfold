@@ -48,6 +48,7 @@ type SlideData struct {
 	Number  int         `json:"number"` // position in the PowerPoint file
 	Label   string      `json:"label,omitempty"`
 	Notes   string      `json:"notes,omitempty"`
+	Hidden  bool        `json:"hidden,omitempty"` // hidden in PowerPoint (show="0"), skipped in the show
 	Steps   int         `json:"steps"`
 	Auto    []bool      `json:"auto,omitempty"`
 	Delay   []float64   `json:"delay,omitempty"`

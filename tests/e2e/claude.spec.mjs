@@ -228,3 +228,37 @@ test('claude.ai: the slide counter of the player is not shown, in the presentati
   }));
   expect(inPreviews.every((d) => d === 'none')).toBe(true);
 });
+
+// E21: a click past a slide hidden from the show never shows it: deckfold jumps over it instead of
+// pressing the player's "next" key, which would take the player to the hidden slide first.
+test('claude.ai hidden slide: skipping it never shows it', async ({ page }) => {
+  await startScreen(page, 'claude.html');
+  // a slide without auto steps, with two slides after it; the one after it is hidden
+  const k = await page.evaluate(() => {
+    const sl = window.__deckfold.slides();
+    return sl.findIndex((s, i) => i + 2 < sl.length && !(s.auto || []).some(Boolean));
+  });
+  test.skip(k < 0, 'no slide without auto steps with two slides after it');
+  await page.click(`.df-strip [data-df-eye="${k + 1}"]`);
+  await page.click(`.df-strip .df-tile[data-i="${k}"]`);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience);
+  const end = await page.evaluate((k) => window.__deckfold.model.end(k), k);
+  await page.evaluate((s) => window.__deckfold.audience.act('state', s), end);
+  await expect.poll(() => visibleSlide(page)).toBe(k);
+  await expect.poll(() => audState(page)).toEqual(end);
+  const frames = await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(performance.now())));
+    const shown = () => [...document.querySelectorAll('.deck-slide')].findIndex((s) => !s.hasAttribute('data-off'));
+    let last = await frame(), steady = 0;
+    for (const stop = last + 5000; steady < 10 && last < stop;) { const now = await frame(); steady = now - last < 50 ? steady + 1 : 0; last = now; }
+    const t0 = performance.now(), seen = [];
+    window.__deckfold.audience.act('next');
+    while (performance.now() - t0 < 2500) { await frame(); seen.push([Math.round(performance.now() - t0), shown()]); }
+    return seen;
+  });
+  const msg = `frames after "next" (ms, slide shown): ${JSON.stringify(frames)}`;
+  expect(frames.some(([, s]) => s === k + 1), msg).toBe(false);
+  expect(frames.at(-1)[1], msg).toBe(k + 2);
+  expect((await audState(page)).slide).toBe(k + 2);
+});

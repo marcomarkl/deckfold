@@ -104,6 +104,17 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 [data-df-ui] .df-strip-nav:hover:not(:disabled) { background: var(--df-panel); border-color: var(--df-line); color: var(--df-fg); }
 [data-df-ui] .df-strip-nav:disabled { opacity: .25; cursor: default; }
 .df-start[data-df-ui] .df-strip .df-tile { flex: 0 0 160px; width: 160px; min-width: 0; scroll-snap-align: start; }
+/* the eye of a tile (E21): at the right of the slide number, a button of its own beside the tile */
+.df-start[data-df-ui] .df-strip .df-tile-wrap { position: relative; flex: 0 0 160px; width: 160px; min-width: 0; scroll-snap-align: start; }
+.df-start[data-df-ui] .df-tile-wrap .df-tile { width: 100%; }
+.df-start[data-df-ui] .df-tile-wrap .df-tile span { padding-right: 22px; }
+[data-df-ui] .df-tile-wrap .df-eye { position: absolute; right: 5px; bottom: 4px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: var(--df-mute); }
+[data-df-ui] .df-tile-wrap .df-eye svg { width: 16px; height: 16px; }
+[data-df-ui] .df-tile-wrap .df-eye:hover:not(:disabled) { color: var(--df-fg); background: var(--df-line); }
+[data-df-ui] .df-tile-wrap .df-eye:disabled { opacity: .35; cursor: default; }
+[data-df-ui] .df-tile-wrap.df-off .df-thumb { opacity: .3; }
+[data-df-ui] .df-tile-wrap.df-off .df-eye { color: var(--df-fg); }
 /* the settings with "Start" beside them; below the settings and as wide as they are, a hint when
    there is one (over both columns) and the footer, which starts at the left */
 .df-start-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--df-gap) 14px; align-items: stretch; }

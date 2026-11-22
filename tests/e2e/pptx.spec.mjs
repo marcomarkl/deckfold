@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, expected, fileURL, OUT, assetState } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, shownCount, expected, fileURL, OUT, assetState } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -11,14 +11,27 @@ test('PowerPoint solo: hidden slide skipped, keys, no network', async ({ page, c
   const w = watch(context);
   await solo(page, 'pptx-basic.html');
   const n = await slideCount(page);
-  // the basic deck has four slides in the file, one of them hidden
-  expect(n).toBe(3);
-  expect(await page.locator('.df-pptx-slide').count()).toBe(3);
-  expect(await page.evaluate(() => window.__deckfold.slides().map((s) => s.label))).not.toContain('This slide is hidden');
+  // the basic deck has four slides in the file; the third is hidden in PowerPoint, written and
+  // marked as hidden (E21), and the show skips it
+  expect(n).toBe(4);
+  expect(await page.locator('.df-pptx-slide').count()).toBe(4);
+  expect(await page.evaluate(() => window.__deckfold.slides().map((s) => [s.label, !!s.hidden]))).toContainEqual(['This slide is hidden', true]);
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([2]);
   const st = () => audState(page);
   await page.keyboard.press('PageDown');
   await expect.poll(st).toEqual(await expected(page, ['next']));
   await expect.poll(() => shown(page)).toBe(1);
+  // from the last step of slide 2 the next click goes to slide 4
+  const end1 = await page.evaluate(() => window.__deckfold.model.end(1));
+  await page.evaluate((s) => window.__deckfold.audience.act('state', s), end1);
+  await expect.poll(() => shown(page)).toBe(1);
+  await page.keyboard.press('PageDown');
+  await expect.poll(st).toEqual({ slide: 3, step: 0 });
+  await expect.poll(() => shown(page)).toBe(3);
+  // and back to slide 2
+  await page.keyboard.press('PageUp');
+  await expect.poll(st).toEqual(await expected(page, ['prev'], { slide: 3, step: 0 }));
+  expect((await st()).slide).toBe(1);
   await page.keyboard.press('End');
   await expect.poll(() => shown(page)).toBe(n - 1);
   await page.keyboard.press('Home');
@@ -37,6 +50,58 @@ test('PowerPoint solo: hidden slide skipped, keys, no network', async ({ page, c
   for (const [fam, ok] of fonts) expect(ok, fam).toBe(true);
   expect(w.net).toEqual([]);
   expect(realErrors(w)).toEqual([]);
+});
+
+// skipFrames: "next" through deckfold, then after every frame for 2.5 s: which slides the player
+// draws (df-on), the slide of its state, and whether a transition moves something. The page first
+// waits until it draws frames steadily (see the fade test below).
+const skipFrames = (page) => page.evaluate(async () => {
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r(performance.now())));
+  let last = await frame(), steady = 0;
+  for (const end = last + 5000; steady < 10 && last < end;) { const now = await frame(); steady = now - last < 50 ? steady + 1 : 0; last = now; }
+  const moving = () => !!document.querySelector('#df-pptx-stage > canvas') ||
+    [...document.querySelectorAll('.df-pptx-slide')].some((s) => s.style.transform || s.style.clipPath || s.style.opacity || s.style.filter);
+  const on = () => [...document.querySelectorAll('.df-pptx-slide')].map((s, i) => (s.classList.contains('df-on') ? i : -1)).filter((i) => i >= 0);
+  const t0 = performance.now(), seen = [];
+  window.__deckfold.audience.act('next');
+  while (performance.now() - t0 < 2500) {
+    await frame();
+    seen.push({ ms: Math.round(performance.now() - t0), on: on(), player: window.__dfPptx.state().slide, moving: moving() });
+  }
+  return seen;
+});
+
+// E21: a click past a hidden slide never shows it, not even for a frame: the player gets no key
+// press that would take it there (it would go to the next slide in the file, and the show window
+// would bring it back only a second later).
+test('PowerPoint hidden slide: skipping it never draws it', async ({ page }) => {
+  await solo(page, 'pptx-basic.html');
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([2]);
+  const end1 = await page.evaluate(() => window.__deckfold.model.end(1));
+  await page.evaluate((s) => window.__deckfold.audience.act('state', s), end1);
+  await expect.poll(() => shown(page)).toBe(1);
+  const frames = await skipFrames(page);
+  const msg = `frames after "next" (ms, slides drawn, player state): ${JSON.stringify(frames.map((f) => [f.ms, f.on, f.player]))}`;
+  expect(frames.some((f) => f.on.includes(2) || f.player === 2), msg).toBe(false);
+  expect(frames.at(-1).on, msg).toEqual([3]);
+  expect(await audState(page)).toEqual({ slide: 3, step: 0 });
+});
+
+// E21: past a hidden slide the next shown one comes in with its own transition, as in PowerPoint,
+// not with a jump.
+test('PowerPoint hidden slide: the next slide comes in with its transition', async ({ page }) => {
+  await startScreen(page, 'pptx-transitions3d.html');
+  await page.click('.df-strip [data-df-eye="1"]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience && window.__dfPptx);
+  expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([1]);
+  expect(await page.evaluate(() => (window.__dfPptx.deck.slides[2].anim.transition || {}).type)).toBeTruthy();
+  await expect.poll(() => shown(page)).toBe(0);
+  const frames = await skipFrames(page);
+  const msg = `frames after "next" (ms, slides drawn, player state, moving): ${JSON.stringify(frames.map((f) => [f.ms, f.on, f.player, f.moving]))}`;
+  expect(frames.some((f) => f.on.includes(1) || f.player === 1), msg).toBe(false);
+  expect(frames.some((f) => f.moving && f.on.includes(0) && f.on.includes(2)), msg).toBe(true);
+  expect(frames.at(-1).on, msg).toEqual([2]);
 });
 
 test('PowerPoint presenter view: previews, notes, overview', async ({ page, context }) => {
@@ -59,12 +124,16 @@ test('PowerPoint presenter view: previews, notes, overview', async ({ page, cont
   const note = await pres.evaluate((i) => window.__deckfold.slides()[i].notes, s1.slide);
   expect(note).toBeTruthy();
   await expect(pres.locator('.df-notes-text')).toHaveText(note);
-  // overview band: one tile per visible slide, each a clone of the rendered slide
-  await expect(pres.locator('.df-overview .df-tile')).toHaveCount(n);
-  await expect.poll(() => pres.locator('.df-overview .df-tile .df-clone svg').count()).toBe(n);
-  await pres.click('.df-overview .df-tile[data-i="2"]');
-  await expect.poll(() => audState(page)).toEqual(await expected(pres, [['goto', 2]]));
-  await expect.poll(() => shown(page)).toBe(2);
+  // overview band: one tile per slide of the show (the hidden third slide is left out, E21), each
+  // a clone of the rendered slide
+  const k = await shownCount(pres);
+  expect(k).toBe(n - 1);
+  await expect(pres.locator('.df-overview .df-tile:visible')).toHaveCount(k);
+  await expect(pres.locator('.df-overview .df-tile[data-i="2"]')).toBeHidden();
+  await expect.poll(() => pres.locator('.df-overview .df-tile .df-clone svg').count()).toBe(k);
+  await pres.click('.df-overview .df-tile[data-i="3"]');
+  await expect.poll(() => audState(page)).toEqual(await expected(pres, [['goto', 3]]));
+  await expect.poll(() => shown(page)).toBe(3);
   expect(w.net).toEqual([]);
   expect(realErrors(w)).toEqual([]);
 });
@@ -631,7 +700,13 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   // the slide with the links, and what the generator says each of them leads to
   const L = contentSpec.slides.findIndex((s) => s.blocks.some((b) => b.jump));
   const links = contentSpec.slides[L].blocks.filter((b) => b.jump).map((b) => (b.jump.to || String(b.jump.slide)));
-  expect(links.sort()).toEqual(['1', '2', 'back', 'end', 'first', 'last', 'next', 'prev']);
+  expect(links.sort()).toEqual(['1', '2', '3', 'back', 'end', 'first', 'last', 'next', 'prev']);
+  // the slide before the one with the links is hidden in PowerPoint (E21): "prev" skips it, the
+  // link to it by its number shows it
+  const H = 3;
+  expect(await page.evaluate((h) => window.__deckfold.slides()[h].hidden && !window.__deckfold.isShown(h), H)).toBe(true);
+  const before = await page.evaluate((l) => window.__deckfold.model.shownBefore(l), L);
+  expect(before).toBe(H - 1);
   const to = (k) => page.evaluate((k) => window.__deckfold.audience.act('state', { slide: k, step: 0 }), k);
   const at = async (k) => {
     await expect.poll(() => audState(page)).toEqual({ slide: k, step: 0 });
@@ -653,7 +728,7 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   // every link the drawing has is one of the model
   await to(L); await at(L);
   expect(await page.evaluate(() => [...document.querySelectorAll('.df-pptx-slide.df-on [data-df-jump]')].map((e) => e.getAttribute('data-df-jump')).sort())).toEqual(links);
-  for (const [link, target] of [['next', L + 1], ['prev', L - 1], ['first', 0], ['last', n - 1], ['1', 1], ['2', 2]]) {
+  for (const [link, target] of [['next', L + 1], ['prev', before], ['first', 0], ['last', n - 1], ['1', 1], ['2', 2], ['3', H]]) {
     await to(L); await at(L);
     await clickLink(page, link);
     await at(target);
@@ -663,18 +738,12 @@ test('PowerPoint links to other slides: followed through deckfold, the presenter
   await to(L); await at(L);
   await clickLink(page, 'back');
   await at(1);
-  // the link to the hidden slide is plain text: a click on it moves on like any other click
+  // from the hidden slide the link led to, "next" goes on to the next shown slide
   await to(L); await at(L);
-  expect(await paragraphs(page, L, ['The hidden slide'])).toEqual(['visible']);
-  const plain = await page.evaluate((k) => {
-    const sec = document.querySelectorAll('.df-pptx-slide')[k];
-    const g = [...sec.querySelectorAll('g[data-sid] g[data-p]')].find((g) => g.textContent.replace(/\s+/g, '').endsWith('Thehiddenslide'));
-    const r = g.getBoundingClientRect();
-    return [r.x + r.width / 2, r.y + r.height / 2, !!g.closest('[data-df-jump]') || !!g.querySelector('[data-df-jump]')];
-  }, L);
-  expect(plain[2]).toBe(false);
-  await page.mouse.click(plain[0], plain[1]);
-  await at(L + 1);
+  await clickLink(page, '3');
+  await at(H);
+  await page.keyboard.press('ArrowRight');
+  await at(L);
   // a link in a preview of the presenter view does nothing. The preview is inert and lies under a
   // shield, so what a user can do there is click at the place of the link, and that click meets
   // the shield.

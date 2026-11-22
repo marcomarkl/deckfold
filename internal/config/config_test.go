@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestMergeAndValidate(t *testing.T) {
 	c, err := Merge([]byte(`{"presenter":{"notesFontSize":30},"auto":{"loop":true},"keys":{"next":["n"]}}`), Default())
@@ -118,5 +122,21 @@ func TestTargetMinutesBecomeSeconds(t *testing.T) {
 	p.Upgrade()
 	if p.TargetSeconds != 300 || p.TargetMinutes != 0 {
 		t.Errorf("upgrade %+v", p)
+	}
+}
+
+// dropHidden is read from a configuration file and steers the conversion only: it is not part of
+// the JSON form of Config, which becomes the defaults of the presentation.
+func TestDropHidden(t *testing.T) {
+	c, err := Merge([]byte(`{"dropHidden": true}`), Default())
+	if err != nil || !c.DropHidden {
+		t.Fatalf("dropHidden %v, error %v", c.DropHidden, err)
+	}
+	if c, _ := Merge([]byte(`{}`), Default()); c.DropHidden {
+		t.Error("dropHidden is on by default")
+	}
+	b, _ := json.Marshal(c)
+	if strings.Contains(string(b), "ropHidden") {
+		t.Errorf("the switch is in the JSON form: %s", b)
 	}
 }

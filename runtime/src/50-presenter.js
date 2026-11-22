@@ -108,8 +108,8 @@ DF.startPresenter = function (snapshotHTML) {
   });
   var overviewEl = DF.el("div", { class: "df-overview" }, [strip.el]);
   // the status bar: the number of slides at the left, the hints, the switches at the right
-  var status = DF.el("footer", { class: "df-status" }, [
-    DF.el("span", { class: "df-count", "data-df-count": String(slides.length), text: DF.slideCount(slides.length) }), bannerEl, toggles]);
+  var countEl = DF.el("span", { class: "df-count", "data-df-count": String(slides.length) });
+  var status = DF.el("footer", { class: "df-status" }, [countEl, bannerEl, toggles]);
   ui.appendChild(bar); ui.appendChild(grid); ui.appendChild(splitS); ui.appendChild(overviewEl); ui.appendChild(status);
   ui.style.setProperty("--df-ratio", (meta.width || 1920) + " / " + (meta.height || 1080));
   document.body.appendChild(ui);
@@ -206,7 +206,21 @@ DF.startPresenter = function (snapshotHTML) {
   var hasNotes = slides.some(function (s) { return s.notes; });
 
   // ---------- rendering ----------
-  function shown() { return phase === "show" ? st : DF.model.goto(sel); }
+  // before the start: the slide the show will begin on, which is not a chosen slide hidden from it
+  function shown() { return phase === "show" ? st : DF.model.startAt(sel); }
+  // the slides hidden from the show (E21): the strip leaves them out, and the count says so. The
+  // show window sends the list with every message, so a change on the start screen shows at once.
+  var hiddenNow = null;
+  function applyHidden(list) {
+    var key = JSON.stringify(list || []);
+    if (key === hiddenNow) return false;
+    hiddenNow = key;
+    DF.setHidden(list || []);
+    strip.hide(DF.hiddenSlides());
+    countEl.textContent = DF.slideCount(slides.length, slides.length - DF.hiddenSlides().length);
+    marked = -1;
+    return true;
+  }
   function render() {
     cfg = DF.settings();
     var els = elements();
@@ -242,7 +256,7 @@ DF.startPresenter = function (snapshotHTML) {
     autoBtn.classList.toggle("df-active", !!remote.auto.on);
     ui.classList.toggle("df-before", phase !== "show");
     if (s.slide !== marked) { marked = s.slide; strip.mark(s.slide); }
-    strip.nav(phase === "show" || s.slide > 0, phase === "show" || s.slide < n - 1);
+    strip.nav(phase === "show" || DF.model.shownBefore(s.slide) >= 0, phase === "show" || DF.model.shownAfter(s.slide) >= 0);
     banners();
   }
   // dots in the heading of "Live": one for each state the slide rests in, filled up to the one
@@ -336,7 +350,8 @@ DF.startPresenter = function (snapshotHTML) {
     }
     if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
     if (phase !== "show") remote.auto = { on: false, due: 0 };
-    if (d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
+    var hid = Array.isArray(d.hidden) && applyHidden(d.hidden);
+    if (hid || d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
   }
   function beat() { send({ type: "hb" }); banners(); }
   setInterval(beat, 1000);
@@ -378,6 +393,8 @@ DF.startPresenter = function (snapshotHTML) {
   window.addEventListener("blur", function () { setTimeout(refocus, 0); });
   setInterval(refocus, 500);
 
+  // the list as stored until the show window sends its own
+  applyHidden(DF.hiddenList());
   render();
   tickClock();
   send({ type: "hello" });

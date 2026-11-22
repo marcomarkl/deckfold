@@ -91,9 +91,20 @@ DF.rescaleTiles = function (root) { [].slice.call(root.querySelectorAll(".df-thu
 // used by the start screen and by the presenter view. opts.pick(i) is called for a click on a
 // tile, opts.step(-1 | 1) for the arrows. mark(i) highlights the tile and scrolls it into view;
 // nav(canBack, canForward) enables or disables the arrows.
+// With opts.eye (the start screen), each tile has an eye at the right of its number that hides the
+// slide from the show or shows it again (E21): opts.onEye(i). The eye is a button of its own beside
+// the tile button, in a wrapper, since a button inside a button is not allowed.
+// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, otherwise
+// (the presenter view) by leaving their tiles out.
 DF.slideStrip = function (opts) {
   var band = DF.el("div", { class: "df-strip", "data-df-strip": "" });
-  DF.slides().forEach(function (s, i) { band.appendChild(DF.slideTile(i, function () { opts.pick(i); })); });
+  DF.slides().forEach(function (s, i) {
+    var tile = DF.slideTile(i, function () { opts.pick(i); });
+    if (!opts.eye) { band.appendChild(tile); return; }
+    var eye = DF.iconButton("eye", DF.t("hideSlide"), { class: "df-eye", "data-df-eye": String(i), "aria-pressed": "false",
+      onclick: function () { opts.onEye(i); } });
+    band.appendChild(DF.el("div", { class: "df-tile-wrap", "data-i": String(i) }, [tile, eye]));
+  });
   var back = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-prev": "", "aria-label": DF.t("previous"), title: DF.t("previous"), text: "‹", onclick: function () { opts.step(-1); } });
   var fwd = DF.el("button", { type: "button", class: "df-strip-nav", "data-df-strip-next": "", "aria-label": DF.t("following"), title: DF.t("following"), text: "›", onclick: function () { opts.step(1); } });
   var el = DF.el("div", { class: "df-strip-wrap" }, [back, band, fwd]);
@@ -112,6 +123,25 @@ DF.slideStrip = function (opts) {
       }
     },
     nav: function (canBack, canFwd) { back.disabled = !canBack; fwd.disabled = !canFwd; },
+    hide: function (list) {
+      var set = {}, n = DF.slides().length;
+      (list || []).forEach(function (i) { set[i] = true; });
+      var shown = n - Object.keys(set).length;
+      if (!opts.eye) {
+        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-hidden", !!set[+t.getAttribute("data-i")]); });
+        DF.rescaleTiles(band);
+        return;
+      }
+      [].slice.call(band.querySelectorAll(".df-tile-wrap")).forEach(function (w) {
+        var off = !!set[+w.getAttribute("data-i")], eye = w.querySelector("[data-df-eye]"), label = DF.t(off ? "showSlide" : "hideSlide");
+        w.classList.toggle("df-off", off);
+        eye.replaceChild(DF.icon(off ? "eyeOff" : "eye"), eye.firstChild);
+        eye.title = label; eye.setAttribute("aria-label", label);
+        eye.setAttribute("aria-pressed", off ? "true" : "false");
+        // the last shown slide cannot be hidden: the show is never empty
+        eye.disabled = !off && shown <= 1;
+      });
+    },
     // scroll: move the band by most of its width without choosing a slide
     scroll: function (dir) { band.scrollBy({ left: dir * band.clientWidth * 0.8, behavior: "smooth" }); }
   };
@@ -335,14 +365,16 @@ DF.finder = function (opts) {
 // They are drawn here so that they look the same on every machine (a character such as U+2328
 // would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
 // keys and the space bar; search: a magnifier; fsEnter and fsExit: four corners pointing out and
-// in; power: the on/off sign.
+// in; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
   keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
     ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
   fsEnter: [["path", { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" }]],
   fsExit: [["path", { d: "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" }]],
-  power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]]
+  power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
+  eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
+  eyeOff: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }], ["path", { d: "M4 20L20 4" }]]
 };
 DF.icon = function (name) {
   var ns = "http://www.w3.org/2000/svg";

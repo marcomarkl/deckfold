@@ -34,6 +34,9 @@ type Slide struct {
 	Auto  []bool    `json:"auto,omitempty"` // per step: the source advances by itself
 	Delay []float64 `json:"delay,omitempty"`
 	Thumb string    `json:"thumb,omitempty"` // asset hash of a thumbnail
+	// Hidden: the source hides the slide from the show (a PowerPoint slide with show="0"); the
+	// runtime skips it until it is switched on (E21).
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 // Meta describes the deck.

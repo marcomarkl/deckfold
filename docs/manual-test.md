@@ -29,6 +29,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
 | With ffmpeg installed: convert a deck with a video that browsers do not play (HEVC from an iPhone, WMV) and a WAV sound; play both in Chrome, Safari and Firefox | The report names the converted video and sound. The video plays with its sound, in the right colours and at the right speed; the sound plays | |
 | Hide notes, press A+ twice, drag the dividers between the panes and the one above the strip of slides | While the notes are hidden, A− and A+ are grey; the presenter view changes at once, the tiles of the strip grow with it; after reloading it, the changes are still there | |
+| On the start screen, with the presenter view on the second screen, click the eye of a slide, then start and click through | The tile is greyed out with a crossed eye, the presenter view's strip leaves the slide out at once and its count reads "n of m slides"; the clicker goes past the slide, also on the projector, and the eye is easy to hit on the laptop | |
 | Time: before Start, after Start, pause, resume, reset (button and T) | 00:00 before the start; then it runs, stands still while paused, and starts again from 00:00 | |
 | Type 1:30 as the target, Enter | The field shows 01:30; the time left counts down, turns yellow under two minutes and red after it | |
 | Click a slide in the strip of the presenter view during the show; click its arrows | The click jumps there; the arrows only scroll the strip | |

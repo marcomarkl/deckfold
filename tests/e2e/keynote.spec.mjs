@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { watch, realErrors, solo, present, audState, counter, slideCount, expected, need } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need } from './helpers.mjs';
 
 test.beforeEach(() => need('keynote'));
 
@@ -198,4 +198,32 @@ test('Keynote: the player\'s slide number display stays hidden in the presentati
   // the player has the display (otherwise this test checks nothing), and no frame showed it
   expect(hud.found).toBe(true);
   expect(hud.seen).toBe(0);
+});
+
+// E21: a click past a slide hidden from the show never takes the Keynote player there: deckfold
+// jumps over it (digits and Enter) instead of pressing the player's "next" key. The player's own
+// slide change events name every slide it goes to.
+test('Keynote hidden slide: skipping it never shows it', async ({ page }) => {
+  await startScreen(page, 'keynote.html');
+  test.skip(!(await page.evaluate(() => window.__deckfold.canHide())), 'a self-playing export: no eye (E21)');
+  const n = await slideCount(page);
+  test.skip(n < 3, 'fewer than three slides');
+  await page.click('.df-strip [data-df-eye="1"]');
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience);
+  await expect(page.locator('#stage canvas').first()).toBeAttached({ timeout: 15000 });
+  await page.waitForTimeout(1500);
+  const end = await page.evaluate(() => window.__deckfold.model.end(0));
+  await page.evaluate((s) => window.__deckfold.audience.act('state', s), end);
+  await page.waitForTimeout(3000);
+  await expect.poll(() => audState(page)).toEqual(end);
+  const events = await page.evaluate(() => new Promise((res) => {
+    const seen = [];
+    document.addEventListener('ShowController:SlideIndexDidChangeEvent', (e) => seen.push(e.detail.slideIndex));
+    window.__deckfold.audience.act('next');
+    setTimeout(() => res(seen), 4000);
+  }));
+  expect(events, `slide change events after "next": ${JSON.stringify(events)}`).not.toContain(1);
+  expect(events.at(-1), `slide change events after "next": ${JSON.stringify(events)}`).toBe(2);
+  expect((await audState(page)).slide).toBe(2);
 });

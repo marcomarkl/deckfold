@@ -58,7 +58,7 @@ test('start screen: the title in the middle; the footer below the settings start
       text: count.textContent, sub: document.querySelectorAll('.df-start .df-sub').length, last: foot === foot.parentNode.lastElementChild,
       label: help.getAttribute('aria-label') || '', title: help.getAttribute('title') || '', icons: help.querySelectorAll('svg').length, helpText: help.textContent.trim(),
       findLabel: find.getAttribute('aria-label') || '', findTitle: find.getAttribute('title') || '', findIcons: find.querySelectorAll('svg').length, findText: find.textContent.trim(),
-      search: window.__deckfold.t('search'), countText: window.__deckfold.slideCount(window.__deckfold.slides().length),
+      search: window.__deckfold.t('search'), countText: window.__deckfold.slideCount(window.__deckfold.slides().length, window.__deckfold.slides().length - window.__deckfold.hiddenSlides().length),
       h1: (() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('.df-start h1')); return box(r); })(),
       order: [...foot.children].map((c) => ['data-df-help', 'data-df-find', 'data-df-count'].find((a) => c.hasAttribute(a)) || c.tagName) };
   });
@@ -349,4 +349,90 @@ test('start screen without container units: the preview keeps its share of the w
     else expect(Math.abs(m.stage.w - m.col.w), at).toBeLessThanOrEqual(1);
     if (w >= 1280) expect(m.over, at).toBeLessThanOrEqual(0);
   }
+});
+
+// E21: an eye at the right of the number of every tile hides the slide from the show and shows it
+// again. The deck's own choice (the third slide of the basic deck is hidden in PowerPoint) comes
+// first; a change is stored for the deck, the count says how many slides the show has, and the
+// last shown slide cannot be hidden.
+test('start screen: the eye of a tile hides the slide from the show and shows it again', async ({ page }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const n = await page.evaluate(() => window.__deckfold.slides().length);
+  const eyes = () => page.evaluate(() => [...document.querySelectorAll('.df-strip [data-df-eye]')].map((b) => {
+    const wrap = b.closest('.df-tile-wrap'), tile = wrap.querySelector('.df-tile'), num = tile.querySelector('span');
+    const r = b.getBoundingClientRect(), t = tile.getBoundingClientRect(), p = tile.querySelector('.df-thumb').getBoundingClientRect(), s = num.getBoundingClientRect();
+    return { i: +b.getAttribute('data-df-eye'), svg: b.querySelectorAll('svg').length, text: b.textContent.trim(), label: b.getAttribute('aria-label'),
+      title: b.getAttribute('title'), pressed: b.getAttribute('aria-pressed'), off: wrap.classList.contains('df-off'), disabled: b.disabled,
+      // at the right of the slide number, below the picture, inside the tile
+      place: r.top >= p.bottom - 1 && r.bottom <= t.bottom + 1 && r.right <= t.right + 1 && r.left >= s.left && t.right - r.right < 12 &&
+        r.top < s.bottom && r.bottom > s.top };
+  }));
+  const t = (k) => page.evaluate((k) => window.__deckfold.t(k), k);
+  const count = (shown) => page.evaluate(([n, shown]) => window.__deckfold.slideCount(n, shown), [n, shown]);
+  const stored = () => page.evaluate(() => window.__deckfold.settings().hidden);
+  let e = await eyes();
+  expect(e.length).toBe(n);
+  for (const x of e) {
+    expect(x.svg, `eye ${x.i}`).toBe(1);
+    expect(x.text, `eye ${x.i}`).toBe('');
+    expect(x.place, `eye ${x.i} at the right of the slide number`).toBe(true);
+    expect(x.label, `eye ${x.i}`).toBe(await t(x.i === 2 ? 'showSlide' : 'hideSlide'));
+    expect(x.title, `eye ${x.i}`).toBe(x.label);
+    expect([x.pressed, x.off], `eye ${x.i}`).toEqual(x.i === 2 ? ['true', true] : ['false', false]);
+  }
+  await expect(page.locator('[data-df-count]')).toHaveText(await count(n - 1));
+  expect(await stored()).toBeUndefined();
+  // hiding slide 2: the start slide stays, the choice is stored, and it survives a reload
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '0');
+  await page.click('.df-strip [data-df-eye="1"]');
+  e = await eyes();
+  expect([e[1].pressed, e[1].off, e[1].label]).toEqual(['true', true, await t('showSlide')]);
+  await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '0');
+  await expect(page.locator('[data-df-count]')).toHaveText(await count(n - 2));
+  expect(await stored()).toEqual([1, 2]);
+  await page.reload();
+  await page.waitForSelector('.df-start [data-df-start]');
+  expect((await eyes()).map((x) => x.off)).toEqual([false, true, true, false]);
+  await expect(page.locator('[data-df-count]')).toHaveText(await count(n - 2));
+  // the last shown slide cannot be hidden
+  await page.click('.df-strip [data-df-eye="3"]');
+  e = await eyes();
+  expect(e.map((x) => [x.off, x.disabled])).toEqual([[false, true], [true, false], [true, false], [true, false]]);
+  await page.click('.df-strip [data-df-eye="0"]', { force: true });
+  expect((await eyes())[0].off).toBe(false);
+  // showing them again: back to the deck's own choice, which is not stored
+  await page.click('.df-strip [data-df-eye="3"]');
+  await page.click('.df-strip [data-df-eye="1"]');
+  expect((await eyes()).map((x) => x.off)).toEqual([false, false, true, false]);
+  expect(await stored()).toBeUndefined();
+  await expect(page.locator('[data-df-count]')).toHaveText(await count(n - 1));
+  // without hidden slides the count is the plain number
+  await page.click('.df-strip [data-df-eye="2"]');
+  await expect(page.locator('[data-df-count]')).toHaveText(await count(n));
+  expect(await page.locator('[data-df-count]').textContent()).toBe(await page.evaluate((n) => window.__deckfold.slideCount(n), n));
+  expect(await stored()).toEqual([]);
+});
+
+// E21: a chosen start slide that is hidden from the show is not where the show begins; the line
+// beside "Start" says where it does.
+test('start screen: a hidden start slide is named in the hint, with the slide the show starts on', async ({ page }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const hint = page.locator('[data-df-hint]');
+  await expect(hint).toHaveText('');
+  // the third slide is hidden in the deck: chosen, the show starts on the fourth
+  await page.click('.df-strip .df-tile[data-i="2"]');
+  const want = await page.evaluate(() => window.__deckfold.t('startsAt') + ' ' + (window.__deckfold.model.startAt(2).slide + 1));
+  expect(want).toMatch(/ 4$/);
+  await expect(hint).toHaveText(want);
+  // shown again, the hint goes
+  await page.click('.df-strip [data-df-eye="2"]');
+  await expect(hint).toHaveText('');
+  // the fourth slide chosen and hidden: no slide after it, the show starts on the second
+  await page.click('.df-strip [data-df-eye="2"]');
+  await page.click('.df-strip .df-tile[data-i="3"]');
+  await page.click('.df-strip [data-df-eye="3"]');
+  await expect(hint).toHaveText(await page.evaluate(() => window.__deckfold.t('startsAt') + ' 2'));
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold.audience);
+  await expect.poll(() => page.evaluate(() => window.__deckfold.audience.state())).toEqual({ slide: 1, step: 0 });
 });

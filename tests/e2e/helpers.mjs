@@ -76,6 +76,10 @@ export const audState = (show) => show.evaluate(() => window.__deckfold.audience
 // the slide the presenter view shows, as "<slide> / <slides>" (data-df-at; the view shows no counter)
 export const counter = (page) => page.getAttribute('.df-presenter', 'data-df-at');
 export const slideCount = (page) => page.evaluate(() => window.__deckfold.slides().length);
+// the number of slides the show shows: without the ones hidden from it (E21)
+export const shownCount = (page) => page.evaluate(() => window.__deckfold.slides().length - window.__deckfold.hiddenSlides().length);
+// the index of a slide the show shows, the k-th of them
+export const shownSlide = (page, k) => page.evaluate((k) => window.__deckfold.slides().map((s, i) => i).filter((i) => window.__deckfold.isShown(i))[k], k);
 
 // Expected state after a sequence of model operations, computed with the runtime's own model
 // from the deck metadata (so the tests do not depend on a particular deck).

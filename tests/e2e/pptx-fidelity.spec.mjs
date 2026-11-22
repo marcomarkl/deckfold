@@ -87,13 +87,21 @@ for (const name of decks) {
     await page.click('[data-df-start]');
     await page.waitForFunction(() => window.__dfPptx);
     await page.evaluate(() => document.fonts.ready);
-    const n = await page.evaluate(() => window.__dfPptx.deck.slides.length);
+    // PowerPoint exports the shown slides only; a slide it hides is in the deck since E21, marked
+    // as hidden, and has no reference image. Image k belongs to the k-th shown slide.
+    const visible = await page.evaluate(() => window.__deckfold.slides().map((s, i) => (s.hidden ? -1 : i)).filter((i) => i >= 0));
+    const n = visible.length;
     expect(n, 'one reference image per visible slide').toBe(images.length);
+    // every slide of the file is in the deck, the hidden ones too: the slides of a .pptx are the
+    // parts ppt/slides/slideN.xml, whose names stand uncompressed in the ZIP file
+    const inFile = new Set(fs.readFileSync(saved).toString('latin1').match(/ppt\/slides\/slide\d+\.xml/g)).size;
+    expect(await page.evaluate(() => window.__deckfold.slides().length), 'every slide of the PowerPoint file is in the deck').toBe(inFile);
     const threshold = DECK_THRESHOLD[name] ?? THRESHOLD;
     // every slide is measured before the test fails, so that a run in CI shows the value of
     // each slide of a deck and not only of the first one below the threshold
     const low = [];
-    for (let i = 0; i < n; i++) {
+    for (let k = 0; k < n; k++) {
+      const i = visible[k];
       // the slide through deckfold first (it brings a player that went elsewhere back to its own
       // slide), then every object of it shown
       await page.evaluate((i) => window.__deckfold.audience.act('state', { slide: i, step: 0 }), i);
@@ -101,15 +109,15 @@ for (const name of decks) {
       await page.evaluate((i) => window.__dfPptx.showAll(i), i);
       await page.waitForTimeout(100);
       const shot = PNG.sync.read(await page.screenshot());
-      const refImg = PNG.sync.read(fs.readFileSync(path.join(ref, images[i])));
+      const refImg = PNG.sync.read(fs.readFileSync(path.join(ref, images[k])));
       expect([shot.width, shot.height]).toEqual([refImg.width, refImg.height]);
       const score = ssim(shot.data, refImg.data, shot.width, shot.height);
-      const key = `${name}/${i + 1}`;
+      const key = `${name}/${k + 1}`;
       console.log(`${key}: SSIM ${score.toFixed(3)}`);
       if (score < threshold && !EXCEPTIONS[key]) {
-        fs.writeFileSync(path.join(OUT, `pptx-diff-${name}-${i + 1}.png`), PNG.sync.write(shot));
+        fs.writeFileSync(path.join(OUT, `pptx-diff-${name}-${k + 1}.png`), PNG.sync.write(shot));
       }
-      if (!EXCEPTIONS[key] && score < threshold) low.push(`${key}: SSIM ${score.toFixed(3)} (rendering saved as tests/.out/pptx-diff-${name}-${i + 1}.png)`);
+      if (!EXCEPTIONS[key] && score < threshold) low.push(`${key}: SSIM ${score.toFixed(3)} (rendering saved as tests/.out/pptx-diff-${name}-${k + 1}.png)`);
     }
     expect(low, `slides below ${threshold}`).toEqual([]);
   });
