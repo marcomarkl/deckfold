@@ -189,29 +189,49 @@ var PH = /deckfold:([0-9a-f]{20})/g;
 // open(), new Worker() or a settled fetch is safe because the URL parser binds the blob when the
 // URL is parsed. In the preview role all three go to the parent window, so the same window creates
 // and releases every URL.
+// An asset is decoded once: its Blob is kept, and the Base64 text of its blocks is emptied (the
+// elements stay, marked data-df-freed). In Chrome that gave back as much memory as the text held,
+// about 300 MB for a file of 300 MB (docs/spikes/S3-large-files.md). Every later URL, from url()
+// or fresh(), comes from the kept Blob.
 DF.assets = (function () {
-  var urls = {};
-  function parts(h) {
+  var urls = {}, blobs = {};
+  function blocks(h) {
     var first = document.getElementById("df-a-" + h + "-0");
     if (!first) return null;
-    var n = parseInt(first.getAttribute("data-parts") || "1", 10), out = [];
-    for (var i = 0; i < n; i++) {
-      var node = i === 0 ? first : document.getElementById("df-a-" + h + "-" + i);
-      var bin = atob(node.textContent);
+    var n = parseInt(first.getAttribute("data-parts") || "1", 10), out = [first];
+    for (var i = 1; i < n; i++) out.push(document.getElementById("df-a-" + h + "-" + i));
+    return out;
+  }
+  function parts(h, nodes) {
+    // a block emptied before is no source any more: without its Blob the asset is missing
+    if (nodes[0].hasAttribute("data-df-freed")) return null;
+    var out = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var bin = atob(nodes[i].textContent);
       var u = new Uint8Array(bin.length);
       for (var j = 0; j < bin.length; j++) u[j] = bin.charCodeAt(j);
       out.push(u);
     }
-    return { mime: first.getAttribute("data-mime") || "application/octet-stream", parts: out };
+    return { mime: nodes[0].getAttribute("data-mime") || "application/octet-stream", parts: out };
+  }
+  // blob(h): the asset's Blob, decoded at the first call; the text is emptied only once every part
+  // has been decoded
+  function blob(h) {
+    if (blobs[h]) return blobs[h];
+    var nodes = blocks(h), p = nodes && parts(h, nodes);
+    if (!p) return null;
+    blobs[h] = new Blob(p.parts, { type: p.mime });
+    for (var i = 0; i < nodes.length; i++) { nodes[i].textContent = ""; nodes[i].setAttribute("data-df-freed", ""); }
+    return blobs[h];
   }
   function parent() {
     if (DF.role !== "preview") return null;
     try { return window.parent.__deckfold.assets; } catch (e) { return null; } // fall back to local decoding
   }
   function create(h) {
-    var p = parts(h);
-    if (!p) { console.warn("deckfold: asset missing", h); return null; }
-    return URL.createObjectURL(new Blob(p.parts, { type: p.mime }));
+    var b = blob(h);
+    if (!b) { console.warn("deckfold: asset missing", h); return null; }
+    return URL.createObjectURL(b);
   }
   function url(h) {
     var pa = parent();
@@ -229,7 +249,7 @@ DF.assets = (function () {
     if (pa) return pa.revoke(u);
     if (typeof u === "string" && u.indexOf("blob:") === 0) URL.revokeObjectURL(u);
   }
-  return { url: url, fresh: fresh, revoke: revoke, has: function (h) { return !!document.getElementById("df-a-" + h + "-0") || !!urls[h]; } };
+  return { url: url, fresh: fresh, revoke: revoke, has: function (h) { return !!blobs[h] || !!urls[h] || !!document.getElementById("df-a-" + h + "-0"); } };
 })();
 
 function fillPlaceholders(s) { return String(s).replace(PH, function (_, h) { return DF.assets.url(h); }); }

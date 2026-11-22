@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, shownCount, expected, fileURL, OUT, assetState } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, shownCount, expected, fileURL, OUT, assetState, checkFreedBase64 } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -886,4 +886,12 @@ test('PowerPoint kerning: the browser draws every word where PowerPoint put it',
     });
   }
   expect(bad, 'words not where PowerPoint put them').toEqual([]);
+});
+
+// The Base64 text of an asset is freed once the asset is decoded: in Chrome that gave back as much
+// memory as the text held (docs/spikes/S3-large-files.md). Its URLs come from the kept Blob.
+test('assets: the Base64 text of a decoded asset is emptied, and its URLs keep its bytes', async ({ page }) => {
+  const r = await checkFreedBase64(page, 'pptx-media.html');
+  expect(r.emptied, 'assets whose text the start emptied, of ' + r.assets).toBeGreaterThan(0);
+  expect(r.bad).toEqual([]);
 });

@@ -1,6 +1,6 @@
 // Fallback browser (E3): WebKit is close to Safari and has no Window Management API.
 import { test, expect } from '@playwright/test';
-import { solo, startScreen, openPresenter, audState, counter, slideCount, expected, need, assetState, middleColor } from './helpers.mjs';
+import { solo, startScreen, openPresenter, audState, counter, slideCount, expected, need, assetState, middleColor, checkFreedBase64 } from './helpers.mjs';
 
 test('WebKit: solo navigation in a claude.ai deck', async ({ page }) => {
   need('claude');
@@ -140,4 +140,10 @@ test('WebKit: the overlays close by their button; the key help opens from the fo
     return { stage: [st.width, st.height], ratio: parseFloat(f.style.width) / parseFloat(f.style.height) };
   });
   expect(Math.abs(m.stage[0] - m.stage[1] * m.ratio), JSON.stringify(m)).toBeLessThanOrEqual(1.5);
+});
+
+test('WebKit: the Base64 text of a decoded asset is emptied, and its URLs keep its bytes', async ({ page }) => {
+  const r = await checkFreedBase64(page, 'pptx-media.html');
+  expect(r.emptied, 'assets whose text the start emptied, of ' + r.assets).toBeGreaterThan(0);
+  expect(r.bad).toEqual([]);
 });
