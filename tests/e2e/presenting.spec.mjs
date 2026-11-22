@@ -453,6 +453,26 @@ test('time: runs from Start; pause, resume and reset; target and time left', asy
   await expect(pres.locator('.df-remain')).toHaveClass(/df-over/, { timeout: 8000 });
 });
 
+test('time: stands still when the show ends and runs on from there with the next start', async ({ page, context }) => {
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect.poll(async () => secs(await timeOf(pres)), { timeout: 6000 }).toBeGreaterThanOrEqual(3);
+  await pres.click('.df-presenter [data-df-end]');
+  await page.waitForSelector('.df-start [data-df-start]');
+  await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
+  const held = await timeOf(pres);
+  await pres.waitForTimeout(2500);
+  expect(await timeOf(pres), 'the time after the end of the show').toBe(held);
+  // the next start goes on from the time the last show ended with, not from zero
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await expect(pres.locator('.df-presenter.df-before')).toHaveCount(0, { timeout: 5000 });
+  expect(secs(await timeOf(pres)), 'the time right after the next start').toBeGreaterThanOrEqual(secs(held));
+  await expect.poll(async () => secs(await timeOf(pres)), { timeout: 4000 }).toBeGreaterThan(secs(held));
+});
+
 test('target duration: typed as minutes:seconds and completed', async ({ page, context }) => {
   await startScreen(page, 'pptx-basic.html');
   const pres = await openPresenter(page, context);

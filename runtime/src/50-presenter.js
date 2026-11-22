@@ -14,7 +14,9 @@ DF.startPresenter = function (snapshotHTML) {
   var phase = "start", sel = 0, st = DF.model.first();
   var remote = { blank: null, auto: { on: false, due: 0 }, ended: false };
   var lastBeat = 0, cfg = DF.settings();
-  var timer = { start: 0, accum: 0, paused: false };
+  // the time of the show: accum is what ran before since, the moment it last started running (0
+  // while it stands still: paused, before the first start, after the end of a show)
+  var timer = { since: 0, accum: 0, paused: false };
   document.documentElement.classList.add("df-presenter-mode");
 
   // ---------- layout ----------
@@ -302,17 +304,17 @@ DF.startPresenter = function (snapshotHTML) {
     }
     autoInfo.textContent = remote.auto.on ? (remote.auto.waiting ? "▶ " + DF.t("media") : remote.auto.due ? Math.max(0, Math.ceil((remote.auto.due - Date.now()) / 1000)) + " s" : "") : "";
   }
-  function elapsed() {
-    if (!timer.start) return 0;
-    return timer.accum + (timer.paused ? 0 : Date.now() - timer.start);
-  }
+  function elapsed() { return timer.accum + (timer.since ? Date.now() - timer.since : 0); }
   function togglePause() {
-    if (!timer.start) return;
-    if (timer.paused) { timer.start = Date.now(); timer.paused = false; }
-    else { timer.accum = elapsed(); timer.paused = true; }
+    if (phase !== "show") return;
+    if (timer.paused) { timer.since = Date.now(); timer.paused = false; }
+    else { timer.accum = elapsed(); timer.since = 0; timer.paused = true; }
     tickClock();
   }
-  function resetTimer() { timer = { start: phase === "show" ? Date.now() : 0, accum: 0, paused: false }; tickClock(); }
+  function resetTimer() { timer = { since: phase === "show" ? Date.now() : 0, accum: 0, paused: false }; tickClock(); }
+  // a start lets the time run on from where the last show ended; the end of a show stops it there
+  function runTimer() { timer.since = Date.now(); timer.paused = false; }
+  function stopTimer() { timer.accum = elapsed(); timer.since = 0; timer.paused = false; tickClock(); }
 
   // ---------- banner: lost connection, start hint, no wake lock ----------
   // noWake: the presentation window holds no screen wake lock (refused, released, a request open
@@ -340,7 +342,7 @@ DF.startPresenter = function (snapshotHTML) {
   function onMsg(d) {
     lastBeat = Date.now();
     if (pending.length) { var q = pending; pending = []; setTimeout(function () { q.forEach(function (c) { command(c[0], c[1]); }); }, 0); }
-    if (d.type === "ended") { phase = "start"; render(); return; }
+    if (d.type === "ended") { if (phase === "show") stopTimer(); phase = "start"; render(); return; }
     var was = phase, before = JSON.stringify([phase, sel, st, remote.auto.on]);
     if (d.phase) phase = d.phase;
     if (typeof d.sel === "number") sel = d.sel;
@@ -348,7 +350,8 @@ DF.startPresenter = function (snapshotHTML) {
       st = { slide: d.state.slide, step: d.state.step };
       remote = { blank: d.blank, auto: d.auto || { on: false }, ended: d.ended, wake: d.wake };
     }
-    if (was !== "show" && phase === "show") timer = { start: Date.now(), accum: 0, paused: false };
+    if (was !== "show" && phase === "show") runTimer();
+    if (was === "show" && phase !== "show") stopTimer();
     if (phase !== "show") remote.auto = { on: false, due: 0 };
     var hid = Array.isArray(d.hidden) && applyHidden(d.hidden);
     if (hid || d.type === "state" || d.type === "init" || JSON.stringify([phase, sel, st, remote.auto.on]) !== before) render();
