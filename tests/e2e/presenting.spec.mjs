@@ -466,9 +466,26 @@ test('time: stands still when the show ends and runs on from there with the next
   await pres.waitForTimeout(2500);
   expect(await timeOf(pres), 'the time after the end of the show').toBe(held);
   // the next start goes on from the time the last show ended with, not from zero
+  await page.evaluate(() => { window.__startAt = Date.now(); });
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
-  await expect(pres.locator('.df-presenter.df-before')).toHaveCount(0, { timeout: 5000 });
+  // what both windows show, with the time of each window (the same clock), so that a failure in CI
+  // tells where the show was: the start screen removes itself once the show runs, and the
+  // presenter view leaves the state before the start when the show window says so
+  const states = async () => ({
+    show: await page.evaluate(() => ({ now: Date.now(), startedAt: window.__startAt, audience: !!(window.__deckfold && window.__deckfold.audience), startScreen: !!document.querySelector('.df-start') })),
+    presenter: await pres.evaluate(() => {
+      const ui = document.querySelector('.df-presenter');
+      return { now: Date.now(), before: ui.classList.contains('df-before'), at: ui.getAttribute('data-df-at'), time: document.querySelector('.df-elapsed').textContent, banner: document.querySelector('[data-df-banner]').getAttribute('data-df-banner') };
+    }),
+  });
+  let last;
+  for (const until = Date.now() + 5000; ;) {
+    last = await states();
+    if (!last.presenter.before || Date.now() > until) break;
+    await pres.waitForTimeout(100);
+  }
+  expect(last.presenter.before, 'the presenter view still shows the state before the start: ' + JSON.stringify(last)).toBe(false);
   expect(secs(await timeOf(pres)), 'the time right after the next start').toBeGreaterThanOrEqual(secs(held));
   await expect.poll(async () => secs(await timeOf(pres)), { timeout: 4000 }).toBeGreaterThan(secs(held));
 });
