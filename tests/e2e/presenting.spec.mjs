@@ -417,6 +417,36 @@ test('presenter view in full screen: one Escape ends the presentation', async ({
   await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
 });
 
+// Keyboard Lock keeps Escape from leaving full screen, so that one Escape ends the presentation.
+// Before the start and after the end there is no presentation to end: there Escape leaves full
+// screen in the presenter view.
+test('presenter view in full screen before the start and after the end: Escape leaves full screen', async ({ page, context }) => {
+  await context.addInitScript(fakeFullscreen);
+  await startScreen(page, 'pptx-basic.html');
+  await page.uncheck('[data-df-fs]');
+  const pres = await openPresenter(page, context);
+  const full = () => pres.evaluate(() => !!document.fullscreenElement);
+  await pres.click('.df-presenter [data-df-fs]');
+  await expect.poll(full).toBe(true);
+  expect(await pres.evaluate(() => window.__locks)).toEqual([['Escape']]);
+  await pres.keyboard.press('Escape');
+  await expect.poll(full, { message: 'full screen after Escape before the start' }).toBe(false);
+  // the start screen is still there: Escape before the start ended nothing
+  await expect(page.locator('.df-start [data-df-start]')).toBeVisible();
+  // after the end of a show
+  await page.click('[data-df-start]');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
+  await pres.click('.df-presenter [data-df-fs]');
+  await expect.poll(full).toBe(true);
+  await pres.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
+  await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
+  expect(await full(), 'the presenter view stays in full screen when Escape ends the show').toBe(true);
+  await pres.keyboard.press('Escape');
+  await expect.poll(full, { message: 'full screen after Escape after the end' }).toBe(false);
+});
+
 // time in the presenter view: tested with real time in short spans (a fake clock would let the
 // heartbeat of the show window look lost and hold the commands back)
 const timeOf = (pres) => pres.textContent('.df-elapsed');

@@ -137,7 +137,7 @@ One step after the last slide shows a black end slide, which stays until the pre
 | / or Ctrl+F, Cmd+F | search and outline (start screen, presenter view) |
 | Esc | end the presentation |
 
-In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation.
+In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation. Before the start and after the end, Escape in the presenter view leaves full screen.
 
 Common presentation clickers send these keys. You can change the bindings under `keys` in the configuration file.
 

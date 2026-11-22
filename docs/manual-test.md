@@ -49,6 +49,7 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Page Down / Page Up on the clicker, with the focus in either window | Next and previous step; both windows follow | |
 | B or the clicker's blank key | Black screen in the presentation; pressed again, the slide comes back | |
 | One Escape in full screen, in the presentation or in the presenter view | The presentation ends: full screen is left, the start screen appears with the last slide chosen, the presenter view stays open and shows the start state | |
+| Presenter view in full screen before the start, and again after the end of a show: press Escape once | The presenter view leaves full screen; the start screen does not change | |
 | Back on the first slide | Nothing happens; no end slide | |
 | Click on the slide; turn the mouse wheel; swipe on the trackpad | The click moves on, in both windows; wheel and swipe do nothing | |
 | Enter during the presentation | Nothing happens | |
