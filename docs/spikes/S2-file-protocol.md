@@ -105,7 +105,35 @@ First decision (E14, maintainer, 2026-11-09): Chrome and Edge use the permission
 
 Revised the same day after the maintainer's next test, in which this check did not work reliably: deckfold no longer asks for the permission and checks in no browser where the windows are, as in reveal.js. Full screen can always be chosen, and placing the windows is left to the user. The diagnostics panel (Shift+D) went with the check.
 
-Not documented: when macOS moves a clipped window fully onto one display; whether `NSWindow.screen` uses the Space assignment or the geometry first; how Chrome and Firefox treat `file://` as a secure context for these interfaces; Chrome's `screenX` under Wayland in a test.
+Not documented: when macOS moves a clipped window fully onto one display; how Chrome and Firefox treat `file://` as a secure context for these interfaces; Chrome's `screenX` under Wayland in a test.
+
+## Full screen of a window over the edge of two screens (2026-11-22)
+
+Reported by the maintainer (Chrome 158, macOS 27.2, external 5K screen at x 0 to 2560 and the laptop screen at x 2560 to 4288, "Displays have separate Spaces" on): after the presenter view was dragged to the other screen, a click on its full-screen button now and then made the window jump and stay a window; a second click always worked. It happened before the start, during the show and after it.
+
+Measured with a page that logs every full-screen event, the window position and `window.screen`, on a control page without deckfold (a popup opened with the same `window.open` features) and in the presenter view:
+
+- The one failure in the logs (control page): the window was at x 1955 to 3155, so 605 px on the 5K screen and 595 px on the laptop screen, and `window.screen` reported the laptop screen. `requestFullscreen()` resolved and `fullscreenchange` fired; 90 ms later full screen ended, `window.screen` reported the 5K screen, and the window was back at x 1955.
+- Windows that lay inside one screen went to full screen at the first click every time: 16 of 16 dragged by the maintainer, 45 of 45 moved by script.
+- Windows moved by script over the edge (CDP `Browser.setWindowBounds`, several shares on both screens, with and without Keyboard Lock, before the start, during the show in a window and in full screen, after the end) never failed. `window.screen` then always reported the screen with the larger part of the window.
+
+The Chromium source at 158 (`refs/branch-heads/8127`, the same code as `main` there) explains this:
+
+- Without the `screen` option, Chrome does not choose a screen for element full screen: `NativeWidgetNSWindowFullscreenController` calls `-[NSWindow toggleFullScreen:]` on the window where it stands, and macOS decides (`components/remote_cocoa/app_shim/native_widget_ns_window_fullscreen_controller.mm`).
+- `window.screen` comes from `NSWindow.screen`, which the source comments as `-[NSWindow _bestScreenBySpaceAssignmentOrGeometry]` (`ui/display/mac/screen_mac.mm`): the Space assignment comes first. With separate Spaces a window the user drags belongs to the screen under the pointer when it is dropped (see the research above), a window moved by script to the screen with its larger part.
+- The first `fullscreenchange` only means that Chrome took the request; the second one follows when macOS ends the transition (`windowDidFailToEnterFullScreen:` or `windowDidExitFullScreen:`).
+- Keyboard Lock on macOS only sets a flag in the view (`render_widget_host_view_cocoa.mm`, `lockKeyboard:`) and cannot end full screen.
+
+So full screen fails when a dropped window belongs to one screen while most of it lies on the other. That also explains the cases that work: a second click finds the assignment and the geometry in agreement, and a window inside one screen or moved by script has no such difference. The transition failure inside macOS itself is inferred, not traced.
+
+Two more measurements in Chrome 158 decided the fix:
+
+- `requestFullscreen()` uses up the click: a second call without a new click was refused ("Permissions check failed") 0 ms, 1 s, 4 s and 6 s after a full screen that ended at once. A second attempt by deckfold is not possible.
+- `window.moveTo(screenX, screenY)` in a popup pulls a window that is not inside its screen fully onto the screen `window.screen` reports (x 1955 became 1360 on the 5K screen, x 2200 became 2560 on the laptop screen) and leaves a window inside its screen where it is; the click still counts afterwards.
+
+Since then the presenter view moves itself this way before full screen when it is not inside its screen (`DF.fitScreen`, E14), and asks for full screen 100 ms later. With the fix, 9 of 9 attempts went to full screen: the 6 windows moved by script over the edge after the move, the 3 inside one screen without one. A window dragged by hand could not be tested by script: macOS drops synthetic mouse events without the Accessibility permission. Safari and Firefox are not measured; the presentation window is a tab, which a page cannot move, so it gets no such move.
+
+How it was measured: Chrome driven by Playwright reports full screen to the page but keeps the window a normal window, so these measurements ran in the installed Chrome, started with its own profile in `tests/.out` and `--remote-debugging-port`, with clicks sent as raw CDP `Input.dispatchMouseEvent` events; then the window goes to macOS full screen (`Browser.getWindowBounds` reports `fullscreen`).
 
 ## The highlight under a resting mouse (2026-11-11)
 

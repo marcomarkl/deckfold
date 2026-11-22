@@ -220,6 +220,20 @@ DF.requestFs = function (target, screen) {
   try { return screen ? elx.requestFullscreen({ screen: screen }) : elx.requestFullscreen(); }
   catch (e) { return Promise.reject(e); }
 };
+// DF.fitScreen: a window that is not inside its screen is moved to where it is, and the browser pulls
+// it onto that screen; it reports whether it moved the window. macOS gives a window dragged over the
+// edge of two screens to the screen under the pointer, and full screen then fails when most of the
+// window lies on the other screen (measured with Chrome 158, docs/spikes/S2-file-protocol.md).
+// Only a popup can be moved, so this is for the presenter view (E14).
+DF.fitScreen = function () {
+  var s = window.screen;
+  if (typeof s.availLeft !== "number" || typeof window.moveTo !== "function") return false;
+  var inside = screenX >= s.availLeft && screenY >= s.availTop &&
+    screenX + outerWidth <= s.availLeft + s.availWidth && screenY + outerHeight <= s.availTop + s.availHeight;
+  if (inside) return false;
+  try { window.moveTo(screenX, screenY); } catch (e) { return false; }
+  return true;
+};
 DF.toggleFs = function () {
   if (document.fullscreenElement) return document.exitFullscreen();
   return DF.requestFs();

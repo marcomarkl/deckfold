@@ -48,7 +48,14 @@ DF.startPresenter = function (snapshotHTML) {
   showTarget();
   // the full-screen button shows what a click does: corners pointing out and "Full screen" in a
   // window, corners pointing in and "Window" in full screen
-  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
+  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { toggleFs(); } });
+  // full screen of this window: a window that hangs over the edge of its screen is first moved onto
+  // it (DF.fitScreen), and full screen follows once the move has reached the window; the click
+  // still counts then, since moving does not use it up
+  function toggleFs() {
+    if (document.fullscreenElement || !DF.fitScreen()) { DF.toggleFs(); return; }
+    setTimeout(function () { DF.requestFs().catch(function () { }); }, 100);
+  }
   function fsLabel() {
     var full = !!(document.fullscreenElement || document.webkitFullscreenElement), label = DF.t(full ? "window" : "fullscreen");
     fsBtn.replaceChild(DF.icon(full ? "fsExit" : "fsEnter"), fsBtn.firstChild);
@@ -374,7 +381,7 @@ DF.startPresenter = function (snapshotHTML) {
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     if (a === "find") { if (finder) finder.open(); return true; }
-    if (a === "fullscreen") { DF.toggleFs(); return true; }
+    if (a === "fullscreen") { toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
     // Enter cannot start from here (full screen needs a click in the presentation window); it is
     // consumed, so that it does not press a focused button either

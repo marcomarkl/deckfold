@@ -417,6 +417,47 @@ test('presenter view in full screen: one Escape ends the presentation', async ({
   await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
 });
 
+// A window and its screen as the page sees them (screenX, outerWidth, screen.availLeft …), set by the
+// test in window.__geom; moveTo and requestFullscreen are recorded in window.__calls in their order.
+const fakeGeometry = () => {
+  window.__calls = [];
+  const g = () => window.__geom;
+  for (const [k, f] of [['screenX', 'x'], ['screenY', 'y'], ['outerWidth', 'w'], ['outerHeight', 'h']]) {
+    const real = Object.getOwnPropertyDescriptor(window, k) || Object.getOwnPropertyDescriptor(Window.prototype, k);
+    Object.defineProperty(window, k, { configurable: true, get() { return g() ? g().win[f] : real.get.call(window); } });
+  }
+  for (const [k, f] of [['availLeft', 'x'], ['availTop', 'y'], ['availWidth', 'w'], ['availHeight', 'h']]) {
+    const real = Object.getOwnPropertyDescriptor(Screen.prototype, k);
+    Object.defineProperty(Screen.prototype, k, { configurable: true, get() { return g() ? g().screen[f] : real.get.call(this); } });
+  }
+  window.moveTo = (x, y) => { window.__calls.push(['moveTo', x, y]); };
+  Element.prototype.requestFullscreen = function () { window.__calls.push(['requestFullscreen']); return Promise.resolve(); };
+};
+
+// The cause, measured with Chrome 158 on macOS with two screens (docs/spikes/S2-file-protocol.md):
+// macOS gives a window dragged over the edge of two screens to the screen under the pointer, and
+// full screen fails when most of the window lies on the other one. Before full screen the presenter
+// view therefore moves a window that is not inside its screen to where it is, and the browser
+// pulls it onto that screen; a window inside its screen is not moved (E14).
+test('presenter view: full screen first moves a window that hangs over the edge of its screen onto it', async ({ page, context }) => {
+  await context.addInitScript(fakeGeometry);
+  await startScreen(page, 'pptx-basic.html');
+  const pres = await openPresenter(page, context);
+  const calls = () => pres.evaluate(() => window.__calls);
+  // the window of the failure that was measured: x 1955 to 3155, its screen from x 2560
+  await pres.evaluate(() => { window.__geom = { win: { x: 1955, y: 609, w: 1200, h: 826 }, screen: { x: 2560, y: 609, w: 1728, h: 1083 } }; window.__calls = []; });
+  await pres.click('.df-presenter [data-df-fs]');
+  await expect.poll(calls, { timeout: 3000 }).toEqual([['moveTo', 1955, 609], ['requestFullscreen']]);
+  // the key does the same
+  await pres.evaluate(() => { window.__calls = []; });
+  await pres.keyboard.press('f');
+  await expect.poll(calls, { timeout: 3000 }).toEqual([['moveTo', 1955, 609], ['requestFullscreen']]);
+  // a window inside its screen goes to full screen at once, without a move
+  await pres.evaluate(() => { window.__geom = { win: { x: 2810, y: 640, w: 1200, h: 760 }, screen: { x: 2560, y: 609, w: 1728, h: 1083 } }; window.__calls = []; });
+  await pres.click('.df-presenter [data-df-fs]');
+  expect(await calls()).toEqual([['requestFullscreen']]);
+});
+
 // time in the presenter view: tested with real time in short spans (a fake clock would let the
 // heartbeat of the show window look lost and hold the commands back)
 const timeOf = (pres) => pres.textContent('.df-elapsed');
