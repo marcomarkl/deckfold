@@ -2,7 +2,8 @@
 // player; auto mode, black/white screen, full-screen fallback, wake lock and mouse cursor.
 //
 // opts: start (state to begin with), fullscreen (the start screen asked for full screen),
-// send(msg) (to the presenter view), onEnd(lastState). Returns a promise that resolves once the first slide is shown.
+// send(msg) (to the presenter view), onEnd(lastState), snapshot (the document before activation,
+// as text: the slide strip copies its tiles from it). Returns a promise that resolves once the first slide is shown.
 
 DF.startAudience = function (opts) {
   var send = opts.send;
@@ -26,6 +27,68 @@ DF.startAudience = function (opts) {
     blank = blank === mode ? null : mode;
     blankEl.className = "df-blank" + (blank ? " df-on df-" + blank : "");
     report();
+  }
+
+  // ---------- slide strip (decision E22) ----------
+  // A band of slide tiles with "End show" at the bottom of the presentation, for a show without a
+  // keyboard: a swipe up or the key of "strip" shows it, a tile goes to its slide (a slide hidden
+  // from the show too, E21), a swipe down, a tap or click beside it, Escape and the key again close
+  // it. It is built when it is first shown, as the last child of <body>, so that the slides of the
+  // deck keep their places among the elements a query finds. While it is open, the keys of "next"
+  // and "back" move its mark as on the start screen and Enter goes there; commands of the
+  // presenter view still move the slides.
+  var strip = { ui: null, band: null, open: false, sel: 0, source: null };
+  function stripSource() {
+    if (!strip.source && opts.snapshot) {
+      try { strip.source = new DOMParser().parseFromString(opts.snapshot, "text/html"); } catch (e) { strip.source = null; }
+    }
+    return strip.source;
+  }
+  function stripSelect(i) {
+    var n = DF.slides().length;
+    strip.sel = Math.max(0, Math.min(n - 1, i));
+    strip.band.mark(strip.sel);
+    strip.band.nav(strip.sel > 0, strip.sel < n - 1);
+  }
+  function stripKeys(type, e) {
+    e.stopImmediatePropagation();
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var a = e.key === "Escape" ? "strip" : e.key === "Enter" ? "pick" : DF.actionFor(e);
+    if (!a) return;
+    e.preventDefault();
+    if (type !== "keydown") return;
+    switch (a) {
+      case "strip": return closeStrip();
+      case "pick": closeStrip(); return take("goto", strip.sel);
+      case "next": return stripSelect(strip.sel + 1);
+      case "prev": return stripSelect(strip.sel - 1);
+      case "first": return stripSelect(0);
+      case "last": return stripSelect(DF.slides().length - 1);
+    }
+  }
+  function openStrip() {
+    if (generic || strip.open) return;
+    if (!strip.ui) {
+      strip.band = DF.slideStrip({ dim: true, source: stripSource,
+        pick: function (i) { closeStrip(); take("goto", i); }, step: function (d) { stripSelect(strip.sel + d); } });
+      var endBtn = DF.iconButton("power", DF.t("endShow"), { class: "df-danger", "data-df-end": "", onclick: function () { take("end"); } });
+      strip.ui = DF.el("div", { "data-df-ui": "", "data-df-showstrip": "", class: "df-showstrip" }, [strip.band.el, endBtn]);
+    }
+    document.body.appendChild(strip.ui);
+    strip.open = true;
+    strip.ui.classList.add("df-on");
+    strip.band.hide(DF.hiddenSlides());
+    DF.rescaleTiles(strip.band.band);
+    stripSelect(st.slide);
+    DF.modalKeys = stripKeys;
+  }
+  function closeStrip() {
+    if (!strip.open) return;
+    strip.open = false;
+    strip.ui.classList.remove("df-on");
+    if (DF.modalKeys === stripKeys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && strip.ui.contains(a) && a.blur) a.blur();
   }
 
   // ---------- full screen ----------
@@ -123,6 +186,7 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
+    if (strip.open) stripSelect(st.slide);
     if (lastShown) {
       DF.ss.set(DF.deckKey("df-last"), lastShown);
       // also in the state of this history entry, which a reload keeps and which goes to the browser
@@ -224,6 +288,7 @@ DF.startAudience = function (opts) {
         if (document.fullscreenElement) return DF.toggleFs();
         fsWanted = true;
         return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
+      case "strip": return strip.open ? closeStrip() : openStrip();
       case "end": return finish();
     }
   }
@@ -285,9 +350,18 @@ DF.startAudience = function (opts) {
     take(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
-  // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
-    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null, follow: function (to) { take("follow", to); } });
+  // a click on the slide moves on, a swipe to the left too, one to the right goes back, one up
+  // shows the slide strip (E22); the wheel does nothing (generic decks keep their own). While the
+  // strip is open, a click or tap beside it closes it and moves nothing, and neither does a swipe.
+  if (!generic) DF.installPointer({ next: function () { if (strip.open) closeStrip(); else take("next"); },
+    interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
+    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null,
+    follow: function (to) { if (strip.open) closeStrip(); else take("follow", to); },
+    swipe: function (dir) {
+      if (dir === "up") { if (!strip.open) take("strip"); return; }
+      if (dir === "down") { if (strip.open) take("strip"); return; }
+      if (!strip.open) take(dir === "left" ? "next" : "prev");
+    } });
 
   DF.audience = {
     act: take,

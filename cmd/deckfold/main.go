@@ -409,6 +409,11 @@ func mergeKnown(def, old config.Config) config.Config {
 			keys[k] = v
 		}
 	}
+	// a default key of the slide strip (added with E22) that the file gave to another action stays
+	// with that action
+	if _, set := old.Keys["strip"]; !set {
+		keys = config.YieldKeys(keys, "strip")
+	}
 	c.Keys = keys
 	c.Presenter.Elements = config.CleanElements(c.Presenter.Elements)
 	// a share the file does not have yet (0) takes its default

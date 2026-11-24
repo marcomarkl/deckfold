@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, shownCount, expected, fileURL, OUT, assetState, checkFreedBase64 } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, openPresenter, audState, hasWebGL, NO_WEBGL, counter, slideCount, shownCount, expected, fileURL, OUT, assetState, checkFreedBase64, checkStripKeys, checkSwipes, checkStripTiles, swipe, stripOpen } from './helpers.mjs';
 
 // Index of the slide the PowerPoint player shows.
 const shown = (doc) => doc.evaluate(() => [...document.querySelectorAll('.df-pptx-slide')].findIndex((s) => s.classList.contains('df-on')));
@@ -894,4 +894,53 @@ test('assets: the Base64 text of a decoded asset is emptied, and its URLs keep i
   const r = await checkFreedBase64(page, 'pptx-media.html');
   expect(r.emptied, 'assets whose text the start emptied, of ' + r.assets).toBeGreaterThan(0);
   expect(r.bad).toEqual([]);
+});
+
+// The slide strip of the presentation (decision E22), with the key and the mouse.
+test('slide strip: the key shows it, its keys choose a slide, a hidden slide can be chosen, its button ends the show', async ({ page }) => {
+  await checkStripKeys(page, 'pptx-basic.html');
+});
+
+// The tiles of the strip are copies of the slides beside the running player: the player hides
+// every element with the slide class but the slide it shows, and counts none of the copies.
+test('slide strip: its tiles are those of the start screen, and the show runs on with it open', async ({ page }) => {
+  test.setTimeout(240_000);
+  await checkStripTiles(page, 'pptx-animations.html', '.df-pptx-slide', shown);
+});
+
+// Touch (decision E22): Chrome only, where a touch can be made through CDP.
+test.describe('touch', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium', 'touch is made through CDP');
+  test.use({ hasTouch: true });
+  test('PowerPoint: swipes move through deckfold, a swipe up shows the slide strip', async ({ page }) => {
+    await checkSwipes(page, 'pptx-animations.html', shown);
+  });
+  test('PowerPoint with the presenter view: a swipe and the strip move both windows, the key of the strip stays out of the presenter view', async ({ page, context }) => {
+    const pres = await present(page, context, 'pptx-basic.html');
+    await page.waitForTimeout(500);
+    await swipe(page, [900, 300], [500, 300]);
+    const s1 = await expected(page, ['next']);
+    await expect.poll(() => audState(page)).toEqual(s1);
+    await expect.poll(() => pres.getAttribute('.df-presenter', 'data-df-at')).toContain(String(s1.slide + 1) + ' /');
+    // the key of the strip in the presenter view shows nothing in the presentation
+    await pres.bringToFront();
+    await pres.keyboard.press('g');
+    await page.waitForTimeout(400);
+    expect(await stripOpen(page)).toBe(false);
+    expect(await audState(page)).toEqual(s1);
+    // with the strip open, "next" from the presenter view still moves the slides
+    await page.evaluate(() => window.__deckfold.audience.act('strip'));
+    await expect.poll(() => stripOpen(page)).toBe(true);
+    await pres.keyboard.press('ArrowLeft');
+    const s0 = await expected(page, ['prev'], s1);
+    await expect.poll(() => audState(page)).toEqual(s0);
+    expect(await stripOpen(page)).toBe(true);
+    // a tile goes to its slide in both windows
+    const last = await expected(page, ['last']);
+    await page.bringToFront();
+    await page.locator(`[data-df-showstrip] .df-tile[data-i="${last.slide}"]`).tap();
+    await expect.poll(() => audState(page)).toEqual({ slide: last.slide, step: 0 });
+    await expect.poll(() => shown(page)).toBe(last.slide);
+    await expect.poll(() => pres.getAttribute('.df-presenter', 'data-df-at')).toContain(String(last.slide + 1) + ' /');
+  });
 });

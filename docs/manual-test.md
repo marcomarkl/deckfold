@@ -52,6 +52,11 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Presenter view in full screen before the start, and again after the end of a show: press Escape once | The presenter view leaves full screen; the start screen does not change | |
 | Back on the first slide | Nothing happens; no end slide | |
 | Click on the slide; turn the mouse wheel; swipe on the trackpad | The click moves on, in both windows; wheel and swipe do nothing | |
+| G during the presentation; the arrow keys; Enter; G or Escape | A strip of all slides appears at the bottom with the button that ends the show; the arrows move its mark, not the slides; Enter goes to the marked slide; G or Escape closes it, and Escape does not end the show then | |
+| On a tablet or touch display (iPad with Safari, Android with Chrome): swipe left and right on the slide, then tap | The swipe to the left moves on, the one to the right goes back, the tap moves on once; the page neither scrolls nor zooms nor goes back in the history | |
+| On a tablet or touch display: swipe up on the slide, tap a slide in the strip; swipe up again and tap the button at its right | The strip appears; the tap goes to that slide and closes the strip; the button ends the show | |
+| On a tablet or touch display: pull down on the slide; swipe in from the left and from the bottom edge | The page does not reload; what the system does at the edges is noted here | |
+| On a tablet in portrait | Noted here: whether a claude.ai deck shows one slide and swipes move it | |
 | Enter during the presentation | Nothing happens | |
 | One step after the last slide | The black end slide appears and stays on further steps (key, click, presenter view); Escape returns to the start screen | |
 

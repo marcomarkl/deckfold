@@ -376,6 +376,8 @@ DF.startPresenter = function (snapshotHTML) {
     if (a === "find") { if (finder) finder.open(); return true; }
     if (a === "fullscreen") { DF.toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
+    // the slide strip belongs to the presentation window (E22); this view has its overview
+    if (a === "strip") return true;
     // Enter cannot start from here (full screen needs a click in the presentation window); it is
     // consumed, so that it does not press a focused button either
     if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }

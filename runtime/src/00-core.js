@@ -43,7 +43,7 @@ DF.token = (function () {
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    slides: "Folien", oneSlide: "Folie", of: "von", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
+    slides: "Folien", oneSlide: "Folie", of: "von", slideStrip: "Folienleiste", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
     fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zurück", following: "Weiter",
@@ -64,7 +64,7 @@ var TEXT = {
     keySpace: "Leertaste", keyPgDn: "Bild ↓", keyPgUp: "Bild ↑", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "Rückschritt", keyDigits: "1 2 3 …",
   },
   en: {
-    slides: "slides", oneSlide: "slide", of: "of", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
+    slides: "slides", oneSlide: "slide", of: "of", slideStrip: "Slide strip", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
     fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",

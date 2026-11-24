@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need, checkSwipes, checkStripTiles } from './helpers.mjs';
 
 test.beforeEach(() => need('keynote'));
 
@@ -226,4 +226,20 @@ test('Keynote hidden slide: skipping it never shows it', async ({ page }) => {
   expect(events, `slide change events after "next": ${JSON.stringify(events)}`).not.toContain(1);
   expect(events.at(-1), `slide change events after "next": ${JSON.stringify(events)}`).toBe(2);
   expect((await audState(page)).slide).toBe(2);
+});
+
+// Touch and the slide strip (decision E22). The Keynote player moves on a swipe by itself; deckfold
+// takes the swipe first. What the player shows is read as the runtime reads it: the index of the
+// player's slide change event.
+const keynoteShown = (page) => page.evaluate(() => window.__deckfold.adapter().shown());
+test.describe('touch', () => {
+  test.use({ hasTouch: true });
+  test('Keynote: swipes move through deckfold, a swipe up shows the slide strip', async ({ page }) => {
+    test.setTimeout(180_000);
+    await checkSwipes(page, 'keynote.html', keynoteShown);
+  });
+});
+test('Keynote: the slide strip shows the tiles of the start screen and leaves the player alone', async ({ page }) => {
+  test.setTimeout(300_000);
+  await checkStripTiles(page, 'keynote.html', null, keynoteShown);
 });

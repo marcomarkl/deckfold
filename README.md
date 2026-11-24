@@ -111,7 +111,7 @@ The magnifier (or `/`, Ctrl+F, Cmd+F) opens the outline: every slide with its ti
 
 "Start" or Enter begins the presentation in this window; it starts only there, because full screen needs a click in the window that goes full screen. The arrow keys choose the start slide, also from the presenter view, so a clicker works before the start. The button with the keyboard icon, at the start of the last row, opens a list of every key as it is set, with the version of deckfold that wrote the file below it. Escape, the × or a click beside the list closes it. The list opens with the mouse only: it has no key of its own.
 
-In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. A link to another slide in a PowerPoint deck or a Keynote export goes there in both windows. The mouse wheel and swipes on a trackpad or touch screen do nothing, so that a gesture cannot move the slides by accident. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
+In the presentation, a click on the slide moves on like the keys for next; links, videos and PowerPoint triggers keep their own click. A link to another slide in a PowerPoint deck or a Keynote export goes there in both windows. The mouse wheel and a swipe on a trackpad do nothing, so that a gesture cannot move the slides by accident. On a touch screen, a tap moves on like a click, a swipe to the left moves on, and a swipe to the right goes back; a swipe counts when it begins on the slide. A swipe up, or the key G, shows a strip of all slides at the bottom of the presentation, with a button that ends the show at its right. A tap or click on a slide in the strip goes to the start of that slide. A slide hidden from the show stands there greyed out and can be chosen too; the show then goes on with the next slide that is not hidden. A swipe down, a tap or click beside the strip, Escape or G closes it. While it is open, the keys for next and back move its mark, and Enter goes to the marked slide. The audience sees the strip, since it is part of the presentation window. Touch is tested with touches made by a script in Chrome; it has not been tried on a tablet or a touch display yet. Should the player of the source still end up on another slide, deckfold brings it back to its own slide within about a second.
 
 deckfold does not place windows itself and does not check where they are. Put each window where it belongs, for example the presentation on the projector and the presenter view on the laptop; full screen can always be chosen. The presenter view goes into full screen with F or its full-screen button (four corners pointing out), which then shows corners pointing in and takes it back. Its buttons for the search, full screen and the end of the show show an icon each, with the name as a tooltip.
 
@@ -135,6 +135,9 @@ One step after the last slide shows a black end slide, which stays until the pre
 | A | auto mode on/off |
 | T | reset the timer |
 | / or Ctrl+F, Cmd+F | search and outline (start screen, presenter view) |
+| G | slide strip in the presentation: choose a slide, end the show |
+| swipe left / right (touch screen) | next / back |
+| swipe up / down (touch screen) | show / close the slide strip |
 | Esc | end the presentation |
 
 In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation. Before the start and after the end, Escape in the presenter view leaves full screen.
