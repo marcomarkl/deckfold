@@ -140,3 +140,30 @@ func TestDropHidden(t *testing.T) {
 		t.Errorf("the switch is in the JSON form: %s", b)
 	}
 }
+
+// The slide strip (E22) has the keys g and G by default; a configuration that gives one of them to
+// another action keeps its choice, and the strip keeps the other key.
+func TestStripKeys(t *testing.T) {
+	d := Default()
+	if got := d.Keys["strip"]; len(got) != 2 || got[0] != "g" || got[1] != "G" {
+		t.Fatalf("default keys of strip: %v", got)
+	}
+	c, err := Merge([]byte(`{"keys":{"white":["g","w"]}}`), Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Keys["strip"]; len(got) != 1 || got[0] != "G" {
+		t.Errorf("strip after another action took g: %v, want [G]", got)
+	}
+	if got := c.Keys["white"]; len(got) != 2 || got[0] != "g" {
+		t.Errorf("white: %v", got)
+	}
+	// a configuration that sets the keys of the strip itself keeps them as given
+	c, err = Merge([]byte(`{"keys":{"white":["g"],"strip":["g","s"]}}`), Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Keys["strip"]; len(got) != 2 || got[0] != "g" || got[1] != "s" {
+		t.Errorf("strip as configured: %v", got)
+	}
+}

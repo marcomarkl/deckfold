@@ -47,6 +47,12 @@ DF.previewFrame = function (host, snapshotHTML) {
 // slideTile: a button with a picture of slide i (the thumbnail of the source, otherwise a copy of
 // the slide). The picture is built only when the tile becomes visible, so that a deck with
 // hundreds of slides does not copy all of them at once.
+// The copy comes from the document of the window, which no source script has touched on the start
+// screen and in the presenter view. In the presentation the player has changed it (steps hidden,
+// animations half way), so the strip there passes source(): a document made from the snapshot, in
+// which nothing runs. Such a copy stands beside the running player, so it does not keep the class
+// the slides are found by (a slide copied whole would otherwise count as one more slide, and the
+// PowerPoint player hides every slide but the one it shows).
 var tileObserver = null;
 function fillTile(box) {
   if (box.__dfFilled) return;
@@ -54,10 +60,13 @@ function fillTile(box) {
   var meta = DF.meta.deck || {}, i = +box.getAttribute("data-i"), s = DF.slides()[i] || {};
   var w = meta.width || 1920;
   if (s.thumb) { box.appendChild(DF.el("img", { src: DF.assets.url(s.thumb), alt: "" })); return; }
-  var src = document.querySelectorAll(meta.slideSelector || ".deck-slide")[i];
+  var sel = meta.slideSelector || ".deck-slide";
+  var from = box.__dfSource ? box.__dfSource() : document;
+  var src = from && from.querySelectorAll(sel)[i];
   if (!src) return;
   var canvas = src.querySelector(".deck-scaler > *") || src;
-  var c = canvas.cloneNode(true);
+  var c = document.importNode(canvas, true);
+  if (from !== document && canvas === src) (sel.match(/\.[\w-]+/g) || []).forEach(function (k) { c.classList.remove(k.slice(1)); });
   [].slice.call(c.querySelectorAll("script,iframe,video,audio")).forEach(function (x) { x.parentNode.removeChild(x); });
   c.removeAttribute("id");
   DF.restoreIn(c);
@@ -71,9 +80,10 @@ function scaleTile(box) {
   var c = box.querySelector(".df-clone");
   if (c) c.style.transform = "scale(" + (box.clientWidth / ((DF.meta.deck || {}).width || 1920)) + ")";
 }
-DF.slideTile = function (i, onclick) {
+DF.slideTile = function (i, onclick, source) {
   var meta = DF.meta.deck || {}, s = DF.slides()[i] || {};
   var box = DF.el("div", { class: "df-thumb", "data-i": String(i) });
+  if (source) box.__dfSource = source;
   box.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
   var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: onclick }, [box,
     DF.el("span", { text: (i + 1) + (s.label ? " · " + s.label : "") })]);
@@ -94,12 +104,14 @@ DF.rescaleTiles = function (root) { [].slice.call(root.querySelectorAll(".df-thu
 // With opts.eye (the start screen), each tile has an eye at the right of its number that hides the
 // slide from the show or shows it again (E21): opts.onEye(i). The eye is a button of its own beside
 // the tile button, in a wrapper, since a button inside a button is not allowed.
-// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, otherwise
-// (the presenter view) by leaving their tiles out.
+// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, with
+// opts.dim (the strip of the presentation, E22) greyed out and still to be chosen, otherwise (the
+// presenter view) by leaving their tiles out.
+// opts.source() gives the document the tiles copy their slides from (see slideTile).
 DF.slideStrip = function (opts) {
   var band = DF.el("div", { class: "df-strip", "data-df-strip": "" });
   DF.slides().forEach(function (s, i) {
-    var tile = DF.slideTile(i, function () { opts.pick(i); });
+    var tile = DF.slideTile(i, function () { opts.pick(i); }, opts.source);
     if (!opts.eye) { band.appendChild(tile); return; }
     var eye = DF.iconButton("eye", DF.t("hideSlide"), { class: "df-eye", "data-df-eye": String(i), "aria-pressed": "false",
       onclick: function () { opts.onEye(i); } });
@@ -128,7 +140,7 @@ DF.slideStrip = function (opts) {
       (list || []).forEach(function (i) { set[i] = true; });
       var shown = n - Object.keys(set).length;
       if (!opts.eye) {
-        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-hidden", !!set[+t.getAttribute("data-i")]); });
+        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle(opts.dim ? "df-off" : "df-hidden", !!set[+t.getAttribute("data-i")]); });
         DF.rescaleTiles(band);
         return;
       }

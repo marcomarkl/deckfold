@@ -46,7 +46,7 @@ DF.token = (function () {
 var LANG = String(navigator.language || "en").toLowerCase().indexOf("de") === 0 ? "de" : "en";
 var TEXT = {
   de: {
-    slides: "Folien", oneSlide: "Folie", of: "von", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
+    slides: "Folien", oneSlide: "Folie", of: "von", slideStrip: "Folienleiste", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
     fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
@@ -67,7 +67,7 @@ var TEXT = {
     keySpace: "Leertaste", keyPgDn: "Bild \u2193", keyPgUp: "Bild \u2191", keyHome: "Pos1", keyEnd: "Ende", keyBackspace: "R\u00fcckschritt", keyDigits: "1 2 3 \u2026",
   },
   en: {
-    slides: "slides", oneSlide: "slide", of: "of", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
+    slides: "slides", oneSlide: "slide", of: "of", slideStrip: "Slide strip", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
     fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
@@ -923,6 +923,7 @@ DF.saveHidden = function (list) {
   DF.saveSettings(cur, true);
 };
 
+DF.actionFor = actionFor;
 function actionFor(e) {
   var keys = settings().keys || {};
   for (var act in keys) {
@@ -948,16 +949,21 @@ DF.modalKeys = null;
   }, true);
 });
 
-// Pointer input in the presentation (decision E15). A source player may move by itself on a click,
-// on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves on a
-// swipe), which would leave deckfold's state behind. These capture listeners are registered with
-// the key listeners, before any source script: a click on the slide becomes "next" through deckfold,
-// the wheel and touch moves never reach the player. A click on something that acts by itself (a
-// link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own controls) is left
-// to its target; where the player would take it as a step as well (adapter.guardClicks), it is
-// stopped on <html>, before the player's listener on the document.
+// Pointer input in the presentation (decisions E15 and E22). A source player may move by itself on
+// a click, on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves
+// on a swipe), which would leave deckfold's state behind. These capture listeners are registered
+// with the key listeners, before any source script: a click on the slide becomes "next" through
+// deckfold, the wheel and touch moves never reach the player. A click on something that acts by
+// itself (a link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own
+// controls) is left to its target; where the player would take it as a step as well
+// (adapter.guardClicks), it is stopped on <html>, before the player's listener on the document.
+// A swipe with one finger that begins on the slide is read here and handed to opts.swipe (E22):
+// the player still never sees it. The wheel, and with it a swipe on a trackpad, does nothing.
 var pointerRouter = null;
-["click", "wheel", "touchstart", "touchmove", "touchend"].forEach(function (type) {
+// What counts as a swipe: this far along one axis (CSS pixels), at least this many times as far as
+// across it, and within this time. Usual values, not measured on a device.
+var SWIPE_MIN = 48, SWIPE_RATIO = 2, SWIPE_MS = 800;
+["click", "wheel", "touchstart", "touchmove", "touchend", "touchcancel"].forEach(function (type) {
   window.addEventListener(type, function (e) { if (pointerRouter) pointerRouter(e); }, { capture: true, passive: false });
 });
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
@@ -965,7 +971,8 @@ document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
 // itself; guardClicks keeps such clicks away from the player's document listener; link(target,
 // event) returns the target of a link to another slide under the click, which follow(target)
-// then goes to (through deckfold's state, like every other move).
+// then goes to (through deckfold's state, like every other move); swipe(dir) takes a swipe to the
+// "left", "right", "up" or "down".
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -976,6 +983,7 @@ DF.installPointer = function (opts) {
     try { var sel = window.getSelection && window.getSelection(); if (sel && String(sel) !== "") return true; } catch (e) { }
     return false;
   }
+  var touch = null;
   pointerRouter = function (e) {
     if (e.__deckfold) return;
     if (e.type === "click") {
@@ -989,6 +997,37 @@ DF.installPointer = function (opts) {
     }
     // wheel and touch moves: never to the player (a tap still ends in a click, see above)
     e.stopImmediatePropagation();
+    if (e.type === "wheel" || !opts.swipe) return;
+    if (e.type === "touchstart") {
+      // one finger on the slide begins a gesture; a second finger ends it (two fingers stay with
+      // the browser), and so does a touch on something that acts by itself, such as the band of
+      // the strip, which scrolls under the finger
+      var t0 = e.touches && e.touches.length === 1 && !own(e.target) ? e.touches[0] : null;
+      touch = t0 ? { x: t0.clientX, y: t0.clientY, lx: t0.clientX, ly: t0.clientY, at: Date.now() } : null;
+      return;
+    }
+    if (!touch) return;
+    if (e.type === "touchcancel") { touch = null; return; }
+    if (e.type === "touchmove") {
+      if (e.touches.length !== 1) { touch = null; return; }
+      touch.lx = e.touches[0].clientX; touch.ly = e.touches[0].clientY;
+      // from the first move on: once the browser has begun to scroll, a later preventDefault does
+      // nothing. Without it a pull down may reload the page where the browser has that gesture
+      // (not measured on a device)
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    // touchend
+    var g = touch, c = e.changedTouches && e.changedTouches[0];
+    touch = null;
+    if (e.touches && e.touches.length) return;
+    var dx = (c ? c.clientX : g.lx) - g.x, dy = (c ? c.clientY : g.ly) - g.y, ax = Math.abs(dx), ay = Math.abs(dy);
+    if (Date.now() - g.at > SWIPE_MS) return;
+    var dir = ax >= SWIPE_MIN && ax >= SWIPE_RATIO * ay ? (dx < 0 ? "left" : "right")
+      : ay >= SWIPE_MIN && ay >= SWIPE_RATIO * ax ? (dy < 0 ? "up" : "down") : null;
+    if (!dir) return;
+    if (e.cancelable) e.preventDefault(); // no click after a swipe
+    opts.swipe(dir);
   };
 };
 
@@ -1148,6 +1187,12 @@ DF.previewFrame = function (host, snapshotHTML) {
 // slideTile: a button with a picture of slide i (the thumbnail of the source, otherwise a copy of
 // the slide). The picture is built only when the tile becomes visible, so that a deck with
 // hundreds of slides does not copy all of them at once.
+// The copy comes from the document of the window, which no source script has touched on the start
+// screen and in the presenter view. In the presentation the player has changed it (steps hidden,
+// animations half way), so the strip there passes source(): a document made from the snapshot, in
+// which nothing runs. Such a copy stands beside the running player, so it does not keep the class
+// the slides are found by (a slide copied whole would otherwise count as one more slide, and the
+// PowerPoint player hides every slide but the one it shows).
 var tileObserver = null;
 function fillTile(box) {
   if (box.__dfFilled) return;
@@ -1155,10 +1200,13 @@ function fillTile(box) {
   var meta = DF.meta.deck || {}, i = +box.getAttribute("data-i"), s = DF.slides()[i] || {};
   var w = meta.width || 1920;
   if (s.thumb) { box.appendChild(DF.el("img", { src: DF.assets.url(s.thumb), alt: "" })); return; }
-  var src = document.querySelectorAll(meta.slideSelector || ".deck-slide")[i];
+  var sel = meta.slideSelector || ".deck-slide";
+  var from = box.__dfSource ? box.__dfSource() : document;
+  var src = from && from.querySelectorAll(sel)[i];
   if (!src) return;
   var canvas = src.querySelector(".deck-scaler > *") || src;
-  var c = canvas.cloneNode(true);
+  var c = document.importNode(canvas, true);
+  if (from !== document && canvas === src) (sel.match(/\.[\w-]+/g) || []).forEach(function (k) { c.classList.remove(k.slice(1)); });
   [].slice.call(c.querySelectorAll("script,iframe,video,audio")).forEach(function (x) { x.parentNode.removeChild(x); });
   c.removeAttribute("id");
   DF.restoreIn(c);
@@ -1172,9 +1220,10 @@ function scaleTile(box) {
   var c = box.querySelector(".df-clone");
   if (c) c.style.transform = "scale(" + (box.clientWidth / ((DF.meta.deck || {}).width || 1920)) + ")";
 }
-DF.slideTile = function (i, onclick) {
+DF.slideTile = function (i, onclick, source) {
   var meta = DF.meta.deck || {}, s = DF.slides()[i] || {};
   var box = DF.el("div", { class: "df-thumb", "data-i": String(i) });
+  if (source) box.__dfSource = source;
   box.style.aspectRatio = (meta.width || 1920) + " / " + (meta.height || 1080);
   var tile = DF.el("button", { type: "button", class: "df-tile", "data-i": String(i), onclick: onclick }, [box,
     DF.el("span", { text: (i + 1) + (s.label ? " \u00b7 " + s.label : "") })]);
@@ -1195,12 +1244,14 @@ DF.rescaleTiles = function (root) { [].slice.call(root.querySelectorAll(".df-thu
 // With opts.eye (the start screen), each tile has an eye at the right of its number that hides the
 // slide from the show or shows it again (E21): opts.onEye(i). The eye is a button of its own beside
 // the tile button, in a wrapper, since a button inside a button is not allowed.
-// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, otherwise
-// (the presenter view) by leaving their tiles out.
+// hide(list) shows which slides are hidden: with the eye greyed out and a crossed eye, with
+// opts.dim (the strip of the presentation, E22) greyed out and still to be chosen, otherwise (the
+// presenter view) by leaving their tiles out.
+// opts.source() gives the document the tiles copy their slides from (see slideTile).
 DF.slideStrip = function (opts) {
   var band = DF.el("div", { class: "df-strip", "data-df-strip": "" });
   DF.slides().forEach(function (s, i) {
-    var tile = DF.slideTile(i, function () { opts.pick(i); });
+    var tile = DF.slideTile(i, function () { opts.pick(i); }, opts.source);
     if (!opts.eye) { band.appendChild(tile); return; }
     var eye = DF.iconButton("eye", DF.t("hideSlide"), { class: "df-eye", "data-df-eye": String(i), "aria-pressed": "false",
       onclick: function () { opts.onEye(i); } });
@@ -1229,7 +1280,7 @@ DF.slideStrip = function (opts) {
       (list || []).forEach(function (i) { set[i] = true; });
       var shown = n - Object.keys(set).length;
       if (!opts.eye) {
-        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle("df-hidden", !!set[+t.getAttribute("data-i")]); });
+        [].slice.call(band.querySelectorAll(".df-tile")).forEach(function (t) { t.classList.toggle(opts.dim ? "df-off" : "df-hidden", !!set[+t.getAttribute("data-i")]); });
         DF.rescaleTiles(band);
         return;
       }
@@ -1660,7 +1711,7 @@ DF.startShow = function (snapshotHTML) {
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
         { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
-      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
+      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("strip", DF.t("slideStrip")), row("end", DF.t("endShow"))] },
       { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
   }
   try { performance.mark("deckfold:start-screen"); } catch (e) { }
@@ -1860,7 +1911,7 @@ DF.startShow = function (snapshotHTML) {
     // the scripts start after the click or key event has ended
     new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
       return DF.startAudience({
-        start: start, fullscreen: wantFs, wakeLock: wakeLock,
+        start: start, fullscreen: wantFs, wakeLock: wakeLock, snapshot: snapshotHTML,
         send: function (m) { m.sel = sel; m.hidden = DF.hiddenSlides(); return send(m); },
         onEnd: end
       });
@@ -1898,7 +1949,8 @@ DF.startShow = function (snapshotHTML) {
 // player; auto mode, black/white screen, full-screen fallback, wake lock and mouse cursor.
 //
 // opts: start (state to begin with), fullscreen (the start screen asked for full screen),
-// send(msg) (to the presenter view), onEnd(lastState). Returns a promise that resolves once the first slide is shown.
+// send(msg) (to the presenter view), onEnd(lastState), snapshot (the document before activation,
+// as text: the slide strip copies its tiles from it). Returns a promise that resolves once the first slide is shown.
 
 DF.startAudience = function (opts) {
   var send = opts.send;
@@ -1922,6 +1974,68 @@ DF.startAudience = function (opts) {
     blank = blank === mode ? null : mode;
     blankEl.className = "df-blank" + (blank ? " df-on df-" + blank : "");
     report();
+  }
+
+  // ---------- slide strip (decision E22) ----------
+  // A band of slide tiles with "End show" at the bottom of the presentation, for a show without a
+  // keyboard: a swipe up or the key of "strip" shows it, a tile goes to its slide (a slide hidden
+  // from the show too, E21), a swipe down, a tap or click beside it, Escape and the key again close
+  // it. It is built when it is first shown, as the last child of <body>, so that the slides of the
+  // deck keep their places among the elements a query finds. While it is open, the keys of "next"
+  // and "back" move its mark as on the start screen and Enter goes there; commands of the
+  // presenter view still move the slides.
+  var strip = { ui: null, band: null, open: false, sel: 0, source: null };
+  function stripSource() {
+    if (!strip.source && opts.snapshot) {
+      try { strip.source = new DOMParser().parseFromString(opts.snapshot, "text/html"); } catch (e) { strip.source = null; }
+    }
+    return strip.source;
+  }
+  function stripSelect(i) {
+    var n = DF.slides().length;
+    strip.sel = Math.max(0, Math.min(n - 1, i));
+    strip.band.mark(strip.sel);
+    strip.band.nav(strip.sel > 0, strip.sel < n - 1);
+  }
+  function stripKeys(type, e) {
+    e.stopImmediatePropagation();
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var a = e.key === "Escape" ? "strip" : e.key === "Enter" ? "pick" : DF.actionFor(e);
+    if (!a) return;
+    e.preventDefault();
+    if (type !== "keydown") return;
+    switch (a) {
+      case "strip": return closeStrip();
+      case "pick": closeStrip(); return take("goto", strip.sel);
+      case "next": return stripSelect(strip.sel + 1);
+      case "prev": return stripSelect(strip.sel - 1);
+      case "first": return stripSelect(0);
+      case "last": return stripSelect(DF.slides().length - 1);
+    }
+  }
+  function openStrip() {
+    if (generic || strip.open) return;
+    if (!strip.ui) {
+      strip.band = DF.slideStrip({ dim: true, source: stripSource,
+        pick: function (i) { closeStrip(); take("goto", i); }, step: function (d) { stripSelect(strip.sel + d); } });
+      var endBtn = DF.iconButton("power", DF.t("endShow"), { class: "df-danger", "data-df-end": "", onclick: function () { take("end"); } });
+      strip.ui = DF.el("div", { "data-df-ui": "", "data-df-showstrip": "", class: "df-showstrip" }, [strip.band.el, endBtn]);
+    }
+    document.body.appendChild(strip.ui);
+    strip.open = true;
+    strip.ui.classList.add("df-on");
+    strip.band.hide(DF.hiddenSlides());
+    DF.rescaleTiles(strip.band.band);
+    stripSelect(st.slide);
+    DF.modalKeys = stripKeys;
+  }
+  function closeStrip() {
+    if (!strip.open) return;
+    strip.open = false;
+    strip.ui.classList.remove("df-on");
+    if (DF.modalKeys === stripKeys) DF.modalKeys = null;
+    var a = document.activeElement;
+    if (a && strip.ui.contains(a) && a.blur) a.blur();
   }
 
   // ---------- full screen ----------
@@ -2019,6 +2133,7 @@ DF.startAudience = function (opts) {
     var m = info();
     m.type = "state"; m.phase = "show";
     send(m);
+    if (strip.open) stripSelect(st.slide);
     if (lastShown) {
       DF.ss.set(DF.deckKey("df-last"), lastShown);
       // also in the state of this history entry, which a reload keeps and which goes to the browser
@@ -2120,6 +2235,7 @@ DF.startAudience = function (opts) {
         if (document.fullscreenElement) return DF.toggleFs();
         fsWanted = true;
         return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
+      case "strip": return strip.open ? closeStrip() : openStrip();
       case "end": return finish();
     }
   }
@@ -2181,9 +2297,18 @@ DF.startAudience = function (opts) {
     take(a, e && e.slide);
     return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
-  // a click on the slide moves on; the wheel and swipes do nothing (generic decks keep their own)
-  if (!generic) DF.installPointer({ next: function () { take("next"); }, interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
-    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null, follow: function (to) { take("follow", to); } });
+  // a click on the slide moves on, a swipe to the left too, one to the right goes back, one up
+  // shows the slide strip (E22); the wheel does nothing (generic decks keep their own). While the
+  // strip is open, a click or tap beside it closes it and moves nothing, and neither does a swipe.
+  if (!generic) DF.installPointer({ next: function () { if (strip.open) closeStrip(); else take("next"); },
+    interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
+    link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null,
+    follow: function (to) { if (strip.open) closeStrip(); else take("follow", to); },
+    swipe: function (dir) {
+      if (dir === "up") { if (!strip.open) take("strip"); return; }
+      if (dir === "down") { if (strip.open) take("strip"); return; }
+      if (!strip.open) take(dir === "left" ? "next" : "prev");
+    } });
 
   DF.audience = {
     act: take,
@@ -2584,6 +2709,8 @@ DF.startPresenter = function (snapshotHTML) {
     if (a === "find") { if (finder) finder.open(); return true; }
     if (a === "fullscreen") { DF.toggleFs(); return true; }
     if (a === "timerReset") { resetTimer(); return true; }
+    // the slide strip belongs to the presentation window (E22); this view has its overview
+    if (a === "strip") return true;
     // Enter cannot start from here (full screen needs a click in the presentation window); it is
     // consumed, so that it does not press a focused button either
     if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }

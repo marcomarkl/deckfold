@@ -142,7 +142,7 @@ DF.startShow = function (snapshotHTML) {
         row("prev", DF.t("previous")), row("first", DF.t("firstSlide")), row("last", DF.t("lastSlide")),
         { action: "goto", caps: [DF.t("keyDigits"), "Enter"], label: DF.t("gotoSlide") }].concat(finder ? [row("find", DF.t("search"))] : []) },
       display,
-      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("end", DF.t("endShow"))] },
+      { name: "run", title: DF.t("keysRun"), rows: [row("auto", DF.t("auto")), row("strip", DF.t("slideStrip")), row("end", DF.t("endShow"))] },
       { name: "presenter", title: DF.t("presenterView"), rows: [row("timerReset", DF.t("timerReset"))] }];
   }
   try { performance.mark("deckfold:start-screen"); } catch (e) { }
@@ -342,7 +342,7 @@ DF.startShow = function (snapshotHTML) {
     // the scripts start after the click or key event has ended
     new Promise(function (r) { setTimeout(r, 0); }).then(DF.activateScripts).then(function () {
       return DF.startAudience({
-        start: start, fullscreen: wantFs, wakeLock: wakeLock,
+        start: start, fullscreen: wantFs, wakeLock: wakeLock, snapshot: snapshotHTML,
         send: function (m) { m.sel = sel; m.hidden = DF.hiddenSlides(); return send(m); },
         onEnd: end
       });

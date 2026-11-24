@@ -50,6 +50,7 @@ DF.saveHidden = function (list) {
   DF.saveSettings(cur, true);
 };
 
+DF.actionFor = actionFor;
 function actionFor(e) {
   var keys = settings().keys || {};
   for (var act in keys) {
@@ -75,16 +76,21 @@ DF.modalKeys = null;
   }, true);
 });
 
-// Pointer input in the presentation (decision E15). A source player may move by itself on a click,
-// on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves on a
-// swipe), which would leave deckfold's state behind. These capture listeners are registered with
-// the key listeners, before any source script: a click on the slide becomes "next" through deckfold,
-// the wheel and touch moves never reach the player. A click on something that acts by itself (a
-// link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own controls) is left
-// to its target; where the player would take it as a step as well (adapter.guardClicks), it is
-// stopped on <html>, before the player's listener on the document.
+// Pointer input in the presentation (decisions E15 and E22). A source player may move by itself on
+// a click, on the wheel or on a swipe (the claude.ai player does all three, the Keynote player moves
+// on a swipe), which would leave deckfold's state behind. These capture listeners are registered
+// with the key listeners, before any source script: a click on the slide becomes "next" through
+// deckfold, the wheel and touch moves never reach the player. A click on something that acts by
+// itself (a link, a medium, a form field, a trigger of the PowerPoint player, deckfold's own
+// controls) is left to its target; where the player would take it as a step as well
+// (adapter.guardClicks), it is stopped on <html>, before the player's listener on the document.
+// A swipe with one finger that begins on the slide is read here and handed to opts.swipe (E22):
+// the player still never sees it. The wheel, and with it a swipe on a trackpad, does nothing.
 var pointerRouter = null;
-["click", "wheel", "touchstart", "touchmove", "touchend"].forEach(function (type) {
+// What counts as a swipe: this far along one axis (CSS pixels), at least this many times as far as
+// across it, and within this time. Usual values, not measured on a device.
+var SWIPE_MIN = 48, SWIPE_RATIO = 2, SWIPE_MS = 800;
+["click", "wheel", "touchstart", "touchmove", "touchend", "touchcancel"].forEach(function (type) {
   window.addEventListener(type, function (e) { if (pointerRouter) pointerRouter(e); }, { capture: true, passive: false });
 });
 document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn && pointerRouter) e.stopPropagation(); });
@@ -92,7 +98,8 @@ document.documentElement.addEventListener("click", function (e) { if (e.__dfOwn 
 // opts: next() moves on; interactive(target) tells whether the player handles a click on target
 // itself; guardClicks keeps such clicks away from the player's document listener; link(target,
 // event) returns the target of a link to another slide under the click, which follow(target)
-// then goes to (through deckfold's state, like every other move).
+// then goes to (through deckfold's state, like every other move); swipe(dir) takes a swipe to the
+// "left", "right", "up" or "down".
 DF.installPointer = function (opts) {
   function own(t) {
     if (!t || !t.closest) return true;
@@ -103,6 +110,7 @@ DF.installPointer = function (opts) {
     try { var sel = window.getSelection && window.getSelection(); if (sel && String(sel) !== "") return true; } catch (e) { }
     return false;
   }
+  var touch = null;
   pointerRouter = function (e) {
     if (e.__deckfold) return;
     if (e.type === "click") {
@@ -116,6 +124,37 @@ DF.installPointer = function (opts) {
     }
     // wheel and touch moves: never to the player (a tap still ends in a click, see above)
     e.stopImmediatePropagation();
+    if (e.type === "wheel" || !opts.swipe) return;
+    if (e.type === "touchstart") {
+      // one finger on the slide begins a gesture; a second finger ends it (two fingers stay with
+      // the browser), and so does a touch on something that acts by itself, such as the band of
+      // the strip, which scrolls under the finger
+      var t0 = e.touches && e.touches.length === 1 && !own(e.target) ? e.touches[0] : null;
+      touch = t0 ? { x: t0.clientX, y: t0.clientY, lx: t0.clientX, ly: t0.clientY, at: Date.now() } : null;
+      return;
+    }
+    if (!touch) return;
+    if (e.type === "touchcancel") { touch = null; return; }
+    if (e.type === "touchmove") {
+      if (e.touches.length !== 1) { touch = null; return; }
+      touch.lx = e.touches[0].clientX; touch.ly = e.touches[0].clientY;
+      // from the first move on: once the browser has begun to scroll, a later preventDefault does
+      // nothing. Without it a pull down may reload the page where the browser has that gesture
+      // (not measured on a device)
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    // touchend
+    var g = touch, c = e.changedTouches && e.changedTouches[0];
+    touch = null;
+    if (e.touches && e.touches.length) return;
+    var dx = (c ? c.clientX : g.lx) - g.x, dy = (c ? c.clientY : g.ly) - g.y, ax = Math.abs(dx), ay = Math.abs(dy);
+    if (Date.now() - g.at > SWIPE_MS) return;
+    var dir = ax >= SWIPE_MIN && ax >= SWIPE_RATIO * ay ? (dx < 0 ? "left" : "right")
+      : ay >= SWIPE_MIN && ay >= SWIPE_RATIO * ax ? (dy < 0 ? "up" : "down") : null;
+    if (!dir) return;
+    if (e.cancelable) e.preventDefault(); // no click after a swipe
+    opts.swipe(dir);
   };
 };
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need, fileURL, visibleSlide } from './helpers.mjs';
+import { watch, realErrors, solo, present, startScreen, audState, counter, slideCount, expected, need, fileURL, visibleSlide, swipe, checkSwipes, checkStripTiles, corpus } from './helpers.mjs';
 
 test.beforeEach(() => need('claude'));
 
@@ -137,12 +137,13 @@ test('start slide: three starts in a row each begin at the chosen slide', async 
   await page.waitForSelector('[data-df-start]');
 });
 
-// Mouse, wheel and touch in the presentation (decision E15): the claude.ai player moves by itself
-// on a click (left half back, right half on), on the wheel and on a swipe. A click goes through
-// deckfold as "next"; the wheel and swipes do nothing, so the player never leaves deckfold's state.
+// Mouse, wheel and touch in the presentation (decisions E15 and E22): the claude.ai player moves
+// by itself on a click (left half back, right half on), on the wheel and on a swipe. A click goes
+// through deckfold as "next" and a swipe as "next" or "back"; the wheel does nothing, so the player
+// never leaves deckfold's state.
 test.describe('pointer input', () => {
   test.use({ hasTouch: true });
-  test('claude.ai: a click moves on through deckfold, wheel and swipes do nothing, back reaches the first slide', async ({ page }) => {
+  test('claude.ai: a click and a swipe move through deckfold, the wheel does nothing, back reaches the first slide', async ({ page }) => {
     await startScreen(page, 'claude.html');
     await page.uncheck('[data-df-fs]');
     await page.click('[data-df-start]');
@@ -167,23 +168,61 @@ test.describe('pointer input', () => {
     expect(await audState(page)).toEqual(s2);
     expect(await visibleSlide(page)).toBe(s2.slide);
     expect(await page.evaluate(() => [scrollX, scrollY])).toEqual([0, 0]);
-    // swipe to the left and to the right: nothing moves
-    const cdp = await page.context().newCDPSession(page);
-    const swipe = async (from, to) => {
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from, y: 400 }] });
-      for (const x of [from + (to - from) / 3, from + (to - from) * 2 / 3, to]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 400 }] });
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      await page.waitForTimeout(800);
-    };
-    await swipe(900, 300);
-    await swipe(300, 900);
-    expect(await audState(page)).toEqual(s2);
-    expect(await visibleSlide(page)).toBe(s2.slide);
+    // a swipe to the left moves on and one to the right goes back, through deckfold (E22): the
+    // player shows the slide of deckfold's state and never one further
+    await swipe(page, [900, 400], [300, 400]);
+    const s3 = await expected(page, ['next'], s2);
+    await expect.poll(() => audState(page)).toEqual(s3);
+    await expect.poll(() => visibleSlide(page)).toBe(s3.slide);
+    await page.waitForTimeout(1200);
+    expect(await audState(page)).toEqual(s3);
+    expect(await visibleSlide(page)).toBe(s3.slide);
+    await swipe(page, [300, 400], [900, 400]);
+    await expect.poll(() => audState(page)).toEqual(s2);
+    await expect.poll(() => visibleSlide(page)).toBe(s2.slide);
     // back reaches the first slide, in deckfold and in the player
     for (let i = 0; i < 20 && (await audState(page)).slide > 0; i++) { await page.keyboard.press('ArrowLeft'); await page.waitForTimeout(300); }
     expect((await audState(page)).slide).toBe(0);
     await expect.poll(() => visibleSlide(page)).toBe(0);
   });
+});
+
+// Touch in the presentation (decision E22), in a describe of its own with a touch screen.
+test.describe('touch', () => {
+  test.use({ hasTouch: true });
+  test('claude.ai: swipes move through deckfold, a swipe up shows the slide strip', async ({ page }) => {
+    await checkSwipes(page, 'claude.html', visibleSlide);
+  });
+  // A gesture made before the player stands on the start slide is kept like a key, not lost.
+  test('claude.ai: a swipe right after "Start" is carried out once the player is ready', async ({ page }) => {
+    await startScreen(page, 'claude.html');
+    await page.uncheck('[data-df-fs]');
+    await page.evaluate(() => {
+      const touch = (type, x) => {
+        const t = new Touch({ identifier: 1, target: document.body, clientX: x, clientY: 300 });
+        const on = type === 'touchend' ? [] : [t];
+        document.body.dispatchEvent(new TouchEvent(type, { touches: on, targetTouches: on, changedTouches: [t], bubbles: true, cancelable: true }));
+      };
+      // as soon as the presentation takes input: before the player has reached its start slide
+      const wait = () => {
+        if (!(window.__deckfold && window.__deckfold.audience)) return requestAnimationFrame(wait);
+        touch('touchstart', 900); touch('touchmove', 700); touch('touchmove', 500); touch('touchend', 500);
+      };
+      wait();
+      document.querySelector('[data-df-start]').click();
+    });
+    await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+    const s1 = await expected(page, ['next']);
+    await expect.poll(() => audState(page)).toEqual(s1);
+    await expect.poll(() => visibleSlide(page)).toBe(s1.slide);
+  });
+});
+
+// The tiles of the slide strip are copies of the slides, beside the running player (E22).
+test('claude.ai: the slide strip shows the tiles of the start screen and leaves the player alone', async ({ page }) => {
+  test.setTimeout(240_000);
+  const name = corpus.claudeSteps ? 'claude-steps.html' : 'claude.html';
+  await checkStripTiles(page, name, '.deck-slide', visibleSlide);
 });
 
 // Player and deckfold kept together (decision E15): a player that went elsewhere is brought back.

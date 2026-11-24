@@ -332,6 +332,19 @@ func TestRefreshKeepsOldDefaultsAndAddsNew(t *testing.T) {
 	if err := c.Validate(); err != nil {
 		t.Error(err)
 	}
+	// a file from before the slide strip (E22) gets its keys, without the one the file gave to
+	// another action
+	old = config.Default()
+	delete(old.Keys, "strip")
+	c = mergeKnown(config.Default(), old)
+	if !reflect.DeepEqual(c.Keys["strip"], []string{"g", "G"}) {
+		t.Errorf("strip %q, want the default for a file that does not know the action", c.Keys["strip"])
+	}
+	old.Keys["white"] = []string{"w", "G"}
+	c = mergeKnown(config.Default(), old)
+	if !reflect.DeepEqual(c.Keys["strip"], []string{"g"}) || !reflect.DeepEqual(c.Keys["white"], []string{"w", "G"}) {
+		t.Errorf("strip %q and white %q, want [g] and the file's own list", c.Keys["strip"], c.Keys["white"])
+	}
 	// a file with the default keys of v0.3 (Enter moved on) gets the current default; a list the
 	// file chose itself stays
 	old = config.Default()

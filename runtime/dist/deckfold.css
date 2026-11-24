@@ -249,6 +249,15 @@ html.df-presenter-mode body > :not([data-df-ui]) { display: none !important; }
 .df-endslide { position: fixed; inset: 0; z-index: 2147483540; display: none; align-items: center; justify-content: center; background: #000; color: #888;
   font: 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 .df-endslide.df-on { display: flex; }
+/* the slide strip of the presentation (E22): above the black screen and the end slide, below the
+   full-screen overlay */
+.df-showstrip[data-df-ui] { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483555; display: none; align-items: center; gap: 10px;
+  padding: 10px 12px 6px; background: var(--df-bg); border-top: 1px solid var(--df-line); }
+.df-showstrip[data-df-ui].df-on { display: flex; }
+.df-showstrip .df-strip-wrap { flex: 1; }
+.df-showstrip[data-df-ui] .df-strip .df-tile { flex: 0 0 132px; width: 132px; min-width: 0; scroll-snap-align: start; }
+[data-df-ui] .df-tile.df-off .df-thumb { opacity: .3; }
+.df-showstrip[data-df-ui] [data-df-end] { flex: 0 0 auto; }
 .df-fs-overlay { position: fixed; inset: 0; z-index: 2147483560; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.6); }
 .df-fs-overlay.df-on { display: flex; }
 [data-df-ui].df-fs-overlay button { font-size: 22px; padding: 16px 28px; background: var(--df-accent); border-color: var(--df-accent); color: #fff; }

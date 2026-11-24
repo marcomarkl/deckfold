@@ -106,7 +106,7 @@ func CleanElements(els []string) []string {
 }
 
 // Actions are the actions keys can be bound to.
-var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end", "find"}
+var Actions = []string{"next", "prev", "first", "last", "fullscreen", "black", "white", "auto", "timerReset", "end", "find", "strip"}
 
 // retiredActions were bound to keys by older versions; Merge accepts and drops them, so that
 // older configuration files still load (diagnostics showed the screen detection of v0.4 drafts).
@@ -142,6 +142,8 @@ func Default() Config {
 			"end":        {"Escape"},
 			// search and outline; Ctrl+F and Cmd+F open it too and are not configurable
 			"find": {"/"},
+			// the slide strip of the presentation (E22)
+			"strip": {"g", "G"},
 		},
 		WarnSize: "250MB",
 	}
@@ -238,6 +240,9 @@ func Merge(data []byte, base Config) (Config, error) {
 		}
 		c.Keys[k] = v
 	}
+	if _, set := in.Keys["strip"]; !set {
+		c.Keys = YieldKeys(c.Keys, "strip")
+	}
 	if in.WarnSize != nil {
 		c.WarnSize = *in.WarnSize
 	}
@@ -304,6 +309,30 @@ func KnownAction(a string) bool { return in(Actions, a) }
 // drafts, Enter moved on as well; now Enter only starts the presentation).
 var formerKeys = map[string][][]string{
 	"next": {{"ArrowRight", "ArrowDown", "PageDown", " ", "Enter"}},
+}
+
+// YieldKeys returns keys without those keys of action that another action has as well. An action
+// added later (the slide strip, E22) comes with default keys, and a configuration or a file written
+// before may have given one of them to another action: that choice stays, since the runtime takes
+// the first action it finds for a key. Call it only where the keys of action are the default.
+func YieldKeys(keys map[string][]string, action string) map[string][]string {
+	taken := map[string]bool{}
+	for a, list := range keys {
+		if a != action {
+			for _, k := range list {
+				taken[k] = true
+			}
+		}
+	}
+	out := copyKeys(keys)
+	kept := []string{}
+	for _, k := range keys[action] {
+		if !taken[k] {
+			kept = append(kept, k)
+		}
+	}
+	out[action] = kept
+	return out
 }
 
 // FormerDefaultKeys tells whether keys is a default list an earlier version gave to action.
