@@ -2,7 +2,7 @@
 // screen first; the presenter view is a second window that the user drags to a screen. Where the
 // windows are is not checked; full screen can always be chosen.
 import { test, expect } from '@playwright/test';
-import { startScreen, openPresenter, solo, present, audState, fileURL, need, visibleSlide, expected, counter } from './helpers.mjs';
+import { startScreen, openPresenter, solo, present, audState, fileURL, need, visibleSlide, expected, counter, swipe } from './helpers.mjs';
 
 const deferred = (page) => page.evaluate(() => document.querySelectorAll('script[type="text/df-deferred"]').length);
 
@@ -398,6 +398,110 @@ const fakeFullscreen = () => {
   Document.prototype.exitFullscreen = function () { window.__fs = false; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
   Object.defineProperty(navigator, 'keyboard', { configurable: true, value: { lock(k) { window.__locks.push(k); return Promise.resolve(); }, unlock() { window.__locks.push('unlock'); } } });
 };
+
+// "Click for full screen" is the fallback for a start that got no full screen. Full screen that was
+// there and is left during the show (Escape in Safari and Firefox, the key of "fullscreen") is the
+// presenter's choice: the show goes on in the window with nothing over the slide, and the key
+// brings full screen back.
+test('full screen left during the show: no overlay, the key brings it back', async ({ page, context }) => {
+  await context.addInitScript(fakeFullscreen);
+  await context.addInitScript(() => {
+    Object.defineProperty(window.screen, 'width', { get: () => 3000 });
+    Object.defineProperty(window.screen, 'height', { get: () => 2000 });
+  });
+  await solo(page, 'pptx-basic.html');
+  const full = () => page.evaluate(() => !!document.fullscreenElement);
+  expect(await full()).toBe(true);
+  await page.evaluate(() => document.exitFullscreen());
+  // longer than the overlay's own check, which runs once a second
+  await page.waitForTimeout(1500);
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
+  expect(await audState(page)).toEqual({ slide: 0, step: 0 });
+  // a click moves on and does not ask for full screen on a computer
+  await page.mouse.click(600, 300);
+  await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
+  expect(await full()).toBe(false);
+  await page.keyboard.press('f');
+  await expect.poll(full).toBe(true);
+  await page.keyboard.press('f');
+  await expect.poll(full).toBe(false);
+  await page.waitForTimeout(1500);
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
+  // the strip has no button for full screen: tiles and "End show"
+  await page.keyboard.press('g');
+  expect(await page.locator('[data-df-showstrip] button.df-icon-btn').count()).toBe(1);
+  await page.locator('[data-df-showstrip] [data-df-end]').click();
+  await page.waitForSelector('.df-start [data-df-start]');
+});
+
+// On iOS, iPadOS and Android (decision E23) the show always runs in full screen and there is no
+// presenter view: the start screen shows neither setting. Full screen that is lost there was not
+// left on purpose (on an iPad every swipe down leaves it), so the next touch of the slide asks for
+// it again and moves on as usual; "Click for full screen" never shows.
+for (const device of [
+  { name: 'Android', ua: 'Mozilla/5.0 (Linux; Android 14; Pixel Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', ipad: false },
+  // an iPad reports itself as a Mac with a touch screen
+  { name: 'iPad', ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', ipad: true },
+]) {
+  test.describe('touch device: ' + device.name, () => {
+    test.skip(({ browserName }) => browserName !== 'chromium', 'touch is made through CDP');
+    test.use({ userAgent: device.ua, hasTouch: true });
+    const asDevice = async (context) => {
+      await context.addInitScript(fakeFullscreen);
+      await context.addInitScript((ipad) => {
+        Object.defineProperty(window.screen, 'width', { get: () => 3000 });
+        Object.defineProperty(window.screen, 'height', { get: () => 2000 });
+        if (ipad) {
+          Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' });
+          Object.defineProperty(navigator, 'maxTouchPoints', { get: () => 5 });
+        }
+      }, device.ipad);
+    };
+    test('always full screen, no presenter view; a touch brings lost full screen back', async ({ page, context }) => {
+      await asDevice(context);
+      await startScreen(page, 'pptx-basic.html');
+      await expect(page.locator('[data-df-fs]')).toBeHidden();
+      await expect(page.locator('[data-df-presenter]')).toBeHidden();
+      await expect(page.locator('[data-df-auto]')).toBeVisible();
+      await page.locator('[data-df-start]').tap();
+      await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+      const full = () => page.evaluate(() => !!document.fullscreenElement);
+      expect(await full()).toBe(true);
+      await page.waitForTimeout(500);
+      // lost full screen: nothing over the slide; the next tap asks again and moves on
+      await page.evaluate(() => document.exitFullscreen());
+      await page.waitForTimeout(1500);
+      await expect(page.locator('.df-fs-overlay')).toBeHidden();
+      expect(await audState(page)).toEqual({ slide: 0, step: 0 });
+      await page.touchscreen.tap(600, 300);
+      await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
+      await expect.poll(full).toBe(true);
+      // a swipe does the same
+      await page.evaluate(() => document.exitFullscreen());
+      await swipe(page, [500, 300], [900, 300]);
+      await expect.poll(() => audState(page)).toEqual({ slide: 0, step: 0 });
+      await expect.poll(full).toBe(true);
+      // a swipe down is how an iPad leaves full screen: it does not ask again
+      await page.evaluate(() => document.exitFullscreen());
+      await swipe(page, [600, 200], [600, 450]);
+      await page.waitForTimeout(400);
+      expect(await full()).toBe(false);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('.df-start [data-df-start]');
+    });
+    test('a refused full screen shows no overlay', async ({ page, context }) => {
+      await asDevice(context);
+      await context.addInitScript(() => { Element.prototype.requestFullscreen = function () { return Promise.reject(new TypeError('refused')); }; });
+      await startScreen(page, 'pptx-basic.html');
+      await page.locator('[data-df-start]').tap();
+      await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+      await page.waitForTimeout(1500);
+      await expect(page.locator('.df-fs-overlay')).toBeHidden();
+      await page.touchscreen.tap(600, 300);
+      await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
+    });
+  });
+}
 
 test('presenter view in full screen: one Escape ends the presentation', async ({ page, context }) => {
   await context.addInitScript(fakeFullscreen);

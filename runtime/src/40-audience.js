@@ -31,8 +31,7 @@ DF.startAudience = function (opts) {
 
   // ---------- slide strip (decision E22) ----------
   // A band of slide tiles with "End show" at the bottom of the presentation, for a show without a
-  // keyboard: a swipe up or the key of "strip" shows it, a tile goes to its slide (a slide hidden
-  // from the show too, E21), a swipe down, a tap or click beside it, Escape and the key again close
+  // keyboard: a swipe up or the key of "strip" shows it, a tile goes to its slide (a slide hidden from the show too, E21), a swipe down, a tap or click beside it, Escape and the key again close
   // it. It is built when it is first shown, as the last child of <body>, so that the slides of the
   // deck keep their places among the elements a query finds. While it is open, the keys of "next"
   // and "back" move its mark as on the start screen and Enter goes there; commands of the
@@ -93,12 +92,27 @@ DF.startAudience = function (opts) {
 
   // ---------- full screen ----------
   // The start screen requested full screen in the click on "Start". If that failed, one click on
-  // the overlay is enough. While the presenter view is on the same screen, no full screen.
-  var fsWanted = !!opts.fullscreen;
+  // the overlay is enough. The overlay is for a request that got no full screen. Full screen that
+  // was there and is left later is the presenter's choice (Escape in Safari and Firefox, the key
+  // of "fullscreen"): the show goes on in the window with nothing over the slide, and the key
+  // brings it back.
+  // On a phone or tablet (E23) the show always runs in full screen, and full screen that is lost
+  // was not left on purpose: on an iPad every swipe down leaves it, and no page can take that
+  // gesture (measured by the maintainer). There the overlay never shows; the next tap or swipe on
+  // the slide asks for full screen again (regainFs) and moves on as usual.
+  var mobile = DF.mobile();
+  var fsWanted = !!opts.fullscreen, fsHad = !!document.fullscreenElement;
   function needFs() {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
-  function updateFsOverlay() { fsEl.classList.toggle("df-on", fsWanted && needFs()); }
+  function updateFsOverlay() {
+    if (document.fullscreenElement) fsHad = true;
+    else if (fsHad && !mobile) { fsHad = false; fsWanted = false; }
+    fsEl.classList.toggle("df-on", !mobile && fsWanted && needFs());
+  }
+  function regainFs() {
+    if (mobile && fsWanted && !document.fullscreenElement) DF.requestFs().catch(function () { });
+  }
   // the wake lock before full screen: requestFullscreen uses the click up, and Safari grants the
   // wake lock only in one (see "wake lock" below)
   fsEl.addEventListener("click", function () { wake(); DF.requestFs().then(updateFsOverlay, updateFsOverlay); });
@@ -353,11 +367,13 @@ DF.startAudience = function (opts) {
   // a click on the slide moves on, a swipe to the left too, one to the right goes back, one up
   // shows the slide strip (E22); the wheel does nothing (generic decks keep their own). While the
   // strip is open, a click or tap beside it closes it and moves nothing, and neither does a swipe.
-  if (!generic) DF.installPointer({ next: function () { if (strip.open) closeStrip(); else take("next"); },
+  if (!generic) DF.installPointer({ next: function () { regainFs(); if (strip.open) closeStrip(); else take("next"); },
     interactive: adapter.interactive, guardClicks: !!adapter.guardClicks,
     link: adapter.link ? function (t, e) { return adapter.link(t, e, st); } : null,
-    follow: function (to) { if (strip.open) closeStrip(); else take("follow", to); },
+    follow: function (to) { regainFs(); if (strip.open) closeStrip(); else take("follow", to); },
     swipe: function (dir) {
+      // not on a swipe down, which is how an iPad leaves full screen
+      if (dir !== "down") regainFs();
       if (dir === "up") { if (!strip.open) take("strip"); return; }
       if (dir === "down") { if (strip.open) take("strip"); return; }
       if (!strip.open) take(dir === "left" ? "next" : "prev");

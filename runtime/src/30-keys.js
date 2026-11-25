@@ -253,6 +253,13 @@ DF.channel = function (getPeer, getToken, onMsg) {
   };
 };
 
+// DF.mobile: a phone or tablet (iOS, iPadOS, Android), read from what the browser says of itself;
+// an iPad calls itself a Mac and is told by its touch points (a Mac has none). There the show always
+// runs in full screen and has no presenter view (decision E23).
+DF.mobile = function () {
+  var ua = navigator.userAgent || "";
+  return /Android|iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+};
 DF.requestFs = function (target, screen) {
   var elx = target || document.documentElement;
   if (!elx.requestFullscreen) return Promise.reject(new Error("no fullscreen"));

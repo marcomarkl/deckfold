@@ -55,8 +55,11 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | G during the presentation; the arrow keys; Enter; G or Escape | A strip of all slides appears at the bottom with the button that ends the show; the arrows move its mark, not the slides; Enter goes to the marked slide; G or Escape closes it, and Escape does not end the show then | |
 | On a tablet or touch display (iPad with Safari, Android with Chrome): swipe left and right on the slide, then tap | The swipe to the left moves on, the one to the right goes back, the tap moves on once; the page neither scrolls nor zooms nor goes back in the history | |
 | On a tablet or touch display: swipe up on the slide, tap a slide in the strip; swipe up again and tap the button at its right | The strip appears; the tap goes to that slide and closes the strip; the button ends the show | |
-| On a tablet or touch display: pull down on the slide; swipe in from the left and from the bottom edge | The page does not reload; what the system does at the edges is noted here | |
-| On a tablet in portrait | Noted here: whether a claude.ai deck shows one slide and swipes move it | |
+| On a tablet or touch display: pull down on the slide; swipe in from the left and from the bottom edge | The page does not reload; what the system does at the edges is noted here | iPad, Safari, 2026-11-25: in full screen every swipe down leaves full screen, wherever it begins. The edges are not noted yet |
+| On a tablet: the start screen | Neither "Presenter view" nor "Full screen" is offered; "Start" begins in full screen | |
+| On a tablet, during the show: leave full screen (on an iPad with a swipe down), then tap the slide; leave it again and swipe left | Nothing covers the slide after full screen is left; the tap and the swipe move on and bring full screen back | |
+| On a tablet: "Full screen" on the start screen, then "Start"; turn the tablet | Full screen without the address bar; the slide fits in portrait and in landscape | iPad, Safari, 2026-11-25: full screen hides the address bar; portrait and landscape work (a claude.ai deck) |
+| On an iPad: open the file from the Files app | Noted here: the Files app shows only a preview, in which the deck does not run; serve the file from a web server instead | iPad, 2026-11-25: only the preview is offered |
 | Enter during the presentation | Nothing happens | |
 | One step after the last slide | The black end slide appears and stays on further steps (key, click, presenter view); Escape returns to the start screen | |
 
