@@ -109,6 +109,8 @@ Not documented: when macOS moves a clipped window fully onto one display; whethe
 
 ## Full screen of the presenter view after a drag to another screen (2026-11-22)
 
+Since decision E23 (2026-11-25) the presenter view has no full screen of its own, so this fault can no longer be met there. The section stays as the record of what was measured; the same fault of Chrome would hold for any window that is dragged to another screen and then asks for full screen.
+
 Reported by the maintainer (Chrome 158, macOS 27.2, external 5K screen at x 0 to 2560 and the laptop screen at x 2560 to 4288, "Displays have separate Spaces" on): after the presenter view was dragged from the laptop screen to the 5K screen, the first click on its full-screen button made the window jump and stay a window; a second click worked. Before the start, during the show and after it. Safari, with the same file and the same moves, went to full screen at the first click.
 
 A log in both windows (position, `window.screen`, full-screen events, keys, clicks with their screen position, every 100 ms) showed, in the maintainer's Chrome:

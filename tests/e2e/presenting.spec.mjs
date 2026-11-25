@@ -371,24 +371,6 @@ test('reload: the start screen chooses the slide chosen or shown last', async ({
   await expect(page.locator('.df-strip .df-tile.df-cur'), `ended: stored ${await kept()}`).toHaveAttribute('data-i', '1');
 });
 
-test('presenter view: the full-screen button names what a click does', async ({ page, context }) => {
-  await context.addInitScript(() => {
-    window.__fs = false;
-    Object.defineProperty(Document.prototype, 'fullscreenElement', { configurable: true, get() { return window.__fs ? document.documentElement : null; } });
-    Element.prototype.requestFullscreen = function () { window.__fs = true; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
-    Document.prototype.exitFullscreen = function () { window.__fs = false; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
-  });
-  await startScreen(page, 'pptx-basic.html');
-  const pres = await openPresenter(page, context);
-  const label = (k) => pres.evaluate((k) => window.__deckfold.t(k), k);
-  const btn = pres.locator('.df-presenter [data-df-fs]');
-  await expect(btn).toHaveAttribute('aria-label', await label('fullscreen'));
-  await btn.click();
-  await expect(btn).toHaveAttribute('aria-label', await label('window'));
-  await btn.click();
-  await expect(btn).toHaveAttribute('aria-label', await label('fullscreen'));
-});
-
 // fake full screen with Keyboard Lock for all windows of a context
 const fakeFullscreen = () => {
   window.__fs = false;
@@ -503,52 +485,35 @@ for (const device of [
   });
 }
 
-test('presenter view in full screen: one Escape ends the presentation', async ({ page, context }) => {
+// The presenter view has no full screen of its own (decision E23): no button, and the key of
+// "fullscreen" does nothing there. Escape in it ends the presentation; before the start there is
+// nothing to end.
+test('presenter view: no full screen of its own; Escape ends the presentation', async ({ page, context }) => {
   await context.addInitScript(fakeFullscreen);
   await startScreen(page, 'pptx-basic.html');
   await page.uncheck('[data-df-fs]');
   const pres = await openPresenter(page, context);
+  const full = (w) => w.evaluate(() => !!document.fullscreenElement);
+  expect(await pres.locator('.df-presenter [data-df-fs]').count()).toBe(0);
+  await pres.keyboard.press('f');
+  await pres.keyboard.press('Escape');
+  await pres.waitForTimeout(300);
+  expect(await full(pres)).toBe(false);
+  await expect(page.locator('.df-start [data-df-start]')).toBeVisible();
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
-  await pres.click('.df-presenter [data-df-fs]');
-  expect(await pres.evaluate(() => !!document.fullscreenElement)).toBe(true);
-  expect(await pres.evaluate(() => window.__locks)).toEqual([['Escape']]);
+  // the key changes neither window and shows nothing in the presentation
+  await pres.keyboard.press('f');
+  await pres.waitForTimeout(400);
+  expect(await full(pres)).toBe(false);
+  expect(await full(page)).toBe(false);
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
   await pres.keyboard.press('ArrowRight');
   await expect.poll(() => audState(page)).toEqual({ slide: 1, step: 0 });
   await pres.keyboard.press('Escape');
   await page.waitForSelector('.df-start [data-df-start]');
   await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
-});
-
-// Keyboard Lock keeps Escape from leaving full screen, so that one Escape ends the presentation.
-// Before the start and after the end there is no presentation to end: there Escape leaves full
-// screen in the presenter view.
-test('presenter view in full screen before the start and after the end: Escape leaves full screen', async ({ page, context }) => {
-  await context.addInitScript(fakeFullscreen);
-  await startScreen(page, 'pptx-basic.html');
-  await page.uncheck('[data-df-fs]');
-  const pres = await openPresenter(page, context);
-  const full = () => pres.evaluate(() => !!document.fullscreenElement);
-  await pres.click('.df-presenter [data-df-fs]');
-  await expect.poll(full).toBe(true);
-  expect(await pres.evaluate(() => window.__locks)).toEqual([['Escape']]);
-  await pres.keyboard.press('Escape');
-  await expect.poll(full, { message: 'full screen after Escape before the start' }).toBe(false);
-  // the start screen is still there: Escape before the start ended nothing
-  await expect(page.locator('.df-start [data-df-start]')).toBeVisible();
-  // after the end of a show
-  await page.click('[data-df-start]');
-  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
-  await pres.waitForFunction(() => !document.querySelector('.df-presenter.df-before'));
-  await pres.click('.df-presenter [data-df-fs]');
-  await expect.poll(full).toBe(true);
-  await pres.keyboard.press('Escape');
-  await page.waitForSelector('.df-start [data-df-start]');
-  await expect(pres.locator('.df-presenter.df-before')).toBeVisible({ timeout: 5000 });
-  expect(await full(), 'the presenter view stays in full screen when Escape ends the show').toBe(true);
-  await pres.keyboard.press('Escape');
-  await expect.poll(full, { message: 'full screen after Escape after the end' }).toBe(false);
 });
 
 // time in the presenter view: tested with real time in short spans (a fake clock would let the
@@ -1213,14 +1178,14 @@ test('presenter view: A- and A+ are off while the notes are hidden', async ({ pa
   expect(await font()).toBe(before + 2);
 });
 
-// Search, full screen and end show are buttons with an icon only; the name is their tooltip
-test('presenter view: search, full screen and end show are icons with a name', async ({ page, context }) => {
+// Search and end show are buttons with an icon only; the name is their tooltip
+test('presenter view: search and end show are icons with a name', async ({ page, context }) => {
   const pres = await present(page, context, 'pptx-basic.html');
-  const m = await pres.evaluate(() => ['[data-df-find]', '[data-df-fs]', '[data-df-end]'].map((q) => {
+  const m = await pres.evaluate(() => ['[data-df-find]', '[data-df-end]'].map((q) => {
     const b = document.querySelector('.df-presenter ' + q);
     return b && { svg: b.querySelectorAll('svg').length, text: b.textContent.trim(), label: b.getAttribute('aria-label'), title: b.getAttribute('title') };
   }));
-  const t = await pres.evaluate(() => ['search', 'fullscreen', 'endShow'].map((k) => window.__deckfold.t(k)));
+  const t = await pres.evaluate(() => ['search', 'endShow'].map((k) => window.__deckfold.t(k)));
   expect(m).toEqual(t.map((label) => ({ svg: 1, text: '', label, title: label })));
 });
 

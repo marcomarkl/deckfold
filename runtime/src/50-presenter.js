@@ -46,18 +46,6 @@ DF.startPresenter = function (snapshotHTML) {
   targetIn.addEventListener("change", takeTarget);
   targetIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); takeTarget(); targetIn.blur(); } });
   showTarget();
-  // the full-screen button shows what a click does: corners pointing out and "Full screen" in a
-  // window, corners pointing in and "Window" in full screen
-  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
-  function fsLabel() {
-    var full = !!(document.fullscreenElement || document.webkitFullscreenElement), label = DF.t(full ? "window" : "fullscreen");
-    fsBtn.replaceChild(DF.icon(full ? "fsExit" : "fsEnter"), fsBtn.firstChild);
-    fsBtn.title = label;
-    fsBtn.setAttribute("aria-label", label);
-  }
-  document.addEventListener("fullscreenchange", fsLabel);
-  document.addEventListener("webkitfullscreenchange", fsLabel);
-  fsLabel();
   // search and outline, with the notes: only the presenter sees this window. An entry goes to its
   // slide like a tile of the overview does.
   var finder = DF.finder({ notes: true, pick: function (i) { command("goto", i); }, current: function () { return shown().slide; } });
@@ -79,7 +67,6 @@ DF.startPresenter = function (snapshotHTML) {
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
     fontDown, fontUp,
     finder ? finder.button : null,
-    fsBtn,
     endBtn
   ]);
   // audience ("Live"): what the audience sees right now: the slide at its step, black, white, the
@@ -374,7 +361,9 @@ DF.startPresenter = function (snapshotHTML) {
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     if (a === "find") { if (finder) finder.open(); return true; }
-    if (a === "fullscreen") { DF.toggleFs(); return true; }
+    // this view has no full screen of its own (E23), and the presentation can enter full screen
+    // only from a click or key in its own window
+    if (a === "fullscreen") return true;
     if (a === "timerReset") { resetTimer(); return true; }
     // the slide strip belongs to the presentation window (E22); this view has its overview
     if (a === "strip") return true;
@@ -382,9 +371,8 @@ DF.startPresenter = function (snapshotHTML) {
     // consumed, so that it does not press a focused button either
     if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }
     if (phase !== "show") {
-      // before the start: choose the slide. "End" has no show to end here; in full screen it leaves
-      // full screen, which Keyboard Lock (30-keys.js) keeps Escape from doing by itself
-      if (a === "end") { if (document.fullscreenElement) document.exitFullscreen().catch(function () { }); return true; }
+      // before the start: choose the slide. "End" has no show to end here
+      if (a === "end") return true;
     }
     if (a === "goto") { command("goto", e.slide); return true; }
     command(a);

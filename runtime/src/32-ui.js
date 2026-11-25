@@ -373,17 +373,14 @@ DF.finder = function (opts) {
   };
 };
 
-// DF.icon: the icons of the buttons that show no text (key help, search, full screen, end show).
+// DF.icon: the icons of the buttons that show no text (key help, search, end show).
 // They are drawn here so that they look the same on every machine (a character such as U+2328
 // would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
-// keys and the space bar; search: a magnifier; fsEnter and fsExit: four corners pointing out and
-// in; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
+// keys and the space bar; search: a magnifier; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
   keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
     ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
-  fsEnter: [["path", { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" }]],
-  fsExit: [["path", { d: "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" }]],
   power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
   eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
   eyeOff: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }], ["path", { d: "M4 20L20 4" }]]

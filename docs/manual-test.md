@@ -24,9 +24,8 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Close the presentation window | The presenter view closes too; reloading the presentation window does not close it | |
 | End the show with the presenter view open | On the start screen the switch of the presenter view is on at once, not a second later | |
 | Click "Start" with "Full screen" on | The presentation fills its screen at the chosen slide; the presenter view follows | |
-| Click the full-screen button (four corners) in the presenter view | The presenter view fills its screen; the corners now point in, and the button takes it back | |
-| Drag the presenter view to the other screen, then click its full-screen button, in Chrome and in Safari | Safari: the presenter view fills that screen. Chrome on a Mac: the first click can end full screen at once (a fault of Chrome, see the full-screen section of `docs/spikes/S2-file-protocol.md`); the second click fills the screen | |
-| Look at the presenter view on the laptop while the projector shows the slides | The icons for search, full screen and end show are clear without their names; "Live" and "Preview" read as meant | |
+| Look for a full-screen button in the presenter view; press F there | There is none, and F changes neither window | |
+| Look at the presenter view on the laptop while the projector shows the slides | The icons for search and end show are clear without their names; "Live" and "Preview" read as meant | |
 | Audio on a slide with sound | Audio plays in the presentation without a click | |
 | With ffmpeg installed: convert a deck with a video that browsers do not play (HEVC from an iPhone, WMV) and a WAV sound; play both in Chrome, Safari and Firefox | The report names the converted video and sound. The video plays with its sound, in the right colours and at the right speed; the sound plays | |
 | Hide notes, press A+ twice, drag the dividers between the panes and the one above the strip of slides | While the notes are hidden, A− and A+ are grey; the presenter view changes at once, the tiles of the strip grow with it; after reloading it, the changes are still there | |
@@ -48,8 +47,8 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 |---|---|---|
 | Page Down / Page Up on the clicker, with the focus in either window | Next and previous step; both windows follow | |
 | B or the clicker's blank key | Black screen in the presentation; pressed again, the slide comes back | |
-| One Escape in full screen, in the presentation or in the presenter view | The presentation ends: full screen is left, the start screen appears with the last slide chosen, the presenter view stays open and shows the start state | |
-| Presenter view in full screen before the start, and again after the end of a show: press Escape once | The presenter view leaves full screen; the start screen does not change | |
+| One Escape, with the presentation in full screen, in the presentation or in the presenter view | The presentation ends: full screen is left, the start screen appears with the last slide chosen, the presenter view stays open and shows the start state | |
+| Escape in the presenter view before the start | Nothing happens; the start screen does not change | |
 | Back on the first slide | Nothing happens; no end slide | |
 | Click on the slide; turn the mouse wheel; swipe on the trackpad | The click moves on, in both windows; wheel and swipe do nothing | |
 | G during the presentation; the arrow keys; Enter; G or Escape | A strip of all slides appears at the bottom with the button that ends the show; the arrows move its mark, not the slides; Enter goes to the marked slide; G or Escape closes it, and Escape does not end the show then | |
