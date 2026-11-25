@@ -45,7 +45,7 @@ var TEXT = {
   de: {
     slides: "Folien", oneSlide: "Folie", of: "von", slideStrip: "Folienleiste", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, Übersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
-    fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
+    fullscreen: "Vollbild", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zurück", following: "Weiter",
     popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups für diese Datei und schalte die Referentenansicht noch einmal ein.",
     startInShow: "Gestartet wird im Präsentationsfenster: Klick dort auf „Start“.", showLost: "Das Präsentationsfenster ist nicht erreichbar.", noWake: "Bildschirmschoner nicht blockiert",
@@ -66,7 +66,7 @@ var TEXT = {
   en: {
     slides: "slides", oneSlide: "slide", of: "of", slideStrip: "Slide strip", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
-    fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
+    fullscreen: "Full screen", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
     popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
     startInShow: "The presentation starts in the presentation window: click “Start” there.", showLost: "The presentation window is not reachable.", noWake: "Screen saver not blocked",

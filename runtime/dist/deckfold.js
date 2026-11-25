@@ -48,7 +48,7 @@ var TEXT = {
   de: {
     slides: "Folien", oneSlide: "Folie", of: "von", slideStrip: "Folienleiste", hideSlide: "Folie ausblenden", showSlide: "Folie einblenden", startsAt: "Start bei Folie", generic: "Unbekanntes Format: ohne Referentenansicht, \u00dcbersicht und Auto-Modus.",
     start: "Start", presenterView: "Referentenansicht",
-    fullscreen: "Vollbild", window: "Fenster", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
+    fullscreen: "Vollbild", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
     popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups f\u00fcr diese Datei und schalte die Referentenansicht noch einmal ein.",
     startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.", noWake: "Bildschirmschoner nicht blockiert",
@@ -69,7 +69,7 @@ var TEXT = {
   en: {
     slides: "slides", oneSlide: "slide", of: "of", slideStrip: "Slide strip", hideSlide: "Hide slide", showSlide: "Show slide", startsAt: "Starts at slide", generic: "Unknown format: no presenter view, overview or auto mode.",
     start: "Start", presenterView: "Presenter view",
-    fullscreen: "Full screen", window: "Window", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
+    fullscreen: "Full screen", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
     popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
     startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.", noWake: "Screen saver not blocked",
@@ -1520,17 +1520,14 @@ DF.finder = function (opts) {
   };
 };
 
-// DF.icon: the icons of the buttons that show no text (key help, search, full screen, end show).
+// DF.icon: the icons of the buttons that show no text (key help, search, end show).
 // They are drawn here so that they look the same on every machine (a character such as U+2328
 // would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
-// keys and the space bar; search: a magnifier; fsEnter and fsExit: four corners pointing out and
-// in; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
+// keys and the space bar; search: a magnifier; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
   keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
     ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
-  fsEnter: [["path", { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" }]],
-  fsExit: [["path", { d: "M9 4v5H4M15 4v5h5M20 15h-5v5M4 15h5v5" }]],
   power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
   eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
   eyeOff: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }], ["path", { d: "M4 20L20 4" }]]
@@ -2407,18 +2404,6 @@ DF.startPresenter = function (snapshotHTML) {
   targetIn.addEventListener("change", takeTarget);
   targetIn.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); takeTarget(); targetIn.blur(); } });
   showTarget();
-  // the full-screen button shows what a click does: corners pointing out and "Full screen" in a
-  // window, corners pointing in and "Window" in full screen
-  var fsBtn = DF.iconButton("fsEnter", DF.t("fullscreen"), { "data-df-fs": "", onclick: function () { DF.toggleFs(); } });
-  function fsLabel() {
-    var full = !!(document.fullscreenElement || document.webkitFullscreenElement), label = DF.t(full ? "window" : "fullscreen");
-    fsBtn.replaceChild(DF.icon(full ? "fsExit" : "fsEnter"), fsBtn.firstChild);
-    fsBtn.title = label;
-    fsBtn.setAttribute("aria-label", label);
-  }
-  document.addEventListener("fullscreenchange", fsLabel);
-  document.addEventListener("webkitfullscreenchange", fsLabel);
-  fsLabel();
   // search and outline, with the notes: only the presenter sees this window. An entry goes to its
   // slide like a tile of the overview does.
   var finder = DF.finder({ notes: true, pick: function (i) { command("goto", i); }, current: function () { return shown().slide; } });
@@ -2440,7 +2425,6 @@ DF.startPresenter = function (snapshotHTML) {
     DF.el("span", { class: "df-auto-group" }, [autoBtn, autoInfo]),
     fontDown, fontUp,
     finder ? finder.button : null,
-    fsBtn,
     endBtn
   ]);
   // audience ("Live"): what the audience sees right now: the slide at its step, black, white, the
@@ -2735,7 +2719,9 @@ DF.startPresenter = function (snapshotHTML) {
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     if (a === "find") { if (finder) finder.open(); return true; }
-    if (a === "fullscreen") { DF.toggleFs(); return true; }
+    // this view has no full screen of its own (E23), and the presentation can enter full screen
+    // only from a click or key in its own window
+    if (a === "fullscreen") return true;
     if (a === "timerReset") { resetTimer(); return true; }
     // the slide strip belongs to the presentation window (E22); this view has its overview
     if (a === "strip") return true;
@@ -2743,9 +2729,8 @@ DF.startPresenter = function (snapshotHTML) {
     // consumed, so that it does not press a focused button either
     if (a === "start" || (phase !== "show" && e && e.key === "Enter" && a !== "goto")) { if (phase !== "show") flashBanner("startInShow"); return true; }
     if (phase !== "show") {
-      // before the start: choose the slide. "End" has no show to end here; in full screen it leaves
-      // full screen, which Keyboard Lock (30-keys.js) keeps Escape from doing by itself
-      if (a === "end") { if (document.fullscreenElement) document.exitFullscreen().catch(function () { }); return true; }
+      // before the start: choose the slide. "End" has no show to end here
+      if (a === "end") return true;
     }
     if (a === "goto") { command("goto", e.slide); return true; }
     command(a);
