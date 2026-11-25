@@ -51,7 +51,11 @@ DF.startShow = function (snapshotHTML) {
 
   // ---------- start screen ----------
   var frame = null, strip = null, hintEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
-  var showFs = !(cfg.show && cfg.show.fullscreen === false);
+  // on a phone or tablet the show always runs in full screen and there is no presenter view (E23):
+  // neither setting is shown, and what is stored for them does not count
+  var mobile = DF.mobile();
+  if (mobile) presenterOpen = false;
+  var showFs = mobile || !(cfg.show && cfg.show.fullscreen === false);
   function check(attr, label, checked, onchange) {
     var box = DF.el("input", { type: "checkbox", checked: checked });
     box.setAttribute(attr, "");
@@ -66,9 +70,9 @@ DF.startShow = function (snapshotHTML) {
   if (!generic) {
     var pre = check("data-df-presenter", DF.t("presenterView"), presenterOpen, function () { if (pre.box.checked) openR(); else closeR(); });
     preBox = pre.box;
-    opts.push(DF.el("div", { class: "df-opt" }, [pre.label]));
+    if (!mobile) opts.push(DF.el("div", { class: "df-opt" }, [pre.label]));
   }
-  opts.push(DF.el("div", { class: "df-opt" }, [fs.label]));
+  if (!mobile) opts.push(DF.el("div", { class: "df-opt" }, [fs.label]));
   if (!generic) {
     var au = check("data-df-auto", DF.t("auto"), cfg.auto.enabled, saveAuto);
     autoBox = au.box;
