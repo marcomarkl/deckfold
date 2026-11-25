@@ -156,7 +156,8 @@ DF.startShow = function (snapshotHTML) {
     showHidden();
     setSel(sel);
   }
-  try { startBtn.focus({ preventScroll: true }); } catch (e) { }
+  // No control gets the focus here: a focused "Start" shows its focus ring from the first frame,
+  // and Enter starts without it, since the keys are taken on the window (see the keys below).
 
   // the large preview shows the chosen slide as it looks after all its steps (effects included)
   function finalState(i) { return DF.model.end(i); }

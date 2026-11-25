@@ -436,3 +436,22 @@ test('start screen: a hidden start slide is named in the hint, with the slide th
   await page.waitForFunction(() => window.__deckfold.audience);
   await expect.poll(() => page.evaluate(() => window.__deckfold.audience.state())).toEqual({ slide: 1, step: 0 });
 });
+
+// The start screen puts the focus on no control when it loads: a focused button shows its focus
+// ring from the first frame (seen in Safari, on an iPad and in Chrome), as if it had been pressed.
+// Enter starts all the same, since the keys are taken on the window, whatever has the focus.
+test('start screen: no control has the focus after loading, and Enter still starts', async ({ page }) => {
+  await startScreen(page, 'pptx-basic.html');
+  await page.waitForTimeout(400);
+  const ringed = () => page.evaluate(() => [...document.querySelectorAll('[data-df-ui] button, [data-df-ui] input')]
+    .filter((c) => c === document.activeElement || c.matches(':focus-visible')).map((c) => c.outerHTML.slice(0, 60)));
+  expect(await ringed()).toEqual([]);
+  await page.uncheck('[data-df-fs]');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
+  // back on the start screen after the end: again nothing has the focus
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
+  await page.waitForTimeout(400);
+  expect(await ringed()).toEqual([]);
+});
