@@ -373,13 +373,14 @@ DF.finder = function (opts) {
   };
 };
 
-// DF.icon: the icons of the buttons that show no text (key help, search, end show).
-// They are drawn here so that they look the same on every machine (a character such as U+2328
-// would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
-// keys and the space bar; search: a magnifier; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
+// DF.icon: the icons of the buttons that show no text (info, search, end show) and of the start
+// slide in the status line of the start screen. They are drawn here so that they look the same on
+// every machine (a character would depend on the fonts installed) and take the text colour.
+// info: an i in a circle; search: a magnifier; power: the on/off sign; play: a triangle pointing
+// right; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
-  keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
-    ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
+  info: [["circle", { cx: "12", cy: "12", r: "9" }], ["path", { d: "M12 11v5.5M12 7.75h.01" }]],
+  play: [["path", { d: "M8 5.5v13l10.5-6.5z" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
   power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
   eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
@@ -405,7 +406,7 @@ DF.iconButton = function (name, label, attrs) {
 // key of its own; while it is open no key reaches the start screen.
 // Returns { button, open, close, isOpen, remove }.
 DF.helpOverlay = function (groups) {
-  var name = DF.t("shortcuts");
+  var name = DF.t("info"), head = DF.t("shortcuts");
   var ov = DF.overlay({ attr: "data-df-help-overlay", cls: "df-help", keys: function (type, e) {
     // Nothing in the box is used with the keys, so what a key would do by itself is cancelled: it
     // must not scroll the start screen behind the overlay, press a button or, with Ctrl+F or
@@ -414,11 +415,11 @@ DF.helpOverlay = function (groups) {
     if (find || !(e.metaKey || e.ctrlKey || e.altKey)) e.preventDefault();
   } });
   ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-help-box" }, [
-    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: name }), ov.closeButton]),
+    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: head }), ov.closeButton]),
     DF.keyHelp(groups),
     DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })]));
   return {
-    button: DF.iconButton("keyboard", name, { "data-df-help": "", onclick: ov.open }),
+    button: DF.iconButton("info", name, { "data-df-help": "", onclick: ov.open }),
     open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };

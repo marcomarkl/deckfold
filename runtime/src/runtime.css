@@ -72,13 +72,14 @@ html.df-audience [data-df-jump] { cursor: pointer; }
 /* start screen in the show window (until "Start" the document itself stays hidden) */
 html.df-start-mode, html.df-start-mode body { background: #15161a !important; overflow: hidden !important; height: 100% !important; margin: 0 !important; }
 html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
-/* The column is at most as high as the window. Its rows keep their height; the frame of the preview
-   (.df-start-view) is the one that gives way, down to a height that still shows the slide, and
-   below that the screen scrolls. The space below the last row is a row of its own (::after),
-   because the padding of a scrolling box does not follow content that overflows it. */
-.df-start { --df-pad: 24px; --df-gap: 10px; position: fixed; inset: 0; z-index: 2147483600; background: var(--df-bg); overflow: auto;
+/* The column fills the window but for a margin that grows with it (E25) and is at most as high as
+   the window. Its rows keep their height; the frame of the preview (.df-start-view) is the one that
+   gives way, down to a height that still shows the slide, and below that the screen scrolls. The
+   space below the last row is a row of its own (::after), because the padding of a scrolling box
+   does not follow content that overflows it. */
+.df-start { --df-pad: clamp(16px, 3vmin, 48px); --df-gap: 10px; position: fixed; inset: 0; z-index: 2147483600; background: var(--df-bg); overflow: auto;
   padding: var(--df-pad) var(--df-pad) 0; display: flex; justify-content: center; }
-.df-start-box { max-width: 850px; width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: var(--df-gap); margin: auto 0; }
+.df-start-box { width: 100%; max-height: 100%; display: flex; flex-direction: column; gap: var(--df-gap); margin: auto 0; }
 .df-start-box > * { flex: 0 0 auto; }
 /* with the gap before it, this row is as high as the padding above the title */
 .df-start-box::after { content: ""; flex: 0 0 calc(var(--df-pad) - var(--df-gap)); }
@@ -86,14 +87,13 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 .df-start .df-sub { text-align: center; }
 .df-start .df-sub, .df-start .df-count, .df-mute { color: var(--df-mute); }
 .df-start-view { display: flex; justify-content: center; align-items: center; min-width: 0; }
-.df-start-stage { position: relative; flex: 0 0 auto; height: min(42vh, 520px); aspect-ratio: var(--df-ar, 16 / 9); max-width: 100%;
+.df-start-stage { position: relative; flex: 0 0 auto; height: 50vh; aspect-ratio: var(--df-ar, 16 / 9); max-width: 100%;
   background: #000; border-radius: 8px; overflow: hidden; }
-/* The preview is at most 42 % of the window high, so that it does not take over the screen. With
-   container units its frame wants the height that goes with the full width of the column, up to
-   that share, and shrinks to what is left; the stage is as large as fits into the frame in the
-   shape of the slide. Without them the preview keeps that share of the window height. */
+/* With container units the frame of the preview wants the height that goes with the full width of
+   the column and shrinks to what the other rows leave (E25); the stage is as large as fits into the
+   frame in the shape of the slide. Without them the preview is half the window high. */
 @supports (height: 1cqh) {
-  .df-start-box > .df-start-view { flex: 0 1 auto; width: 100%; aspect-ratio: var(--df-ar, 16 / 9); min-height: 180px; max-height: 42vh; container-type: size; }
+  .df-start-box > .df-start-view { flex: 0 1 auto; width: 100%; aspect-ratio: var(--df-ar, 16 / 9); min-height: 180px; container-type: size; }
   .df-start-stage { height: min(100cqh, calc(100cqw / var(--df-ar, 1.7778))); }
 }
 .df-start-stage iframe { position: absolute; left: 0; top: 0; transform-origin: 0 0; border: 0; display: block; background: #000; }
@@ -103,9 +103,15 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
   background: transparent; border-color: transparent; color: var(--df-mute); }
 [data-df-ui] .df-strip-nav:hover:not(:disabled) { background: var(--df-panel); border-color: var(--df-line); color: var(--df-fg); }
 [data-df-ui] .df-strip-nav:disabled { opacity: .25; cursor: default; }
-.df-start[data-df-ui] .df-strip .df-tile { flex: 0 0 160px; width: 160px; min-width: 0; scroll-snap-align: start; }
+/* seven tiles side by side, as wide as the band allows, at least 120 px (E25); without container
+   units 160 px */
+.df-start[data-df-ui] .df-strip { --df-tw: 160px; }
+@supports (width: 1cqw) {
+  .df-start[data-df-ui] .df-strip { container-type: inline-size; --df-tw: max(120px, calc((100cqw - 60px) / 7)); }
+}
+.df-start[data-df-ui] .df-strip .df-tile { flex: 0 0 var(--df-tw); width: var(--df-tw); min-width: 0; scroll-snap-align: start; }
 /* the eye of a tile (E21): at the right of the slide number, a button of its own beside the tile */
-.df-start[data-df-ui] .df-strip .df-tile-wrap { position: relative; flex: 0 0 160px; width: 160px; min-width: 0; scroll-snap-align: start; }
+.df-start[data-df-ui] .df-strip .df-tile-wrap { position: relative; flex: 0 0 var(--df-tw); width: var(--df-tw); min-width: 0; scroll-snap-align: start; }
 .df-start[data-df-ui] .df-tile-wrap .df-tile { width: 100%; }
 .df-start[data-df-ui] .df-tile-wrap .df-tile span { padding-right: 22px; }
 [data-df-ui] .df-tile-wrap .df-eye { position: absolute; right: 5px; bottom: 4px; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 4px;
@@ -115,8 +121,7 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 [data-df-ui] .df-tile-wrap .df-eye:disabled { opacity: .35; cursor: default; }
 [data-df-ui] .df-tile-wrap.df-off .df-thumb { opacity: .3; }
 [data-df-ui] .df-tile-wrap.df-off .df-eye { color: var(--df-fg); }
-/* the settings with "Start" beside them; below the settings and as wide as they are, a hint when
-   there is one (over both columns) and the footer, which starts at the left */
+/* the settings with "Start" beside them; below both the status line */
 .df-start-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--df-gap) 14px; align-items: stretch; }
 /* the settings stand in one line and wrap where the window is too narrow for it */
 .df-opts { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; border: 1px solid var(--df-line); border-radius: 8px; padding: 8px 14px; }
@@ -126,10 +131,17 @@ html.df-start-mode body > :not([data-df-ui]) { display: none !important; }
 .df-check { display: inline-flex; align-items: center; gap: 8px; }
 .df-check.df-disabled { opacity: .45; }
 [data-df-ui] input:disabled { cursor: default; }
-.df-start-hint { grid-column: 1 / -1; display: none; padding: 8px 12px; background: #3a2a0c; color: #ffe2a8; border: 1px solid #6b4e12; border-radius: 6px; }
-.df-start-hint.df-on { display: block; }
 [data-df-ui] .df-start-btn { min-width: 132px; padding: 8px 26px; font-size: 18px; font-weight: 650; border-radius: 8px; }
-.df-start-foot { grid-column: 1; display: flex; align-items: center; gap: 10px; min-height: 28px; }
+/* the status line (E25): the controls and the start slide at the left, a message in the middle of
+   the window, the right part empty so that the middle stays the middle */
+.df-start-foot { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; min-height: 28px; }
+.df-start-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.df-start-num { display: none; align-items: center; gap: 4px; margin-left: 10px; color: var(--df-fg); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.df-start-num.df-on { display: inline-flex; }
+.df-start-num svg { width: 14px; height: 14px; }
+.df-start-msg { display: none; max-width: 46vw; margin: 0; padding: 4px 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: #5a1d22; color: #ffd9db; border: 1px solid #8f2e36; border-radius: 6px; }
+.df-start-msg.df-on { display: block; }
 .df-start .df-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* buttons with an icon only (key help, search, full screen, end show) */
 [data-df-ui] .df-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; color: var(--df-mute); }
