@@ -77,7 +77,7 @@ test('where the windows are is not checked: no screen permission, no hint, full 
   const pres = await openPresenter(page, context);
   await page.waitForTimeout(1500);
   await expect(page.locator('[data-df-fs]')).toBeEnabled();
-  await expect(page.locator('[data-df-hint].df-on')).toHaveCount(0);
+  await expect(page.locator('[data-df-message].df-on')).toHaveCount(0);
   await expect(pres.locator('.df-banner')).toHaveAttribute('data-df-banner', '');
   const asked = [...await page.evaluate(() => window.__asked), ...await pres.evaluate(() => window.__asked)];
   expect(asked.filter((a) => a === 'getScreenDetails' || a === 'window-management')).toEqual([]);
@@ -1356,7 +1356,7 @@ test('hidden slides: with the first slide hidden, the start slide is the first s
   await startScreen(page, 'pptx-basic.html');
   expect(await page.evaluate(() => window.__deckfold.hiddenSlides())).toEqual([0, 2]);
   await expect(page.locator('.df-strip .df-tile.df-cur')).toHaveAttribute('data-i', '1');
-  await expect(page.locator('[data-df-hint]')).toHaveText('');
+  await expect(page.locator('[data-df-startnum].df-on')).toHaveCount(0);
 });
 
 // Auto mode skips hidden slides too, also when it loops back to the first slide and that one is

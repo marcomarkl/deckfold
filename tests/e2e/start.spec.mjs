@@ -46,7 +46,7 @@ test('start screen: the key help lists every bound key, grouped, and the fixed k
 const helpOpen = (page) => page.evaluate(() => { const o = document.querySelector('[data-df-help-overlay]'); return !!o && o.classList.contains('df-on'); });
 const chosenTile = (page) => page.evaluate(() => { const t = document.querySelector('.df-start .df-strip .df-tile.df-cur'); return t ? +t.getAttribute('data-i') : -1; });
 
-test('start screen: the title in the middle; the footer below the settings starts at the left with the key help button, the search and the number of slides', async ({ page }) => {
+test('start screen: the title in the middle; the status line below the settings and "Start" over the whole width, at its left the info button, the search and the number of slides', async ({ page }) => {
   await startScreen(page, 'pptx-basic.html');
   const m = await page.evaluate(() => {
     const box = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2 }; };
@@ -56,12 +56,12 @@ test('start screen: the title in the middle; the footer below the settings start
     if (!foot || !find || !count || !help) return { missing: { foot: !foot, find: !find, count: !count, help: !help } };
     return { find: box(find), count: box(count), help: box(help), foot: box(foot), col: box(document.querySelector('.df-start-box')), opts: box(document.querySelector('.df-opts')),
       start: box(document.querySelector('[data-df-start]')), n: +count.getAttribute('data-df-count'), slides: window.__deckfold.slides().length,
-      text: count.textContent, sub: document.querySelectorAll('.df-start .df-sub').length, last: foot === foot.parentNode.lastElementChild,
+      text: count.textContent, sub: document.querySelectorAll('.df-start .df-sub').length, last: foot === foot.parentNode.lastElementChild, info: window.__deckfold.t('info'),
       label: help.getAttribute('aria-label') || '', title: help.getAttribute('title') || '', icons: help.querySelectorAll('svg').length, helpText: help.textContent.trim(),
       findLabel: find.getAttribute('aria-label') || '', findTitle: find.getAttribute('title') || '', findIcons: find.querySelectorAll('svg').length, findText: find.textContent.trim(),
       search: window.__deckfold.t('search'), countText: window.__deckfold.slideCount(window.__deckfold.slides().length, window.__deckfold.slides().length - window.__deckfold.hiddenSlides().length),
       h1: (() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('.df-start h1')); return box(r); })(),
-      order: [...foot.children].map((c) => ['data-df-help', 'data-df-find', 'data-df-count'].find((a) => c.hasAttribute(a)) || c.tagName) };
+      order: [...foot.querySelector('.df-start-left').children].map((c) => ['data-df-help', 'data-df-find', 'data-df-count', 'data-df-startnum'].find((a) => c.hasAttribute(a)) || c.tagName) };
   });
   expect(m.missing, 'parts of the footer that are missing').toBeUndefined();
   // the text of the title stands in the middle of the column
@@ -72,14 +72,14 @@ test('start screen: the title in the middle; the footer below the settings start
   expect(m.last).toBe(true);
   expect(Math.abs(m.find.cy - m.count.cy)).toBeLessThanOrEqual(2);
   expect(Math.abs(m.help.cy - m.count.cy)).toBeLessThanOrEqual(2);
-  // the footer is as wide as the settings above it, and nothing stands below "Start"
-  expect(Math.abs(m.foot.l - m.opts.l)).toBeLessThanOrEqual(1);
-  expect(Math.abs(m.foot.r - m.opts.r)).toBeLessThanOrEqual(1);
-  expect(m.foot.r).toBeLessThan(m.start.l);
+  // the status line is as wide as the column, below the settings and below "Start" (E25)
+  expect(Math.abs(m.foot.l - m.col.l)).toBeLessThanOrEqual(1);
+  expect(Math.abs(m.foot.r - m.col.r)).toBeLessThanOrEqual(1);
+  expect(m.foot.r).toBeGreaterThanOrEqual(m.start.r - 1);
   expect(Math.abs(m.opts.l - m.col.l)).toBeLessThanOrEqual(1);
-  // everything at the left, in this order: the key help button at the left edge of the settings,
-  // then the search, then the number of slides, close to each other
-  expect(m.order).toEqual(['data-df-help', 'data-df-find', 'data-df-count']);
+  // at the left, in this order: the info button at the left edge, then the search, then the number
+  // of slides, close to each other, and the start slide when there is one
+  expect(m.order).toEqual(['data-df-help', 'data-df-find', 'data-df-count', 'data-df-startnum']);
   expect(Math.abs(m.help.l - m.opts.l)).toBeLessThanOrEqual(1);
   expect(m.find.l - m.help.r).toBeLessThanOrEqual(16);
   expect(m.count.l - m.find.r).toBeLessThanOrEqual(16);
@@ -98,7 +98,7 @@ test('start screen: the title in the middle; the footer below the settings start
   // the button shows an icon and no text; its name is in the title and for screen readers
   expect(m.icons).toBe(1);
   expect(m.helpText).toBe('');
-  expect(m.label).not.toBe('');
+  expect(m.label).toBe(m.info);
   expect(m.title).toBe(m.label);
   // the line below the title is gone, and the key help is not on the start screen itself
   expect(m.sub).toBe(0);
@@ -154,44 +154,77 @@ test('start screen: the key help is gone once the presentation runs', async ({ p
   await expect(page.locator('[data-df-keyhelp]')).toHaveCount(0);
 });
 
-test('start screen: it fits the window; the preview takes the height the other rows leave, up to 42 % of the window', async ({ page }) => {
-  for (const [w, h] of [[1280, 800], [1920, 1080], [800, 500]]) {
+// E25: the start screen fills the window but for a margin of 3 % of its shorter side (16 to 48 px).
+// The preview takes the height the other rows leave, limited by the width of the column and the
+// shape of the slide, and seven tiles stand side by side in the band, at least 120 px wide.
+const startLayout = (page) => page.evaluate(() => {
+  const ui = document.querySelector('.df-start');
+  const box = (e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
+  const f = document.querySelector('.df-start-stage iframe');
+  const band = box(document.querySelector('.df-start .df-strip'));
+  const tiles = [...document.querySelectorAll('.df-start .df-strip .df-tile')].map(box);
+  const top = document.querySelector('.df-start h1').getBoundingClientRect().top;
+  const out = { over: ui.scrollHeight - ui.clientHeight, wide: ui.scrollWidth - ui.clientWidth, top, pad: parseFloat(getComputedStyle(ui).paddingLeft),
+    col: box(document.querySelector('.df-start-box')), stage: box(document.querySelector('.df-start-stage')), ratio: parseFloat(f.style.width) / parseFloat(f.style.height),
+    tile: tiles[0].w, inBand: tiles.filter((t) => t.l >= band.l - 1 && t.r <= band.r + 1).length, n: tiles.length,
+    // the picture of a drawn tile against the frame it stands in
+    scale: (() => { const c = document.querySelector('.df-start .df-strip .df-thumb .df-clone, .df-start .df-strip .df-thumb img'); return c ? c.getBoundingClientRect().width / c.closest('.df-thumb').getBoundingClientRect().width : 0; })() };
+  ui.scrollTop = ui.scrollHeight;
+  out.footBottom = document.querySelector('.df-start-foot').getBoundingClientRect().bottom;
+  ui.scrollTop = 0;
+  return out;
+});
+test('start screen: it fills the window but for its margin; the preview takes the height the other rows leave, seven tiles side by side', async ({ page }) => {
+  for (const [w, h] of [[1280, 800], [1920, 1080], [2560, 1440], [800, 500]]) {
     await page.setViewportSize({ width: w, height: h });
-    await startScreen(page, 'pptx-basic.html');
+    await startScreen(page, 'pptx-transitions3d.html');
     await page.waitForSelector('.df-start-stage iframe[data-df-preview]');
     await page.waitForTimeout(300);
-    const m = await page.evaluate(() => {
-      const ui = document.querySelector('.df-start');
-      const f = document.querySelector('.df-start-stage iframe');
-      const st = document.querySelector('.df-start-stage').getBoundingClientRect();
-      const foot = document.querySelector('.df-start-foot');
-      const top = document.querySelector('.df-start h1').getBoundingClientRect().top;
-      ui.scrollTop = ui.scrollHeight;
-      const footBottom = foot ? foot.getBoundingClientRect().bottom : -1;
-      ui.scrollTop = 0;
-      return { over: ui.scrollHeight - ui.clientHeight, wide: ui.scrollWidth - ui.clientWidth, top, footBottom,
-        stage: [st.width, st.height], ratio: parseFloat(f.style.width) / parseFloat(f.style.height) };
-    });
+    const m = await startLayout(page);
     const at = `${w}x${h}: ${JSON.stringify(m)}`;
+    const pad = Math.min(48, Math.max(16, 0.03 * Math.min(w, h)));
+    expect(Math.abs(m.pad - pad), at).toBeLessThanOrEqual(0.5);
+    // the column reaches from margin to margin
+    expect(Math.abs(m.col.l - pad), at).toBeLessThanOrEqual(1);
+    expect(Math.abs(m.col.r - (w - pad)), at).toBeLessThanOrEqual(1);
     // the preview has the shape of the slide, so the scaled player leaves no bars
-    expect(Math.abs(m.stage[0] - m.stage[1] * m.ratio), at).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(m.stage.w - m.stage.h * m.ratio), at).toBeLessThanOrEqual(1.5);
     expect(m.wide, at).toBeLessThanOrEqual(0);
     expect(m.top, at).toBeGreaterThanOrEqual(0);
-    // the footer can be reached: scrolled to the end, it is in the window
-    expect(m.footBottom, at).toBeGreaterThan(0);
-    expect(m.footBottom, at).toBeLessThanOrEqual(h);
-    // the same space below the footer as above the title, also at the end of a screen that scrolls
+    // the same space below the status line as above the title
     expect(Math.abs((h - m.footBottom) - m.top), at).toBeLessThanOrEqual(1);
-    if (h >= 800) {
-      // nothing to scroll, and the preview uses its share of the window height
-      expect(m.over, at).toBeLessThanOrEqual(0);
-      expect(m.stage[1], at).toBeGreaterThan(0.4 * h);
-      expect(m.stage[1], at).toBeLessThanOrEqual(0.42 * h + 1);
-    } else {
-      // a low window: the preview keeps a height that still shows the slide, and the screen scrolls
-      expect(m.stage[1], at).toBeGreaterThanOrEqual(170);
-    }
+    expect(m.over, at).toBeLessThanOrEqual(0);
+    // the preview takes what is left: either the width of the column, or the height, so that the
+    // column reaches from the margin at the top to the one at the bottom
+    const byWidth = Math.abs(m.stage.w - m.col.w) <= 1, byHeight = Math.abs(m.top - pad) <= 1 && Math.abs(h - pad - m.footBottom) <= 1;
+    expect(byWidth || byHeight, at).toBe(true);
+    expect(m.stage.h, at).toBeGreaterThanOrEqual(180);
+    // seven tiles fit into the band, at least 120 px wide; fewer where the window is too narrow
+    expect(m.tile, at).toBeGreaterThanOrEqual(119.5);
+    if (m.tile > 121) expect(m.inBand, at).toBe(7);
+    else expect(m.inBand, at).toBeLessThanOrEqual(7);
+    // the picture of a tile fills its width
+    expect(Math.abs(m.scale - 1), at).toBeLessThanOrEqual(0.01);
   }
+});
+
+test('start screen: the preview and the tiles follow a change of the window size without a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await startScreen(page, 'pptx-transitions3d.html');
+  await page.waitForSelector('.df-start-stage iframe[data-df-preview]');
+  await page.waitForTimeout(300);
+  const small = await startLayout(page);
+  await page.evaluate(() => { window.__same = true; });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.waitForTimeout(500);
+  const big = await startLayout(page);
+  const at = JSON.stringify({ small, big });
+  expect(await page.evaluate(() => window.__same), 'no reload').toBe(true);
+  expect(big.stage.w, at).toBeGreaterThan(small.stage.w * 1.3);
+  expect(big.tile, at).toBeGreaterThan(small.tile * 1.3);
+  expect(big.inBand, at).toBe(7);
+  expect(Math.abs(big.scale - 1), at).toBeLessThanOrEqual(0.01);
+  expect(big.over, at).toBeLessThanOrEqual(0);
 });
 
 test('start screen of an unknown format: the notice below the title, the footer with the key help only', async ({ page }) => {
@@ -288,18 +321,27 @@ test('start screen: a title of two lines and decks of other shapes fit as well',
   expect(m.over, JSON.stringify(m)).toBeLessThanOrEqual(0);
   expect(m.stage[1], JSON.stringify(m)).toBeGreaterThanOrEqual(180);
   expect(m.footBottom, JSON.stringify(m)).toBeLessThanOrEqual(800);
-  // other shapes of the slide (width by height): 4:3, portrait, a wide banner
-  for (const ar of [4 / 3, 9 / 16, 3]) {
-    await page.evaluate((ar) => document.querySelector('.df-start-view').style.setProperty('--df-ar', String(ar)), ar);
-    await page.waitForTimeout(300);
-    m = await measure();
-    const at = `${ar}: ${JSON.stringify(m)}`;
-    expect(Math.abs(m.stage[0] - m.stage[1] * ar), at).toBeLessThanOrEqual(1.5);
-    expect(m.stage[0], at).toBeLessThanOrEqual(m.view[0] + 0.5);
-    expect(m.stage[1], at).toBeLessThanOrEqual(m.view[1] + 0.5);
-    expect(m.stage[1], at).toBeGreaterThanOrEqual(180);
-    expect(m.over, at).toBeLessThanOrEqual(0);
-    expect(m.footBottom, at).toBeLessThanOrEqual(800);
+  // other shapes of the slide (width by height): 4:3, portrait, a wide banner; the tiles take the
+  // shape too, at 1280 x 800 and at 800 x 500
+  for (const [w, h] of [[1280, 800], [800, 500]]) {
+    await page.setViewportSize({ width: w, height: h });
+    for (const ar of [4 / 3, 9 / 16, 3]) {
+      await page.evaluate((ar) => {
+        document.querySelector('.df-start-view').style.setProperty('--df-ar', String(ar));
+        document.querySelectorAll('.df-start .df-thumb').forEach((t) => { t.style.aspectRatio = String(ar); });
+      }, ar);
+      await page.waitForTimeout(300);
+      m = await measure();
+      const at = `${w}x${h} ${ar}: ${JSON.stringify(m)}`;
+      expect(Math.abs(m.stage[0] - m.stage[1] * ar), at).toBeLessThanOrEqual(1.5);
+      expect(m.stage[0], at).toBeLessThanOrEqual(m.view[0] + 0.5);
+      expect(m.stage[1], at).toBeLessThanOrEqual(m.view[1] + 0.5);
+      expect(m.stage[1], at).toBeGreaterThanOrEqual(180);
+      if (h >= 800) {
+        expect(m.over, at).toBeLessThanOrEqual(0);
+        expect(m.footBottom, at).toBeLessThanOrEqual(h);
+      }
+    }
   }
 });
 
@@ -307,7 +349,7 @@ test('start screen: a title of two lines and decks of other shapes fit as well',
 // the rules before it. No test browser is that old, and none lets the units be switched off, so
 // the test takes the block out of the loaded style sheet: what is left is what such a browser
 // applies. It does not show what else such a browser lacks.
-test('start screen without container units: the preview keeps its share of the window height and stays in the column', async ({ page }) => {
+test('start screen without container units: the preview is half the window high and stays in the column', async ({ page }) => {
   for (const [w, h] of [[1280, 800], [1920, 1080], [800, 500], [360, 700]]) {
     await page.setViewportSize({ width: w, height: h });
     await startScreen(page, 'pptx-basic.html');
@@ -336,8 +378,8 @@ test('start screen without container units: the preview keeps its share of the w
       return out;
     });
     const at = `${w}x${h}: ${JSON.stringify(m)}`;
-    // the fixed share of the window height, inside the column and above the strip of slides
-    expect(Math.abs(m.stage.h - Math.min(0.42 * h, 520)), at).toBeLessThanOrEqual(1);
+    // half the window height, inside the column and above the strip of slides
+    expect(Math.abs(m.stage.h - 0.5 * h), at).toBeLessThanOrEqual(1);
     expect(m.stage.l, at).toBeGreaterThanOrEqual(m.col.l - 0.5);
     expect(m.stage.r, at).toBeLessThanOrEqual(m.col.r + 0.5);
     expect(m.stage.b, at).toBeLessThanOrEqual(m.strip.t + 0.5);
@@ -348,7 +390,7 @@ test('start screen without container units: the preview keeps its share of the w
     // is as wide as the column, and the scaled player stands in its middle
     if (m.stage.h * m.ratio <= m.col.w) expect(Math.abs(m.stage.w - m.stage.h * m.ratio), at).toBeLessThanOrEqual(1.5);
     else expect(Math.abs(m.stage.w - m.col.w), at).toBeLessThanOrEqual(1);
-    if (w >= 1280) expect(m.over, at).toBeLessThanOrEqual(0);
+    if (w >= 1280 && h >= 1000) expect(m.over, at).toBeLessThanOrEqual(0);
   }
 });
 
@@ -414,28 +456,62 @@ test('start screen: the eye of a tile hides the slide from the show and shows it
   expect(await stored()).toEqual([]);
 });
 
-// E21: a chosen start slide that is hidden from the show is not where the show begins; the line
-// beside "Start" says where it does.
-test('start screen: a hidden start slide is named in the hint, with the slide the show starts on', async ({ page }) => {
+// E21, E25: a chosen start slide that is hidden from the show is not where the show begins; the
+// status line shows the slide it starts on, with a play sign, and nothing while the chosen slide is
+// shown. A blocked pop-up is a message of its own in the middle of the window, beside it.
+test('start screen: a hidden start slide shows the slide the show starts on in the status line', async ({ page }) => {
   await startScreen(page, 'pptx-basic.html');
-  const hint = page.locator('[data-df-hint]');
-  await expect(hint).toHaveText('');
+  const num = page.locator('[data-df-startnum]');
+  const on = () => page.evaluate(() => document.querySelector('[data-df-startnum]').classList.contains('df-on'));
+  await expect(num).toBeHidden();
+  expect(await num.getAttribute('aria-label')).toBe(await page.evaluate(() => window.__deckfold.t('startsAt')));
+  expect(await num.locator('svg').count()).toBe(1);
   // the third slide is hidden in the deck: chosen, the show starts on the fourth
   await page.click('.df-strip .df-tile[data-i="2"]');
-  const want = await page.evaluate(() => window.__deckfold.t('startsAt') + ' ' + (window.__deckfold.model.startAt(2).slide + 1));
-  expect(want).toMatch(/ 4$/);
-  await expect(hint).toHaveText(want);
-  // shown again, the hint goes
+  expect(await page.evaluate(() => window.__deckfold.model.startAt(2).slide + 1)).toBe(4);
+  await expect(num).toBeVisible();
+  await expect(num).toHaveText('4');
+  // shown again, the number goes
   await page.click('.df-strip [data-df-eye="2"]');
-  await expect(hint).toHaveText('');
+  await expect(num).toBeHidden();
+  expect(await on()).toBe(false);
   // the fourth slide chosen and hidden: no slide after it, the show starts on the second
   await page.click('.df-strip [data-df-eye="2"]');
   await page.click('.df-strip .df-tile[data-i="3"]');
   await page.click('.df-strip [data-df-eye="3"]');
-  await expect(hint).toHaveText(await page.evaluate(() => window.__deckfold.t('startsAt') + ' 2'));
+  await expect(num).toHaveText('2');
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold.audience);
   await expect.poll(() => page.evaluate(() => window.__deckfold.audience.state())).toEqual({ slide: 1, step: 0 });
+});
+
+test('start screen: a blocked pop-up is a red message in the middle of the status line, beside the start slide', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await startScreen(page, 'pptx-basic.html');
+  await page.evaluate(() => { window.open = () => null; });
+  const msg = page.locator('[data-df-message]');
+  await expect(msg).toBeHidden();
+  await page.click('.df-strip .df-tile[data-i="2"]');
+  await page.click('[data-df-presenter]');
+  await expect(msg).toBeVisible();
+  expect(await msg.textContent()).toBe(await page.evaluate(() => window.__deckfold.t('popupBlocked')));
+  expect(await page.isChecked('[data-df-presenter]')).toBe(false);
+  const m = await page.evaluate(() => {
+    const box = (e) => e.getBoundingClientRect();
+    const msg = box(document.querySelector('[data-df-message]')), num = box(document.querySelector('[data-df-startnum]')), foot = box(document.querySelector('.df-start-foot'));
+    const bg = getComputedStyle(document.querySelector('[data-df-message]')).backgroundColor.match(/\d+/g).map(Number);
+    return { center: (msg.left + msg.right) / 2, w: innerWidth, apart: num.right <= msg.left, inFoot: msg.top >= foot.top - 1 && msg.bottom <= foot.bottom + 1, bg,
+      title: document.querySelector('[data-df-message]').title };
+  });
+  const at = JSON.stringify(m);
+  expect(Math.abs(m.center - m.w / 2), at).toBeLessThanOrEqual(2);
+  expect(m.apart, at).toBe(true);
+  expect(m.inFoot, at).toBe(true);
+  // red: far more red than green and blue
+  expect(m.bg[0], at).toBeGreaterThan(m.bg[1] + 40);
+  expect(m.bg[0], at).toBeGreaterThan(m.bg[2] + 40);
+  expect(m.title, at).toBe(await msg.textContent());
+  await expect(page.locator('[data-df-startnum]')).toHaveText('4');
 });
 
 // The start screen puts the focus on no control when it loads: a focused button shows its focus

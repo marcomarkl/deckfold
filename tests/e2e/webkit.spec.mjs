@@ -16,7 +16,7 @@ test('WebKit: presenter view without screen detection: no hint, full screen allo
   // WebKit has no Window Management API: deckfold does not check where the windows are
   await page.waitForTimeout(1500);
   await expect(page.locator('[data-df-fs]')).toBeEnabled();
-  await expect(page.locator('[data-df-hint].df-on')).toHaveCount(0);
+  await expect(page.locator('[data-df-message].df-on')).toHaveCount(0);
   await page.click('[data-df-start]');
   await page.waitForFunction(() => window.__deckfold && window.__deckfold.audience);
   await pres.keyboard.press('ArrowRight');

@@ -50,7 +50,7 @@ var TEXT = {
     start: "Start", presenterView: "Referentenansicht",
     fullscreen: "Vollbild", auto: "Auto-Modus", autoInterval: "Intervall (s)", autoLoop: "Schleife",
     slide: "Folie", previous: "Zur\u00fcck", following: "Weiter",
-    popupBlocked: "Der Browser hat das Fenster der Referentenansicht blockiert. Erlaube Pop-ups f\u00fcr diese Datei und schalte die Referentenansicht noch einmal ein.",
+    popupBlocked: "Pop-up blockiert: f\u00fcr diese Datei erlauben", info: "Info",
     startInShow: "Gestartet wird im Pr\u00e4sentationsfenster: Klick dort auf \u201eStart\u201c.", showLost: "Das Pr\u00e4sentationsfenster ist nicht erreichbar.", noWake: "Bildschirmschoner nicht blockiert",
     loading: "Wird geladen \u2026",
     clickFs: "Klicken f\u00fcr Vollbild",
@@ -71,7 +71,7 @@ var TEXT = {
     start: "Start", presenterView: "Presenter view",
     fullscreen: "Full screen", auto: "Auto mode", autoInterval: "Interval (s)", autoLoop: "Loop",
     slide: "Slide", previous: "Back", following: "Forward",
-    popupBlocked: "The browser blocked the presenter view window. Allow pop-ups for this file and switch the presenter view on again.",
+    popupBlocked: "Pop-up blocked: allow it for this file", info: "Info",
     startInShow: "The presentation starts in the presentation window: click \u201cStart\u201d there.", showLost: "The presentation window is not reachable.", noWake: "Screen saver not blocked",
     loading: "Loading \u2026",
     clickFs: "Click for full screen",
@@ -1531,13 +1531,14 @@ DF.finder = function (opts) {
   };
 };
 
-// DF.icon: the icons of the buttons that show no text (key help, search, end show).
-// They are drawn here so that they look the same on every machine (a character such as U+2328
-// would depend on the fonts installed) and take the text colour. keyboard: its case, two rows of
-// keys and the space bar; search: a magnifier; power: the on/off sign; eye and eyeOff: a slide shown in the show or hidden from it.
+// DF.icon: the icons of the buttons that show no text (info, search, end show) and of the start
+// slide in the status line of the start screen. They are drawn here so that they look the same on
+// every machine (a character would depend on the fonts installed) and take the text colour.
+// info: an i in a circle; search: a magnifier; power: the on/off sign; play: a triangle pointing
+// right; eye and eyeOff: a slide shown in the show or hidden from it.
 var ICONS = {
-  keyboard: [["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2" }],
-    ["path", { d: "M6.5 9.75h.01M9.25 9.75h.01M12 9.75h.01M14.75 9.75h.01M17.5 9.75h.01M6.5 12.5h.01M9.25 12.5h.01M12 12.5h.01M14.75 12.5h.01M17.5 12.5h.01M8.5 15.25h7" }]],
+  info: [["circle", { cx: "12", cy: "12", r: "9" }], ["path", { d: "M12 11v5.5M12 7.75h.01" }]],
+  play: [["path", { d: "M8 5.5v13l10.5-6.5z" }]],
   search: [["circle", { cx: "10.5", cy: "10.5", r: "6" }], ["path", { d: "M15 15l5 5" }]],
   power: [["path", { d: "M12 3.5v8" }], ["path", { d: "M7.05 6.55a7 7 0 1 0 9.9 0" }]],
   eye: [["path", { d: "M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" }], ["circle", { cx: "12", cy: "12", r: "2.75" }]],
@@ -1563,7 +1564,7 @@ DF.iconButton = function (name, label, attrs) {
 // key of its own; while it is open no key reaches the start screen.
 // Returns { button, open, close, isOpen, remove }.
 DF.helpOverlay = function (groups) {
-  var name = DF.t("shortcuts");
+  var name = DF.t("info"), head = DF.t("shortcuts");
   var ov = DF.overlay({ attr: "data-df-help-overlay", cls: "df-help", keys: function (type, e) {
     // Nothing in the box is used with the keys, so what a key would do by itself is cancelled: it
     // must not scroll the start screen behind the overlay, press a button or, with Ctrl+F or
@@ -1572,19 +1573,21 @@ DF.helpOverlay = function (groups) {
     if (find || !(e.metaKey || e.ctrlKey || e.altKey)) e.preventDefault();
   } });
   ov.root.appendChild(DF.el("div", { class: "df-overlay-box df-help-box" }, [
-    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: name }), ov.closeButton]),
+    DF.el("div", { class: "df-help-head" }, [DF.el("h2", { text: head }), ov.closeButton]),
     DF.keyHelp(groups),
     DF.el("p", { class: "df-ver", text: "deckfold " + (DF.version || "") })]));
   return {
-    button: DF.iconButton("keyboard", name, { "data-df-help": "", onclick: ov.open }),
+    button: DF.iconButton("info", name, { "data-df-help": "", onclick: ov.open }),
     open: ov.open, close: ov.close, isOpen: ov.isOpen, remove: ov.remove
   };
 };
 
 // --- 35-start.js ---
-// Start screen of the show window (decision E14): the title, a large preview of the chosen slide, a
-// strip of all slides to choose where to start, the settings with "Start", and below the settings
-// a footer with the button that opens the key help, the search and the number of slides. The
+// Start screen of the show window (decisions E14 and E25): the title, a large preview of the chosen
+// slide, a strip of all slides to choose where to start, the settings with "Start", and below them a
+// status line over the whole width: at the left the button that opens the key help, the search, the
+// number of slides and, while the chosen slide is hidden from the show, the slide the show starts
+// on; in the middle a message such as a blocked pop-up. The
 // window is the presentation itself: "Start" activates the source player here. The presenter view
 // is a second window that the switch opens; deckfold never places windows and does not check where
 // they are: the user drags them where they belong (decision E14).
@@ -1634,7 +1637,7 @@ DF.startShow = function (snapshotHTML) {
   document.documentElement.classList.add("df-start-mode");
 
   // ---------- start screen ----------
-  var frame = null, strip = null, hintEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
+  var frame = null, strip = null, startNum = null, msgEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
   // on a phone or tablet the show always runs in full screen and there is no presenter view (E23):
   // neither setting is shown, and what is stored for them does not count
   var mobile = DF.mobile();
@@ -1681,7 +1684,13 @@ DF.startShow = function (snapshotHTML) {
     cfg.auto.loop = loopBox.checked;
     DF.saveSettings(cfg);
   }
-  hintEl = DF.el("p", { class: "df-start-hint", "data-df-hint": "" });
+  // the status line: the slide the show starts on (only while the chosen slide is hidden from the
+  // show, E21) and a message in the middle (a blocked pop-up)
+  msgEl = DF.el("p", { class: "df-start-msg", "data-df-message": "", role: "status" });
+  if (!generic) {
+    startNum = DF.el("span", { class: "df-start-num", "data-df-startnum": "", title: DF.t("startsAt"), "aria-label": DF.t("startsAt") },
+      [DF.icon("play"), DF.el("span", {})]);
+  }
   startBtn = DF.el("button", { type: "button", class: "df-primary df-start-btn", "data-df-start": "", text: DF.t("start"), onclick: begin });
   // the preview has the shape of the slide (--df-ar, width by height) and takes the height the
   // other rows leave: its frame shrinks, and the stage keeps its shape inside it
@@ -1702,11 +1711,13 @@ DF.startShow = function (snapshotHTML) {
       generic ? DF.el("p", { class: "df-sub", text: DF.t("generic") }) : null,
       generic ? null : view,
       generic ? null : strip.el,
-      // the settings with "Start" beside them, and below the settings the footer, everything at
-      // the left: the key help, the search, the number of slides. Nothing stands below "Start".
-      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
-        DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
-          countEl])
+      // the settings with "Start" beside them, and below both the status line: at the left the key
+      // help, the search, the number of slides and the start slide; the message in the middle of the
+      // window; the right part stays empty, so that the middle is the middle (E25)
+      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn,
+        DF.el("div", { class: "df-start-foot" }, [
+          DF.el("div", { class: "df-start-left" }, [help.button, finder ? finder.button : null, countEl, startNum]),
+          msgEl, DF.el("span", {})])
       ])
     ])
   ]);
@@ -1871,15 +1882,22 @@ DF.startShow = function (snapshotHTML) {
     if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; remember(false); }
     beat();
   }, 1000);
-  // hint: a message in the line beside "Start" (popupBlocked) until it is cleared; otherwise, while
-  // the chosen slide is hidden from the show, the slide the show starts on (E21)
+  // hint: a message in the middle of the status line (popupBlocked) until it is cleared; apart
+  // from it, while the chosen slide is hidden from the show, the slide the show starts on (E21)
   var hintKey = null;
   function hint(k) { hintKey = k; showHint(); }
   function showHint() {
-    if (!hintEl) return;
-    var text = hintKey ? DF.t(hintKey) : !generic && slides.length && !DF.isShown(sel) ? DF.t("startsAt") + " " + (DF.model.startAt(sel).slide + 1) : "";
-    hintEl.textContent = text;
-    hintEl.classList.toggle("df-on", !!text);
+    if (msgEl) {
+      var text = hintKey ? DF.t(hintKey) : "";
+      msgEl.textContent = text;
+      msgEl.title = text;
+      msgEl.classList.toggle("df-on", !!text);
+    }
+    if (startNum) {
+      var hidden = slides.length && !DF.isShown(sel);
+      startNum.lastChild.textContent = hidden ? String(DF.model.startAt(sel).slide + 1) : "";
+      startNum.classList.toggle("df-on", !!hidden);
+    }
   }
 
   // ---------- keys on the start screen ----------

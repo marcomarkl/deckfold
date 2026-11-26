@@ -1,6 +1,8 @@
-// Start screen of the show window (decision E14): the title, a large preview of the chosen slide, a
-// strip of all slides to choose where to start, the settings with "Start", and below the settings
-// a footer with the button that opens the key help, the search and the number of slides. The
+// Start screen of the show window (decisions E14 and E25): the title, a large preview of the chosen
+// slide, a strip of all slides to choose where to start, the settings with "Start", and below them a
+// status line over the whole width: at the left the button that opens the key help, the search, the
+// number of slides and, while the chosen slide is hidden from the show, the slide the show starts
+// on; in the middle a message such as a blocked pop-up. The
 // window is the presentation itself: "Start" activates the source player here. The presenter view
 // is a second window that the switch opens; deckfold never places windows and does not check where
 // they are: the user drags them where they belong (decision E14).
@@ -50,7 +52,7 @@ DF.startShow = function (snapshotHTML) {
   document.documentElement.classList.add("df-start-mode");
 
   // ---------- start screen ----------
-  var frame = null, strip = null, hintEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
+  var frame = null, strip = null, startNum = null, msgEl, fsBox, preBox = null, autoBox = null, intervalIn = null, loopBox = null, startBtn;
   // on a phone or tablet the show always runs in full screen and there is no presenter view (E23):
   // neither setting is shown, and what is stored for them does not count
   var mobile = DF.mobile();
@@ -97,7 +99,13 @@ DF.startShow = function (snapshotHTML) {
     cfg.auto.loop = loopBox.checked;
     DF.saveSettings(cfg);
   }
-  hintEl = DF.el("p", { class: "df-start-hint", "data-df-hint": "" });
+  // the status line: the slide the show starts on (only while the chosen slide is hidden from the
+  // show, E21) and a message in the middle (a blocked pop-up)
+  msgEl = DF.el("p", { class: "df-start-msg", "data-df-message": "", role: "status" });
+  if (!generic) {
+    startNum = DF.el("span", { class: "df-start-num", "data-df-startnum": "", title: DF.t("startsAt"), "aria-label": DF.t("startsAt") },
+      [DF.icon("play"), DF.el("span", {})]);
+  }
   startBtn = DF.el("button", { type: "button", class: "df-primary df-start-btn", "data-df-start": "", text: DF.t("start"), onclick: begin });
   // the preview has the shape of the slide (--df-ar, width by height) and takes the height the
   // other rows leave: its frame shrinks, and the stage keeps its shape inside it
@@ -118,11 +126,13 @@ DF.startShow = function (snapshotHTML) {
       generic ? DF.el("p", { class: "df-sub", text: DF.t("generic") }) : null,
       generic ? null : view,
       generic ? null : strip.el,
-      // the settings with "Start" beside them, and below the settings the footer, everything at
-      // the left: the key help, the search, the number of slides. Nothing stands below "Start".
-      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn, hintEl,
-        DF.el("div", { class: "df-start-foot" }, [help.button, finder ? finder.button : null,
-          countEl])
+      // the settings with "Start" beside them, and below both the status line: at the left the key
+      // help, the search, the number of slides and the start slide; the message in the middle of the
+      // window; the right part stays empty, so that the middle is the middle (E25)
+      DF.el("div", { class: "df-start-row" }, [DF.el("div", { class: "df-opts" }, opts), startBtn,
+        DF.el("div", { class: "df-start-foot" }, [
+          DF.el("div", { class: "df-start-left" }, [help.button, finder ? finder.button : null, countEl, startNum]),
+          msgEl, DF.el("span", {})])
       ])
     ])
   ]);
@@ -287,15 +297,22 @@ DF.startShow = function (snapshotHTML) {
     if (rWin && rWin.closed) { rWin = null; if (preBox) preBox.checked = false; remember(false); }
     beat();
   }, 1000);
-  // hint: a message in the line beside "Start" (popupBlocked) until it is cleared; otherwise, while
-  // the chosen slide is hidden from the show, the slide the show starts on (E21)
+  // hint: a message in the middle of the status line (popupBlocked) until it is cleared; apart
+  // from it, while the chosen slide is hidden from the show, the slide the show starts on (E21)
   var hintKey = null;
   function hint(k) { hintKey = k; showHint(); }
   function showHint() {
-    if (!hintEl) return;
-    var text = hintKey ? DF.t(hintKey) : !generic && slides.length && !DF.isShown(sel) ? DF.t("startsAt") + " " + (DF.model.startAt(sel).slide + 1) : "";
-    hintEl.textContent = text;
-    hintEl.classList.toggle("df-on", !!text);
+    if (msgEl) {
+      var text = hintKey ? DF.t(hintKey) : "";
+      msgEl.textContent = text;
+      msgEl.title = text;
+      msgEl.classList.toggle("df-on", !!text);
+    }
+    if (startNum) {
+      var hidden = slides.length && !DF.isShown(sel);
+      startNum.lastChild.textContent = hidden ? String(DF.model.startAt(sel).slide + 1) : "";
+      startNum.classList.toggle("df-on", !!hidden);
+    }
   }
 
   // ---------- keys on the start screen ----------
