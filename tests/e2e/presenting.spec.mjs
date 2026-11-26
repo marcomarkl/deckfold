@@ -381,10 +381,10 @@ const fakeFullscreen = () => {
   Object.defineProperty(navigator, 'keyboard', { configurable: true, value: { lock(k) { window.__locks.push(k); return Promise.resolve(); }, unlock() { window.__locks.push('unlock'); } } });
 };
 
-// "Click for full screen" is the fallback for a start that got no full screen. Full screen that was
-// there and is left during the show (Escape in Safari and Firefox, the key of "fullscreen") is the
-// presenter's choice: the show goes on in the window with nothing over the slide, and the key
-// brings full screen back.
+// "Click for full screen" is the fallback for a start that got no full screen. With Keyboard Lock,
+// which the stand-in above has, full screen that was there and is left during the show (Escape
+// held down, the key of "fullscreen") goes on in the window with nothing over the slide, and the
+// key brings full screen back. Without Keyboard Lock leaving it ends the show (E24, start.spec.mjs).
 test('full screen left during the show: no overlay, the key brings it back', async ({ page, context }) => {
   await context.addInitScript(fakeFullscreen);
   await context.addInitScript(() => {

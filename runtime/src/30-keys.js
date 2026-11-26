@@ -160,14 +160,25 @@ DF.installPointer = function (opts) {
 
 // Keyboard Lock (Chrome, Edge): in full screen, Escape reaches the key handler above instead of only
 // leaving full screen, so that one Escape ends the presentation; holding Escape still leaves full
-// screen. Browsers without Keyboard Lock leave full screen on the first Escape as before.
+// screen. Browsers without Keyboard Lock take the Escape themselves and leave full screen, and the
+// presentation ends when it sees that (decision E24, the full-screen part of 40-audience.js).
+// DF.escLock: Escape comes as a key in this full screen. It is set as soon as the lock is asked
+// for, not when the promise settles, because macOS can end a full screen of Chrome 90 ms after it
+// began (S2), and it stays as it is when full screen is left: this listener runs before the one of
+// the presentation, which reads the value then.
+DF.escLock = false;
 document.addEventListener("fullscreenchange", function () {
-  var kb = navigator.keyboard;
-  if (!kb || !kb.lock) return;
+  var kb = navigator.keyboard, can = !!(kb && kb.lock);
+  if (!document.fullscreenElement) {
+    try { if (can) kb.unlock(); } catch (e) { }
+    return;
+  }
+  DF.escLock = false;
+  if (!can) return;
   try {
-    if (document.fullscreenElement) kb.lock(["Escape"]).catch(function () { });
-    else kb.unlock();
-  } catch (e) { }
+    DF.escLock = true;
+    kb.lock(["Escape"]).catch(function () { DF.escLock = false; });
+  } catch (e) { DF.escLock = false; }
 });
 
 // typing: keys go to a text or number field (not to a checkbox, whose focus must not stop the

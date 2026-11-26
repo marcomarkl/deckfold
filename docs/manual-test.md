@@ -81,7 +81,11 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | Switch "Presenter view" on | No permission prompt, no hint about the screens; "Full screen" can always be chosen | |
 | Previews on a slide with builds | Each preview shows its slide with all builds, without playing them | |
 | Start with "Full screen" | The presentation fills its screen | |
-| Escape in full screen | Safari leaves full screen; a second Escape ends the presentation | |
+| One Escape in full screen | Safari leaves full screen and the presentation ends: the start screen appears with the last slide chosen | |
+| F in full screen, then an arrow key, then F | Full screen is left and the presentation goes on in the window, with nothing over the slide; the arrow moves on; F brings full screen back | |
+| G in full screen, then Escape | Safari leaves full screen and the presentation ends (in Chrome, Escape only closes the strip) | |
+| With the presenter view open and the show in full screen: a click and a key in the presenter view | The presentation stays in full screen and goes on | |
+| A video in its own full screen, then Escape | Not measured yet: note what happens | |
 
 ## Keynote
 

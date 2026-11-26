@@ -4,7 +4,9 @@
 // a fault in how the windows behave that only the maintainer can produce, such as a drag to
 // another screen; the maintainer opens the copy, shows the fault and copies the log with a click.
 //
-// The script goes right after the runtime block. A browser runs it only where the file allows
+// The script goes right after the runtime block. The keys are recorded by a short script before
+// that block, because the runtime stops the keys it takes before a later listener sees them, and
+// in the presentation it takes every key. A browser runs the scripts only where the file allows
 // inline scripts without a hash or nonce, so the command stops when the Content-Security-Policy
 // of the file would block it. It never writes over its input.
 //
@@ -65,17 +67,25 @@ func run(in, out string) error {
 	return nil
 }
 
-// addLog returns src with the log script right after the runtime block.
+// keyScript records every keydown and keyup with its time in window.__dfkeys. It runs before the
+// runtime registers its key listeners, so it sees the keys the runtime stops; the log script takes
+// the list over.
+const keyScript = `(function(){if(window.top!==window)return;window.__dfkeys=[];["keydown","keyup"].forEach(function(t){window.addEventListener(t,function(e){window.__dfkeys.push([Date.now(),t+" "+e.key]);},true);});})();`
+
+// addLog returns src with the key script right before the runtime block and the log script right
+// after it.
 func addLog(src []byte) ([]byte, error) {
 	if err := allowsInline(src); err != nil {
 		return nil, err
 	}
-	_, end, err := inject.Find(src)
+	begin, end, err := inject.Find(src)
 	if err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
-	buf.Write(src[:end])
+	buf.Write(src[:begin])
+	buf.WriteString("<script>" + keyScript + "</script>")
+	buf.Write(src[begin:end])
 	buf.WriteString("<script>")
 	buf.Write(logScript)
 	buf.WriteString("</script>")

@@ -1,6 +1,6 @@
 // Window log for both windows of a deckfold file: the start screen or presentation ("SHOW") and
 // the presenter view ("PRESENTER"). It logs the window position and size, the screen the browser
-// reports, full screen, focus, visibility, keys, mouse clicks with their screen position, the calls
+// reports, full screen, focus, visibility, keys (down and up), mouse clicks with their screen position, the calls
 // of requestFullscreen, exitFullscreen, moveTo and Keyboard Lock, and the messages between the
 // windows (without the heartbeat). Both windows write into localStorage, so the list in each window
 // shows both, in time order, on the clock of the machine. A click on the list copies it. A new tab
@@ -32,13 +32,13 @@
   var box = document.createElement("pre");
   box.setAttribute("data-df-ui", "");
   box.title = "Click: copy the log of both windows";
-  box.style.cssText = (who === "SHOW" ? "position:fixed;left:55%;right:8px;top:8px;max-height:30vh;" : "position:fixed;left:30%;right:8px;bottom:48px;max-height:38vh;") + "overflow:auto;margin:0;padding:8px;background:#000d;color:#9f9;font:11px/1.35 Menlo,monospace;z-index:2147483647;white-space:pre-wrap;user-select:text;cursor:copy";
+  box.style.cssText = (who === "SHOW" ? "position:fixed;left:55%;right:8px;top:8px;max-height:30vh;" : "position:fixed;left:30%;right:8px;bottom:48px;max-height:38vh;") + "overflow:auto;margin:0;padding:8px;background:#000d;color:#9f9;font:11px/1.35 Menlo,monospace;z-index:2147483647;white-space:pre-wrap;-webkit-user-select:text;user-select:text;cursor:copy";
   function text() {
     return all.concat(other()).sort(function (a, b) { return a[0] - b[0]; }).map(function (l) { return hms(l[0]) + " " + l[1] + " " + l[2]; }).join("\n");
   }
   function show() { box.textContent = text(); box.scrollTop = box.scrollHeight; }
-  function log(what) {
-    all.push([Date.now(), (who + "    ").slice(0, 9), what + " | " + where()]);
+  function log(what, at) {
+    all.push([at || Date.now(), (who + "    ").slice(0, 9), what + " | " + where()]);
     store(); show();
   }
   window.__dflog = { text: text, log: log };
@@ -55,7 +55,11 @@
   window.addEventListener("blur", function () { log("blur"); });
   document.addEventListener("visibilitychange", function () { log("visibilitychange"); });
   window.addEventListener("pagehide", function () { log("pagehide"); });
-  window.addEventListener("keydown", function (e) { log("keydown " + e.key); }, true);
+  // keys: recorded by the script before the runtime block (main.go), which sees them before the
+  // runtime stops them; the ones that came before this script ran are logged with their own time
+  var early = window.__dfkeys || [];
+  window.__dfkeys = { push: function (k) { log(k[1], k[0]); } };
+  early.forEach(function (k) { log(k[1], k[0]); });
   window.addEventListener("pointerdown", function (e) { log("pointerdown at screen " + e.screenX + "," + e.screenY + " on " + (e.target && e.target.getAttribute ? (e.target.closest("[data-df-fs]") ? "full-screen button" : e.target.tagName.toLowerCase()) : "?")); }, true);
   if (window.screen && "onchange" in window.screen) window.screen.addEventListener("change", function () { log("screen change"); });
   // position and screen, every 100 ms

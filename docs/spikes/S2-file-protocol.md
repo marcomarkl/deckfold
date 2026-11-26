@@ -130,6 +130,20 @@ A page cannot correct this, measured in Chrome 158:
 
 deckfold therefore leaves full screen as it is; the README names the fault and what helps. How it was measured: Chrome driven by Playwright reports full screen to the page but keeps the window a normal window, and a window dragged by hand cannot be reproduced by script (macOS drops synthetic mouse events without the Accessibility permission, and a window moved by script never got a wrong position). The measurements by script ran in the installed Chrome, started with its own profile in `tests/.out` and `--remote-debugging-port`, with clicks as raw CDP `Input.dispatchMouseEvent` events; once a permission is set through CDP, that Chrome refuses every plain `requestFullscreen()`.
 
+## One Escape in full screen, Safari (2026-11-26)
+
+The question behind decision E24: what does a page get when Escape leaves full screen in Safari, where there is no Keyboard Lock? Measured in Safari 27.2 on macOS 27.2 with the public `basic` deck and the log of `scripts/windowlog`, the show window on the built-in display. The keys were real key presses sent through System Events (`key code 53`), which needs the Accessibility permission for the program that runs the command; the log was read from the window title, into which a script added to the copy wrote its last lines. For this the log script got a recorder that runs before the runtime block, because the runtime stops every key in the presentation before a later listener sees it.
+
+- Escape in full screen, 20 runs: no `keydown` reached the page in any of them. `fullscreenchange` came every time. A `keyup` of the Escape came in 15 runs, 590 to 630 ms before `fullscreenchange`, while `document.fullscreenElement` was still set.
+- The 5 runs without the `keyup`: the first run of the session, 3 runs after a `key down`/`key up` pair of System Events had sent the key "Clear" in full screen, and the first run with the slide strip open (a later run with the strip open had it). No cause is established, so E24 rests on `fullscreenchange` alone.
+- Leaving full screen takes Safari about 0.6 s, from the key of "fullscreen" as well: `exitFullscreen()` at 0 ms, `fullscreenchange` 600 to 620 ms later. A check that runs once a second can fall into that time; the first version of the rule dropped its mark for "left with the own key" there and ended the show on F.
+- Another app brought to the front and back: `blur` and `focus`, full screen stays. Mission Control: the page is hidden and visible again, full screen stays, and the Escape that closes Mission Control reaches the page neither as `keydown` nor as `keyup`.
+- With the rule of E24 in the runtime: one Escape ended the show in 3 of 3 runs after an arrow key, in 1 of 1 after F out and F in, and in 1 of 1 with the strip open; the page reloaded 60 to 70 ms after `fullscreenchange`. F left full screen and the show went on (an arrow key moved it).
+
+- By the maintainer, by hand, with the rule in the runtime: a click into the presenter view while the show is in full screen ends neither full screen nor the show.
+
+What this does not show: a key pressed by a finger, which is held for about a tenth of a second while System Events sends down and up a few milliseconds apart; Safari's own button for leaving full screen; a second screen under the keys from System Events; Firefox, which is not installed on that Mac.
+
 ## The highlight under a resting mouse (2026-11-11)
 
 Seen twice with the presenter view on a second screen: the highlight of a slide tile or a button went away while the mouse rested on it. Measured on the maintainer's Mac (macOS 27.2, Chrome 157, a 5K display and the built-in one), with real mouse movements.
