@@ -142,7 +142,7 @@ One step after the last slide shows a black end slide, which stays until the pre
 | swipe up / down (touch screen) | show / close the slide strip |
 | Esc | end the presentation |
 
-In Chrome and Edge, one Escape ends the presentation in full screen too. Safari and Firefox leave full screen on the first Escape; a second one ends the presentation.
+One Escape ends the presentation in full screen too. In Chrome and Edge the key reaches deckfold. Safari takes the key and leaves full screen, and deckfold ends the presentation when full screen is gone. There every other way out of full screen ends it as well, except the key F, which leaves full screen and lets the presentation go on in the window; Escape while the slide strip is open ends the presentation in Safari instead of closing the strip. Firefox follows the same rule and is not measured with a real key.
 
 Common presentation clickers send these keys. You can change the bindings under `keys` in the configuration file.
 

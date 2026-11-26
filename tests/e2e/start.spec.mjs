@@ -3,7 +3,7 @@
 // that the browsers could size differently (container units, a shrinking flex item with an aspect
 // ratio).
 import { test, expect } from '@playwright/test';
-import { startScreen } from './helpers.mjs';
+import { startScreen, solo, soloWindowed, audState } from './helpers.mjs';
 
 test('start screen: the key help lists every bound key, grouped, and the fixed keys', async ({ page }) => {
   await startScreen(page, 'pptx-basic.html');
@@ -454,4 +454,86 @@ test('start screen: no control has the focus after loading, and Enter still star
   await page.waitForSelector('.df-start [data-df-start]');
   await page.waitForTimeout(400);
   expect(await ringed()).toEqual([]);
+});
+
+// One Escape ends the presentation and leads back to the start screen, with and without full screen
+// (decision E24). Without full screen the key reaches deckfold. In full screen a browser without
+// Keyboard Lock takes the Escape itself and only tells the page that full screen is gone, so that
+// ends the presentation; with Keyboard Lock the key comes through, and full screen that is left
+// another way goes on in the window. Full screen is a stand-in here, because no browser of the
+// tests enters real full screen: the tests check the rule, not what a browser does with the key.
+const fakeFs = ({ lock, slow }) => {
+  window.__fs = false;
+  Object.defineProperty(Document.prototype, 'fullscreenElement', { configurable: true, get() { return window.__fs ? document.documentElement : null; } });
+  Element.prototype.requestFullscreen = function () { window.__fs = true; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
+  // slow: full screen ends 1.3 s after the call, longer than the second between two checks of the
+  // presentation (Safari took 0.6 s in the measurement)
+  Document.prototype.exitFullscreen = function () {
+    return new Promise((done) => setTimeout(() => { window.__fs = false; document.dispatchEvent(new Event('fullscreenchange')); done(); }, slow ? 1300 : 0));
+  };
+  Object.defineProperty(navigator, 'keyboard', { configurable: true, value: lock ? { lock() { return Promise.resolve(); }, unlock() { } } : undefined });
+  // a window smaller than the screen, so that it does not count as filling it
+  Object.defineProperty(window.screen, 'width', { get: () => 3000 });
+  Object.defineProperty(window.screen, 'height', { get: () => 2000 });
+  // every load of the page in this tab (the previews are frames and run this script too)
+  if (window.top === window) try { sessionStorage.setItem('loads', String(+(sessionStorage.getItem('loads') || 0) + 1)); } catch (e) { }
+};
+const full = (page) => page.evaluate(() => !!document.fullscreenElement);
+// full screen ends as it does when the browser takes the Escape; the page may reload at once
+const browserLeavesFs = (page) => page.evaluate(() => { setTimeout(() => document.exitFullscreen(), 0); });
+const loads = (page) => page.evaluate(() => +sessionStorage.getItem('loads'));
+
+test('Escape without full screen ends the presentation', async ({ page }) => {
+  await soloWindowed(page, 'pptx-basic.html');
+  await page.evaluate(() => window.__deckfold.audience.act('next'));
+  const at = (await audState(page)).slide;
+  expect(at).toBeGreaterThan(0);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
+  expect(await chosenTile(page)).toBe(at);
+});
+
+test('full screen left without Keyboard Lock ends the presentation, once', async ({ page }) => {
+  await page.addInitScript(fakeFs, {});
+  await solo(page, 'pptx-basic.html');
+  expect(await full(page)).toBe(true);
+  await page.evaluate(() => window.__deckfold.audience.act('next'));
+  const at = (await audState(page)).slide;
+  await browserLeavesFs(page);
+  await page.waitForSelector('.df-start [data-df-start]');
+  expect(await chosenTile(page)).toBe(at);
+  // the start screen came once: the reload did not end the show a second time
+  await page.waitForTimeout(700);
+  expect(await loads(page)).toBe(2);
+  await expect(page.locator('.df-start [data-df-start]')).toBeVisible();
+});
+
+test('the key of "fullscreen" leaves full screen and the presentation goes on', async ({ page }) => {
+  await page.addInitScript(fakeFs, { slow: true });
+  await solo(page, 'pptx-basic.html');
+  expect(await full(page)).toBe(true);
+  await page.keyboard.press('f');
+  await expect.poll(() => full(page)).toBe(false);
+  // longer than the check of the presentation, which runs once a second
+  await page.waitForTimeout(1300);
+  expect(await audState(page)).toEqual({ slide: 0, step: 0 });
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
+  // the key brings full screen back, and leaving it another way then ends the show
+  await page.keyboard.press('f');
+  await expect.poll(() => full(page)).toBe(true);
+  await browserLeavesFs(page);
+  await page.waitForSelector('.df-start [data-df-start]');
+});
+
+test('full screen left with Keyboard Lock: the presentation goes on in the window', async ({ page }) => {
+  await page.addInitScript(fakeFs, { lock: true });
+  await solo(page, 'pptx-basic.html');
+  expect(await full(page)).toBe(true);
+  await browserLeavesFs(page);
+  await expect.poll(() => full(page)).toBe(false);
+  await page.waitForTimeout(1300);
+  expect(await audState(page)).toEqual({ slide: 0, step: 0 });
+  await expect(page.locator('.df-fs-overlay')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.df-start [data-df-start]');
 });

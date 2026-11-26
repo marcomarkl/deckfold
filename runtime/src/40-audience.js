@@ -92,22 +92,35 @@ DF.startAudience = function (opts) {
 
   // ---------- full screen ----------
   // The start screen requested full screen in the click on "Start". If that failed, one click on
-  // the overlay is enough. The overlay is for a request that got no full screen. Full screen that
-  // was there and is left later is the presenter's choice (Escape in Safari and Firefox, the key
-  // of "fullscreen"): the show goes on in the window with nothing over the slide, and the key
-  // brings it back.
+  // the overlay is enough. The overlay is for a request that got no full screen.
+  // Full screen that was there and is left ends the presentation on a computer (decision E24): one
+  // Escape leads back to the start screen in every browser. Safari takes the Escape itself and
+  // tells the page only that full screen is gone, so that is the signal. In 20 runs in Safari 27.2
+  // it came every time; a keyup of the Escape came in 15 of them and is not used (S2). With
+  // Keyboard Lock (DF.escLock) the Escape comes as a key and ends the show by itself, so there the
+  // rule is off, and full screen left by holding Escape goes on in the window. The key of
+  // "fullscreen" leaves full screen without ending (fsSelf); the show then goes on in the window
+  // with nothing over the slide, and the key brings full screen back.
   // On a phone or tablet (E23) the show always runs in full screen, and full screen that is lost
   // was not left on purpose: on an iPad every swipe down leaves it, and no page can take that
   // gesture (measured by the maintainer). There the overlay never shows; the next tap or swipe on
   // the slide asks for full screen again (regainFs) and moves on as usual.
   var mobile = DF.mobile();
-  var fsWanted = !!opts.fullscreen, fsHad = !!document.fullscreenElement;
+  var fsWanted = !!opts.fullscreen, fsHad = !!document.fullscreenElement, fsSelf = false;
+  // used by take(), which the full-screen check below can call before the keys are set up
+  var started = false, held = [];
   function needFs() {
     return !document.fullscreenElement && !(window.innerHeight >= screen.height - 2 && window.innerWidth >= screen.width - 2);
   }
   function updateFsOverlay() {
-    if (document.fullscreenElement) fsHad = true;
-    else if (fsHad && !mobile) { fsHad = false; fsWanted = false; }
+    // fsSelf is dropped when full screen comes, not while it is there: Safari takes 0.6 s to leave
+    // it (measured), and this check also runs once a second
+    if (document.fullscreenElement) { if (!fsHad) fsSelf = false; fsHad = true; }
+    else if (fsHad && !mobile) {
+      fsHad = false; fsWanted = false;
+      if (fsSelf) fsSelf = false;
+      else if (!DF.escLock) { take("end"); return; }
+    }
     fsEl.classList.toggle("df-on", !mobile && fsWanted && needFs());
   }
   function regainFs() {
@@ -280,7 +293,11 @@ DF.startAudience = function (opts) {
     drive(function () { return adapter.jump(to, null); });
   }
   setInterval(check, 1000);
+  // once: the reload at the end leaves full screen too, and that must not end the show again
+  var ending = false;
   function finish() {
+    if (ending) return;
+    ending = true;
     stopAuto();
     opts.onEnd(lastShown || st);
   }
@@ -299,7 +316,7 @@ DF.startAudience = function (opts) {
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
       case "fullscreen":
-        if (document.fullscreenElement) return DF.toggleFs();
+        if (document.fullscreenElement) { fsSelf = true; return DF.toggleFs().catch(function () { fsSelf = false; }); }
         fsWanted = true;
         return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
       case "strip": return strip.open ? closeStrip() : openStrip();
@@ -351,7 +368,6 @@ DF.startAudience = function (opts) {
   // take: keys, clicks and commands of the presenter view. Until the player is ready and on the
   // start slide they are kept and then carried out in order: a step counted from the state before
   // the start slide would be lost.
-  var started = false, held = [];
   function take(a, arg) {
     // a key or click in this window is the gesture Safari needs to grant the wake lock again (the
     // commands of the presenter view come through here too and give it none)
@@ -362,7 +378,7 @@ DF.startAudience = function (opts) {
   DF.installKeys(function (a, e) {
     if (a === "digits") return true;
     take(a, e && e.slide);
-    return true; // the player never gets a bound key; Escape (in full screen through Keyboard Lock) ends the show
+    return true; // the player never gets a bound key; Escape ends the show (in full screen it comes through Keyboard Lock, or the browser takes it and full screen ends, see above)
   }, generic ? { passthrough: true, forward: function () { } } : { swallowAll: true });
   // a click on the slide moves on, a swipe to the left too, one to the right goes back, one up
   // shows the slide strip (E22); the wheel does nothing (generic decks keep their own). While the
