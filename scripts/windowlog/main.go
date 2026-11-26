@@ -67,10 +67,11 @@ func run(in, out string) error {
 	return nil
 }
 
-// keyScript records every keydown and keyup with its time in window.__dfkeys. It runs before the
+// keyScript records every keydown and keyup with its time in window.__dfkeys, and marks the keys
+// a script made (deckfold drives the players of claude.ai and Keynote with such keys). It runs before the
 // runtime registers its key listeners, so it sees the keys the runtime stops; the log script takes
 // the list over.
-const keyScript = `(function(){if(window.top!==window)return;window.__dfkeys=[];["keydown","keyup"].forEach(function(t){window.addEventListener(t,function(e){window.__dfkeys.push([Date.now(),t+" "+e.key]);},true);});})();`
+const keyScript = `(function(){if(window.top!==window)return;window.__dfkeys=[];["keydown","keyup"].forEach(function(t){window.addEventListener(t,function(e){window.__dfkeys.push([Date.now(),t+" "+e.key+(e.isTrusted?"":" (synthetic)")]);},true);});})();`
 
 // addLog returns src with the key script right before the runtime block and the log script right
 // after it.

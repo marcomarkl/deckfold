@@ -2062,18 +2062,22 @@ DF.startAudience = function (opts) {
   // the overlay is enough. The overlay is for a request that got no full screen.
   // Full screen that was there and is left ends the presentation on a computer (decision E24): one
   // Escape leads back to the start screen in every browser. Safari takes the Escape itself and
-  // tells the page only that full screen is gone, so that is the signal. In 20 runs in Safari 27.2
-  // it came every time; a keyup of the Escape came in 15 of them and is not used (S2). With
+  // tells the page only that full screen is gone, so that is the signal. In 19 runs in Safari 27.2
+  // it came every time; a keyup of the Escape came in 14 of them and is not used (S2). With
   // Keyboard Lock (DF.escLock) the Escape comes as a key and ends the show by itself, so there the
   // rule is off, and full screen left by holding Escape goes on in the window. The key of
   // "fullscreen" leaves full screen without ending (fsSelf); the show then goes on in the window
   // with nothing over the slide, and the key brings full screen back.
+  // Only the full screen deckfold asked for counts, the one of the root element. A video or an
+  // embed can take a full screen of its own, in a show in the window too; leaving that is not the
+  // end of the show, also not where the browser leaves every full screen with it (fsOther).
   // On a phone or tablet (E23) the show always runs in full screen, and full screen that is lost
   // was not left on purpose: on an iPad every swipe down leaves it, and no page can take that
   // gesture (measured by the maintainer). There the overlay never shows; the next tap or swipe on
   // the slide asks for full screen again (regainFs) and moves on as usual.
   var mobile = DF.mobile();
-  var fsWanted = !!opts.fullscreen, fsHad = !!document.fullscreenElement, fsSelf = false;
+  var fsRoot = function () { return document.fullscreenElement === document.documentElement; };
+  var fsWanted = !!opts.fullscreen, fsHad = fsRoot(), fsSelf = 0, fsOther = false;
   // used by take(), which the full-screen check below can call before the keys are set up
   var started = false, held = [];
   function needFs() {
@@ -2082,11 +2086,16 @@ DF.startAudience = function (opts) {
   function updateFsOverlay() {
     // fsSelf is dropped when full screen comes, not while it is there: Safari takes 0.6 s to leave
     // it (measured), and this check also runs once a second
-    if (document.fullscreenElement) { if (!fsHad) fsSelf = false; fsHad = true; }
-    else if (fsHad && !mobile) {
-      fsHad = false; fsWanted = false;
-      if (fsSelf) fsSelf = false;
-      else if (!DF.escLock) { take("end"); return; }
+    if (fsRoot()) { if (!fsHad || fsOther) fsSelf = 0; fsHad = true; fsOther = false; }
+    else if (document.fullscreenElement) fsOther = true;
+    else {
+      var other = fsOther;
+      fsOther = false;
+      if (fsHad && !mobile) {
+        fsHad = false; fsWanted = false;
+        if (fsSelf) fsSelf = 0;
+        else if (!other && !DF.escLock) { take("end"); return; }
+      }
     }
     fsEl.classList.toggle("df-on", !mobile && fsWanted && needFs());
   }
@@ -2260,11 +2269,13 @@ DF.startAudience = function (opts) {
     drive(function () { return adapter.jump(to, null); });
   }
   setInterval(check, 1000);
-  // once: the reload at the end leaves full screen too, and that must not end the show again
-  var ending = false;
+  // not twice in a row: the reload at the end leaves full screen too, and that must not end the
+  // show again. Only for a moment, so that the show can still be ended when the reload did not
+  // come (a deck that asks before the page is left, and the answer was to stay).
+  var ending = 0;
   function finish() {
-    if (ending) return;
-    ending = true;
+    if (Date.now() - ending < 2000) return;
+    ending = Date.now();
     stopAuto();
     opts.onEnd(lastShown || st);
   }
@@ -2283,7 +2294,12 @@ DF.startAudience = function (opts) {
       case "white": return setBlank("white");
       case "auto": return auto.on ? stopAuto(true) : startAuto();
       case "fullscreen":
-        if (document.fullscreenElement) { fsSelf = true; return DF.toggleFs().catch(function () { fsSelf = false; }); }
+        if (document.fullscreenElement) {
+          // counted, so that a second press while the browser is still leaving full screen, whose
+          // call may be refused, does not take the mark of the first away
+          fsSelf++;
+          return DF.toggleFs().catch(function () { if (fsSelf) fsSelf--; });
+        }
         fsWanted = true;
         return DF.requestFs().then(updateFsOverlay, updateFsOverlay);
       case "strip": return strip.open ? closeStrip() : openStrip();

@@ -134,15 +134,17 @@ deckfold therefore leaves full screen as it is; the README names the fault and w
 
 The question behind decision E24: what does a page get when Escape leaves full screen in Safari, where there is no Keyboard Lock? Measured in Safari 27.2 on macOS 27.2 with the public `basic` deck and the log of `scripts/windowlog`, the show window on the built-in display. The keys were real key presses sent through System Events (`key code 53`), which needs the Accessibility permission for the program that runs the command; the log was read from the window title, into which a script added to the copy wrote its last lines. For this the log script got a recorder that runs before the runtime block, because the runtime stops every key in the presentation before a later listener sees it.
 
-- Escape in full screen, 20 runs: no `keydown` reached the page in any of them. `fullscreenchange` came every time. A `keyup` of the Escape came in 15 runs, 590 to 630 ms before `fullscreenchange`, while `document.fullscreenElement` was still set.
+- Escape in full screen, 19 runs before the rule was in the runtime: no `keydown` reached the page in any of them. `fullscreenchange` came every time. A `keyup` of the Escape came in 14 runs, 590 to 630 ms before `fullscreenchange`, while `document.fullscreenElement` was still set.
 - The 5 runs without the `keyup`: the first run of the session, 3 runs after a `key down`/`key up` pair of System Events had sent the key "Clear" in full screen, and the first run with the slide strip open (a later run with the strip open had it). No cause is established, so E24 rests on `fullscreenchange` alone.
 - Leaving full screen takes Safari about 0.6 s, from the key of "fullscreen" as well: `exitFullscreen()` at 0 ms, `fullscreenchange` 600 to 620 ms later. A check that runs once a second can fall into that time; the first version of the rule dropped its mark for "left with the own key" there and ended the show on F.
 - Another app brought to the front and back: `blur` and `focus`, full screen stays. Mission Control: the page is hidden and visible again, full screen stays, and the Escape that closes Mission Control reaches the page neither as `keydown` nor as `keyup`.
-- With the rule of E24 in the runtime: one Escape ended the show in 3 of 3 runs after an arrow key, in 1 of 1 after F out and F in, and in 1 of 1 with the strip open; the page reloaded 60 to 70 ms after `fullscreenchange`. F left full screen and the show went on (an arrow key moved it).
+- With the rule of E24 in the runtime (5 more runs, each with the `keyup`): one Escape ended the show in 3 of 3 runs after an arrow key, in 1 of 1 after F out and F in, and in 1 of 1 with the strip open; the page reloaded 60 to 70 ms after `fullscreenchange`. F left full screen and the show went on (an arrow key moved it).
 
 - By the maintainer, by hand, with the rule in the runtime: a click into the presenter view while the show is in full screen ends neither full screen nor the show.
 
-What this does not show: a key pressed by a finger, which is held for about a tenth of a second while System Events sends down and up a few milliseconds apart; Safari's own button for leaving full screen; a second screen under the keys from System Events; Firefox, which is not installed on that Mac.
+A second try the same day, to see whether a click on a link that opens a new tab ends full screen, gave no result: the click sent through System Events did not reach the page, and Safari showed another desktop afterwards. A check of which Safari window is first in AppleScript's order does not say which desktop is shown, and a full-screen window is a desktop of its own, so keys and clicks from a script can land in another window. That measurement is the maintainer's, by hand.
+
+What this does not show: a click on a link of a slide; a key pressed by a finger, which is held for about a tenth of a second while System Events sends down and up a few milliseconds apart; Safari's own button for leaving full screen; a second screen under the keys from System Events; Firefox, which is not installed on that Mac.
 
 ## The highlight under a resting mouse (2026-11-11)
 

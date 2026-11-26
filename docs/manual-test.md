@@ -85,7 +85,8 @@ Some behaviour can only be checked with real hardware: a second screen (projecto
 | F in full screen, then an arrow key, then F | Full screen is left and the presentation goes on in the window, with nothing over the slide; the arrow moves on; F brings full screen back | |
 | G in full screen, then Escape | Safari leaves full screen and the presentation ends (in Chrome, Escape only closes the strip) | |
 | With the presenter view open and the show in full screen: a click and a key in the presenter view | The presentation stays in full screen and goes on | |
-| A video in its own full screen, then Escape | Not measured yet: note what happens | |
+| A video or an embed in its own full screen, then its button for leaving it or Escape | The presentation goes on, in full screen or in the window | |
+| A click on a link of a slide in full screen (it opens a new tab), then back to the tab of the show | Not measured yet: note whether the show is still on its slide or back on the start screen | |
 
 ## Keynote
 
