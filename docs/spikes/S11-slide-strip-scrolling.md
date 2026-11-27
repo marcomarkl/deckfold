@@ -19,3 +19,18 @@ The maintainer swiped by hand on a MacBook trackpad, three times to later slides
 ## What this does not show
 
 The fault itself, which did not appear. A strip with the larger tiles of decision E25 (seven tiles across the window), which came after this measurement. Other trackpads, a mouse with a wheel, Firefox. When the fault is seen again, the copy in `tests/.out/strip/strip-log.html` (or a new one built the same way) gives the log of that case; the summary at its top groups wheel events less than 400 ms apart into one gesture, so swipes in quick succession count as one, and the raw data below it are what to read.
+
+## White at the edges while the window is resized (2026-11-27)
+
+The maintainer saw white flash inside the window, at its right and bottom edge, while dragging a corner of the start screen in Safari 27.2 on macOS 27.2, after the layout of decision E25 had made the preview and the tiles follow the window size. The question was whether deckfold draws something late or in the wrong place.
+
+How it was measured: copies of a claude.ai deck with a script after the runtime block that kept, in memory, for every animation frame the window size, the size of the preview's stage against the scaled iframe in it, and the width of the first drawn tile against the picture in it. The preview is fitted in a `ResizeObserver` of deckfold (`fit()` in `32-ui.js`), which runs after the animation frame and before the frame is painted, so a second `ResizeObserver` created later measured the preview as it is painted. The maintainer dragged the window by hand, larger and smaller, for about six seconds in each copy.
+
+- Copy A, the runtime as it is: 306 frames with a new window size. After deckfold had fitted it, the preview was never more than 0.9 px off its stage (0 of 307 fittings above 1.5 px); at the start of a frame, before the fitting, it was up to 64 px off. No tile was more than 0.5 px off its picture. White flashed at the right and bottom edge.
+- Copy B, the same with `color-scheme: dark` on the root element of the start screen: 319 frames, the same results, and white flashed the same way.
+- Page C, a dark page without deckfold (`html` and `body` in #15161a, one line of text): white flashed the same way.
+- Page D, the deck with the runtime from before E25 (a column of 850 px, a preview of at most 42 % of the window height, tiles of 160 px): white flashed the same way.
+
+So the white is not drawn by deckfold and not caused by E25: Safari shows it for any page, apparently on the area a growing window gains before the page has painted it. A page does not see that moment, so nothing in deckfold changes it. Chrome, Firefox and other macOS versions were not tried; nor was a smaller window or a slower drag.
+
+A related sight from the same day, without a measurement of its cause: after the window had been dragged several times and a show had been started in full screen and ended, Safari showed a picture of its own window, toolbar included, over the real one, with nothing in it reacting. It stayed over a reload, a new tab and `about:blank` in the same window; Safari and the macOS accessibility interface reported one window. Quitting Safari removed it. A page cannot draw Safari's toolbar, so the picture was Safari's, left from a change of the window; whether deckfold's full screen or the reload at the end of a show set it off is not known.
